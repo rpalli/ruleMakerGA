@@ -172,9 +172,9 @@ def fuzzyUpdate(currentNode,oldValue,individual):
 		logicOperatorFlags=individual[triple[1]:triple[2]]
 		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
 		nodeOrderInvert=nodeOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		print(nodeList[currentNode])
-		print(nodeOrderInvert)
-		print(nodeOrder)
+		# print(nodeList[currentNode])
+		# print(nodeOrderInvert)
+		# print(nodeOrder)
 		if len(nodeOrder)==0:
 			value=oldValue[currentNode]
 		elif len(nodeOrder)==1:
@@ -384,18 +384,69 @@ def testFuzzySim():
 	# print(nodeOrderList)
 	# print(nodeOrderInvertList)
 	# print(individualLength)
-	
+	global nodeList
+	print(nodeList)
+	print(graph.edges())
 	individual=[0,0,0,0,0,0]
+	print(individual)
 	print(runFuzzySim(individual))
 	
 	individual=[0,1,0,0,0,0]
+	print(individual)
 	print(runFuzzySim(individual))
 	
 	individual=[1,0,0,0,0,0]
+	print(individual)
 	print(runFuzzySim(individual))
+	
+	
+	
+	graph = nx.DiGraph()
+	dict={}
+	aliasDict={}
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)
+	graph.add_edge('zero','one', signal='a')
+	graph.add_edge('zero','two', signal='i')
+	graph.add_edge('one','two', signal='i')	
+	individualLength=setupGAparams(graph)
+	global nodeList
+	print(nodeList)
+	print(graph.edges())
+	individual=[0,0,0,0,0,0]
+	print(individual)
+	print(runFuzzySim(individual))
+	
+	individual=[0,1,0,0,0,0]
+	print(individual)
+	print(runFuzzySim(individual))
+	
+	individual=[1,0,0,0,0,0]
+	print(individual)
+	print(runFuzzySim(individual))
+	
+	
 
-
-
+	
+	
+	ss['zero']=1
+	ss['one']=1
+	ss['two']=1
+	individualLength=setupGAparams(graph)
+	global nodeList
+	print(nodeList)
+	print(graph.edges())
+	individual=[0,0,0,0,0,0]
+	print(individual)
+	print(runFuzzySim(individual))
+	
+	individual=[0,1,0,0,0,0]
+	print(individual)
+	print(runFuzzySim(individual))
+	
+	individual=[1,0,0,0,0,0]
+	print(individual)
+	print(runFuzzySim(individual))
+	
 
 
 
