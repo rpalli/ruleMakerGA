@@ -10,54 +10,68 @@ from deap import tools
 from deap import algorithms as algo
 import networkx as nx
 from scipy.stats import logistic
+import re
+import urllib2 
 
-
-#need nodeDict, fuzzyUpdate, and individualParse
 
 def setupGAparams(graph):
-	global individualParse
+	global individualParse #keep a triplet of how to parse out each individual
 	global steps
 	global nodeList
 	global nodeOrderList
 	global initValues
 	global ss
-	global evaluateNodes
-	evaluateNodes=[]
-	individualParse=[]
-	nodeOrderList=[]
+	global evaluateNodes #list of indices in nodeList to be evaluated from nodelist
+	global possibilityNumList
+	global h
+	global p
+	p=.5
+	h= 3
+	evaluateNodes=[] 
+	individualParse=[] 
+	nodeOrderList=[] 
+	possibilityNumList=[]
 	nodeList=graph.nodes()
+	nodeDict={}
+	for i in range(0,len(nodeList)):
+		nodeDict[nodeList[i]]=i
 	steps = 10
 	counter=0
-	nodeDict=list(nodeList)
 	initValues=[]
 	for i in range(0,len(nodeList)):
 		preds=graph.predecessors(nodeList[i])
+		for j in range(0,len(preds)):
+			preds[j]=nodeDict[preds[j]]
 		from itertools import product, repeat
 		with_nones = zip(preds, repeat(None))
 		possibilities=list(product(*with_nones))
-
-		for i in range(0,len(possibilities)):
-			possibilities[i]=list(possibilities[i])
-			while None in possibilities[i]:
-				possibilities[i].remove(None)
-			while [] in possibilities[i]:
-				possibilities[i].remove([])
+		for j in range(0,len(possibilities)):
+			possibilities[j]=list(possibilities[j])
+			while None in possibilities[j]:
+				possibilities[j].remove(None)
+			while [] in possibilities[j]:
+				possibilities[j].remove([])
 			# print('possible')
-			# print possibilities[i]
+			# print possibilities[j]
 		while [] in possibilities:
 			possibilities.remove([])
 		nodeOrderList.append(possibilities)
+		possibilityNumList.append(len(possibilities))
 		if len(possibilities)==0:
 			logNum=0
 		else:
 			logNum=ceil(log(len(possibilities))/log(2))
 		individualParse.append([int(counter),int(counter+logNum),int(counter+logNum+len(possibilities)-1)])
 		counter=counter+logNum+len(possibilities)
-		if  nodeList[i]in ss.keys():
+
+		if  nodeList[i] in ss.keys():
 			initValues.append(ss[nodeList[i]])
 			evaluateNodes.append(i)
 		else:
 			initValues.append(0.5)
+	# print(initValues)
+	# print(ss)
+	# print(len(ss.keys()))
 	return counter
 
 def parseKEGGdict(filename):
@@ -277,12 +291,11 @@ def uploadKEGGcodes(codelist, graph, KEGGdict):
 
 		
 
-def logicOptionFind():
-	tempList=[]
-	global listLogicOptions
-	for i in range(0,len(listLogicOptions)):
-		tempList.append(int(floor(listLogicOptions[i]*random())))
-	return tempList
+def genRandBits():
+	global individualLength
+	arr = numpy.random.randint(2, size=(individualLength,))
+	print(arr)
+	return list(arr)
 	
 def loadFatimaData(filename,tempDict):
 	inputfile = open(filename, 'r')
@@ -292,9 +305,14 @@ def loadFatimaData(filename,tempDict):
 			kline=line.split(' ')
 			tempDict[str.upper(kline[0][3:])]=logistic.cdf(float(kline[1]))
 
-			
-def hill(num, h, p):
-	return ((1+h**p)*x**p)/(h**p+x**p)
+	
+def hill(x):
+	global h
+	global p
+	return ((1+h**p)*x**p)/(h**p+x**p)		
+	
+# def hill(x, h, p):
+	# return ((1+h**p)*x**p)/(h**p+x**p)
 			
 def fuzzyAnd(num1, num2):
 	return min(num1,num2)
@@ -315,32 +333,40 @@ def fuzzyUpdate(currentNode,oldValue,individual):
 	global individualParse
 	global nodeList
 	global nodeOrderList
+	global possibilityNumList
+
 	triple=individualParse[currentNode]
 	# print(triple[0])
 	# print(triple[1])
 	# print(individual[triple[0]:triple[1]])
 	#print(nodeOrderList)
-	nodeOrder=nodeOrderList[bit2int(individual[triple[0]:triple[1]])]
-	logicOperatorFlags=individual[triple[1]:triple[2]]
-	#print(logicOperatorFlags)
-	#print(nodeOrder)
-	if len(nodeOrder)==0:
-		value=oldValue[currentNode]
-	elif len(nodeOrder)==1:
-		#print(nodeOrder[0])
-		value=hill(oldValue[nodeOrder[0]])
-	else:
-		counter =0
-		if logicOperatorFlags[0]==0:
-			value=fuzzyAND(hill(oldValue[nodeOrder[0]]),hill(oldValue[nodeOrder[1]]))
+	nodeOrder=nodeOrderList[currentNode]
+	#print(nodeOrderList)
+	if possibilityNumList[currentNode]>0:
+		#print(bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode])
+		logicOperatorFlags=individual[triple[1]:triple[2]]
+		#print(logicOperatorFlags)
+		#print(nodeOrder)
+		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		if len(nodeOrder)==0:
+			value=oldValue[currentNode]
+		elif len(nodeOrder)==1:
+			#print(nodeOrder[0])
+			value=hill(oldValue[nodeOrder[0]])
 		else:
-			value=fuzzyAND(hill(oldValue[nodeOrder[0]]),hill(oldValue[nodeOrder[1]]))
-		for i in range(2,len(nodeOrder)):
-			if logicOperatorFlag[0]==0:
-				value=fuzzyAND(value,hill(oldValue[nodeOrder[i]]))
+			counter =0
+			if logicOperatorFlags[0]==0:
+				value=fuzzyAnd(hill(oldValue[nodeOrder[0]]),hill(oldValue[nodeOrder[1]]))
 			else:
-				value=fuzzyAND(value,hill(oldValue[nodeOrder[i]]))
-	return value
+				value=fuzzyAnd(hill(oldValue[nodeOrder[0]]),hill(oldValue[nodeOrder[1]]))
+			for i in range(2,len(nodeOrder)):
+				if logicOperatorFlags[0]==0:
+					value=fuzzyAnd(value,hill(oldValue[nodeOrder[i]]))
+				else:
+					value=fuzzyAnd(value,hill(oldValue[nodeOrder[i]]))
+		return value
+	else:
+		return oldValue[currentNode]
 						
 				
 def runFuzzySim(individual):
@@ -352,7 +378,6 @@ def runFuzzySim(individual):
 	counter=0;
 	oldValue=list(initValues)
 	newValue=list(initValues)
-	print(initValues)
 	simData=[]
 	simData.append(oldValue)
 	global steps
@@ -361,7 +386,14 @@ def runFuzzySim(individual):
 			newValue[i]=fuzzyUpdate(i,oldValue,individual)
 		oldValue=list(newValue)
 		simData.append(newValue)
-	return simData
+	array= [0 for x in range(0,len(newValue))]
+	for step in range(len(simData)-5,len(simData)):
+		#print(simData[step])
+		for element in range(0,len(array)):
+			array[element]=array[element]+simData[step][element]
+	for element in range(0,len(array)):
+		array[element]=array[element]/5
+	return array
 	
 	
 			
@@ -369,28 +401,24 @@ def runFuzzySim(individual):
 def evaluate(individual):
 	global ss
 	global evaluateNodes
-	print evaluateNodes
+	#print evaluateNodes
 	RME=1.0
 	#for i in range(0,len(individual)):
 		# print(individual)
 		# print(i)
 		# print(individual[int(i)])
 	boolValues=runFuzzySim(individual)	
-	print(len(boolValues))
+	#print(len(boolValues))
 	for i in range(0, len(evaluateNodes)):
-		boolValues[evaluateNodes[i]]=numpy.mean(boolValues[evaluateNodes[i]][-5:])
 		RME=RME+(boolValues[evaluateNodes[i]]-ss[nodeList[evaluateNodes[i]]])**2
 		#print(RME)
-	print(RME)
 	return RME,
 
 	
 	
 def mutate(individual):
 	global nodeList
-	randNum=int(floor(random()*len(individual)))
-	global listLogicOptions
-	individual[randNum]= int(floor(random()*listLogicOptions[randNum]))
+	
 	return individual,
 
 
@@ -400,7 +428,6 @@ if __name__ == '__main__':
 		
 	#two dicts for the models
 	nodeUpdateDict={}
-	logicOptionsList=[]
 	global ss
 	ss={}
 	loadFatimaData(filename,ss)
@@ -414,24 +441,32 @@ if __name__ == '__main__':
 	lines = inputfile.readlines()
 	readKEGG(lines, graph, KEGGdict)
 	
-	KEGGfileName='ko04060.xml'
+	# KEGGfileName='ko04060.xml'
+	# inputfile = open(KEGGfileName, 'r')
+	# lines = inputfile.readlines()
+	# readKEGG(lines, graph, KEGGdict)
+	
+	KEGGfileName='ko04062.xml'
 	inputfile = open(KEGGfileName, 'r')
 	lines = inputfile.readlines()
 	readKEGG(lines, graph, KEGGdict)
 	#print(graph.nodes())
 	
+	
+	
+	currentfile='IL1b_pathways.txt'
+	inputfile = open(currentfile, 'r')
+	line = inputfile.read()
+	codelist=re.findall('ko\d\d\d\d\d',line)	
+	print(codelist)
+	uploadKEGGcodes(codelist, graph, KEGGdict)
+	for node in graph.nodes():
+		if node in graph.successors(node):
+			graph.remove_edge(node,node)
+	global individualLength
 	individualLength=setupGAparams(graph)
 	#graph input stuff
 
-	numNodes=2
-	#numNodes=len(graph.nodes())
-
-	logicOptionsList=[2 for i in range(0,numNodes)]
-	#define function to do randomly find a logic area
-	global listLogicOptions
-	listLogicOptions = logicOptionsList
-
-	#print(len(logicOptionFind(logicOptionsList)))
 
 
 
@@ -453,16 +488,19 @@ if __name__ == '__main__':
 	#toolbox.register("attr_float", random.random)
 	#need this alias to create new graphs... but we should just be using the first one.... 
 
-	toolbox.register("logicSwitch", logicOptionFind)
-	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.logicSwitch)
-	toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+	toolbox.register("genRandomBitString", genRandBits)
+	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
+	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
 	#ind1=toolbox.individual()
-	population=toolbox.population(n=100)
+	population=toolbox.population(n=1)
 
-	ind1=population[1]
-	print(ind1)
-
+	
+	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	stats.register("avg", numpy.mean)
+	stats.register("std", numpy.std)
+	stats.register("min", numpy.min)
+	stats.register("max", numpy.max)
 	hof = tools.HallOfFame(1, similar=numpy.array_equal)
 	
 	#finish registering the toolbox functions
@@ -471,8 +509,10 @@ if __name__ == '__main__':
 	toolbox.register("select", tools.selBest)
 	toolbox.register("evaluate", evaluate)
 	toolbox.register("similar", numpy.array_equal)
-	algo.eaSimple(population, toolbox, cxpb=.2, mutpb=.2, ngen=10)
-
+	algo.eaSimple(population, toolbox, stats=stats, cxpb=.2, mutpb=.2, ngen=2, verbose=True)
+	
+	
+	
 	# graphy=nx.DiGraph()
 	# graphy.add_edge(1,2,color='blue',type='typing')	
 
