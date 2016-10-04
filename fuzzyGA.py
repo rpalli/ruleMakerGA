@@ -1,5 +1,6 @@
 #import stuff
 from random import random
+from random import shuffle
 import numpy as numpy
 from math import floor, ceil, log
 import operator
@@ -12,7 +13,7 @@ import networkx as nx
 from scipy.stats import logistic
 import re
 import urllib2 
-import fuzzyNetworkConstructor.py
+import fuzzyNetworkConstructor as constructor
 
 def setupGAparams(graph):
 	global individualParse #keep a triplet of how to parse out each individual
@@ -25,26 +26,42 @@ def setupGAparams(graph):
 	global possibilityNumList
 	global h
 	global p
+	global hillOn
+	global nodeOrderInvertList
+
+	repeat=True
+	while(repeat):
+		repeat=False
+		for node in graph.nodes():
+			if node in graph.successors(node):
+				graph.remove_edge(node,node)
+				repeat=True
+	hillOn = False
 	p=.5
 	h= 3
 	evaluateNodes=[] 
 	individualParse=[] 
 	nodeOrderList=[] 
+	nodeOrderInvertList=[]
 	possibilityNumList=[]
 	nodeList=graph.nodes()
 	nodeDict={}
 	for i in range(0,len(nodeList)):
 		nodeDict[nodeList[i]]=i
-	steps = 10
+	steps = 5
 	counter=0
 	initValues=[]
 	for i in range(0,len(nodeList)):
 		preds=graph.predecessors(nodeList[i])
+		#print(preds)
 		for j in range(0,len(preds)):
 			preds[j]=nodeDict[preds[j]]
+		#print(preds)
+		#print(nodeList[i])
 		from itertools import product, repeat
 		with_nones = zip(preds, repeat(None))
 		possibilities=list(product(*with_nones))
+		activities=[]
 		for j in range(0,len(possibilities)):
 			possibilities[j]=list(possibilities[j])
 			while None in possibilities[j]:
@@ -55,7 +72,22 @@ def setupGAparams(graph):
 			# print possibilities[j]
 		while [] in possibilities:
 			possibilities.remove([])
+		for sequence in possibilities:
+			activity=[]
+			for node in sequence:
+			#print(nodeList[node[0]])
+			#print(nodeList[i])
+			#print(graph.edges())
+				
+				if graph.edge[nodeList[node]][nodeList[i]]['signal']=='a':
+					activity.append(False)
+					#print('a')
+				else:
+					activity.append(True)
+					#print('i')
+			activities.append(activity)
 		nodeOrderList.append(possibilities)
+		nodeOrderInvertList.append(activities)
 		possibilityNumList.append(len(possibilities))
 		if len(possibilities)==0:
 			logNum=0
@@ -93,8 +125,19 @@ def loadFatimaData(filename,tempDict):
 def hill(x):
 	global h
 	global p
-	return ((1+h**p)*x**p)/(h**p+x**p)		
+	global hillOn
+	if hillOn:
+		return ((1+h**p)*x**p)/(h**p+x**p)		
+	else:
+		return x
 	
+	
+def hillInv(x, inverter):
+	if inverter:
+		return hill(1-x)
+	else:
+		return hill(x)
+
 # def hill(x, h, p):
 	# return ((1+h**p)*x**p)/(h**p+x**p)
 			
@@ -117,59 +160,62 @@ def fuzzyUpdate(currentNode,oldValue,individual):
 	global individualParse
 	global nodeList
 	global nodeOrderList
+	global nodeOrderInvertList
 	global possibilityNumList
-
+	# print(nodeList[currentNode])
 	triple=individualParse[currentNode]
-	# print(triple[0])
-	# print(triple[1])
-	# print(individual[triple[0]:triple[1]])
-	#print(nodeOrderList)
 	nodeOrder=nodeOrderList[currentNode]
+	nodeOrderInvert=nodeOrderInvertList[currentNode]
 	#print(nodeOrderList)
 	if possibilityNumList[currentNode]>0:
 		#print(bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode])
 		logicOperatorFlags=individual[triple[1]:triple[2]]
-		#print(logicOperatorFlags)
-		#print(nodeOrder)
 		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		nodeOrderInvert=nodeOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		print(nodeList[currentNode])
+		print(nodeOrderInvert)
+		print(nodeOrder)
 		if len(nodeOrder)==0:
 			value=oldValue[currentNode]
 		elif len(nodeOrder)==1:
 			#print(nodeOrder[0])
-			value=hill(oldValue[nodeOrder[0]])
+			value=hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0])
 		else:
 			counter =0
 			if logicOperatorFlags[0]==0:
-				value=fuzzyAnd(hill(oldValue[nodeOrder[0]]),hill(oldValue[nodeOrder[1]]))
+				value=fuzzyAnd(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0]),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1]))
 			else:
-				value=fuzzyAnd(hill(oldValue[nodeOrder[0]]),hill(oldValue[nodeOrder[1]]))
+				value=fuzzyOr(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0]),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1]))
 			for i in range(2,len(nodeOrder)):
-				if logicOperatorFlags[0]==0:
-					value=fuzzyAnd(value,hill(oldValue[nodeOrder[i]]))
+				if logicOperatorFlags[i]==0:
+					value=fuzzyAnd(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i]))
 				else:
-					value=fuzzyAnd(value,hill(oldValue[nodeOrder[i]]))
+					value=fuzzyOr(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i]))
+		# print('value')
+		# print(value)
 		return value
 	else:
-		return oldValue[currentNode]
-						
+		# print('origvalue')
+		# print(oldValue[currentNode])
+		return oldValue[currentNode]						
 				
 def runFuzzySim(individual):
 	#do fuzzy simulation. individual is just a long bitstring... need to seperate it out. 
-	global invididualParse
+	global individualParse
 	global nodeList
 	global initValues
 	#list of triples which gives the total list of nodes. 
 	counter=0;
-	oldValue=list(initValues)
 	newValue=list(initValues)
 	simData=[]
-	simData.append(oldValue)
+	simData.append(list(newValue))
 	global steps
+	seq=range(0,len(individualParse))
 	for step in range(0,steps):
-		for i in range(0,len(individualParse)):
-			newValue[i]=fuzzyUpdate(i,oldValue,individual)
-		oldValue=list(newValue)
-		simData.append(newValue)
+		shuffle(seq)
+		for i in range(0,len(individualParse)):	
+			newValue[seq[i]]=fuzzyUpdate(seq[i],newValue,individual)
+		simData.append(list(newValue))
 	array= [0 for x in range(0,len(newValue))]
 	for step in range(len(simData)-5,len(simData)):
 		#print(simData[step])
@@ -177,7 +223,7 @@ def runFuzzySim(individual):
 			array[element]=array[element]+simData[step][element]
 	for element in range(0,len(array)):
 		array[element]=array[element]/5
-	return array
+	return simData
 	
 	
 			
@@ -205,8 +251,7 @@ def mutate(individual):
 	
 	return individual,
 
-
-if __name__ == '__main__':
+def runFatimaSim():
 	filename='inputDataFatima.txt'
 	KEGGfileName='ko04060.xml'
 		
@@ -305,3 +350,55 @@ if __name__ == '__main__':
 	# tools.cxBlend(child1, child2, 0.5)
 	# del child1.fitness.values
 	# del child2.fitness.values
+	
+	
+	
+def testFuzzySim():
+	filename='inputDataFatima.txt'
+	KEGGfileName='ko04060.xml'
+		
+	#two dicts for the models
+	nodeUpdateDict={}
+	global ss
+	ss={}
+	for i in range(1,5):
+		ss[str(i)]=0
+	ss['zero']=1
+	ss['one']=0
+	ss['two']=0
+	print(ss.keys())
+	graph = nx.DiGraph()
+	dict={}
+	aliasDict={}
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)
+	graph.add_edge('zero','one', signal='a')
+	graph.add_edge('zero','two', signal='a')
+	graph.add_edge('one','two', signal='i')	
+
+	global individualLength
+	individualLength=setupGAparams(graph)
+	# global nodeOrderInvertList
+	# global nodeOrderList
+	# global nodeList
+	# print(nodeList)
+	# print(nodeOrderList)
+	# print(nodeOrderInvertList)
+	# print(individualLength)
+	
+	individual=[0,0,0,0,0,0]
+	print(runFuzzySim(individual))
+	
+	individual=[0,1,0,0,0,0]
+	print(runFuzzySim(individual))
+	
+	individual=[1,0,0,0,0,0]
+	print(runFuzzySim(individual))
+
+
+
+
+
+
+
+if __name__ == '__main__':
+	testFuzzySim()
