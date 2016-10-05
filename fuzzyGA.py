@@ -134,7 +134,7 @@ def loadFpkms(filename):
 
 def sortFpkms(data,ss):
 	for i in range(1,len(data)):
-		ss[data[i][0]]=float(data[i][1])
+		ss[str.upper(data[i][0])]=float(data[i][1])
 	
 def hill(x):
 	global h
@@ -293,8 +293,9 @@ def runFatimaSim():
 	global individualLength
 	individualLength=setupGAparams(graph)
 	#graph input stuff
-	print(graph.nodes())
-
+	# print(graph.nodes())
+	# print('sstime')
+	# print(ss.keys())
 
 
 	#setup toolbox
