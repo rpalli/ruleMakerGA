@@ -1,4 +1,20 @@
- 
+#import stuff
+from random import random
+from random import shuffle
+import numpy as numpy
+from math import floor, ceil, log
+import operator
+from deap import base
+from deap import creator
+from deap import gp
+from deap import tools
+from deap import algorithms as algo
+import networkx as nx
+from scipy.stats import logistic
+import re
+import urllib2 
+import fuzzyNetworkConstructor as constructor
+import csv 
 def parseKEGGdict(filename):
 	#makes a dictionary to convert ko numbers from KEGG into real gene names
 	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
@@ -220,6 +236,7 @@ def uploadKEGGcodes(codelist, graph, KEGGdict):
 		url=urllib2.urlopen('http://rest.kegg.jp/get/'+code+'/kgml')
 		text=url.readlines()
 		readKEGG(text, graph, KEGGdict)
+		print(code)
 		#print(graph.nodes())
 
 if __name__ == '__main__':

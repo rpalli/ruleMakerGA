@@ -14,6 +14,7 @@ from scipy.stats import logistic
 import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
+import csv
 
 def setupGAparams(graph):
 	global individualParse #keep a triplet of how to parse out each individual
@@ -53,6 +54,8 @@ def setupGAparams(graph):
 	initValues=[]
 	for i in range(0,len(nodeList)):
 		preds=graph.predecessors(nodeList[i])
+		if len(preds)>15:
+			preds=preds[1:15]
 		#print(preds)
 		for j in range(0,len(preds)):
 			preds[j]=nodeDict[preds[j]]
@@ -95,7 +98,6 @@ def setupGAparams(graph):
 			logNum=ceil(log(len(possibilities))/log(2))
 		individualParse.append([int(counter),int(counter+logNum),int(counter+logNum+len(possibilities)-1)])
 		counter=counter+logNum+len(possibilities)
-
 		if  nodeList[i] in ss.keys():
 			initValues.append(ss[nodeList[i]])
 			evaluateNodes.append(i)
@@ -110,7 +112,7 @@ def setupGAparams(graph):
 def genRandBits():
 	global individualLength
 	arr = numpy.random.randint(2, size=(individualLength,))
-	print(arr)
+	#print(arr)
 	return list(arr)
 	
 def loadFatimaData(filename,tempDict):
@@ -121,6 +123,18 @@ def loadFatimaData(filename,tempDict):
 			kline=line.split(' ')
 			tempDict[str.upper(kline[0][3:])]=logistic.cdf(float(kline[1]))
 
+			
+def loadFpkms(filename):
+	with open(filename) as csvfile:
+		data=[]
+		reader = csv.reader(csvfile, delimiter='\t')
+		for row in reader:
+			data.append(row)
+		return data
+
+def sortFpkms(data,ss):
+	for i in range(1,len(data)):
+		ss[data[i][0]]=float(data[i][1])
 	
 def hill(x):
 	global h
@@ -223,7 +237,7 @@ def runFuzzySim(individual):
 			array[element]=array[element]+simData[step][element]
 	for element in range(0,len(array)):
 		array[element]=array[element]/5
-	return simData
+	return array
 	
 	
 			
@@ -240,6 +254,7 @@ def evaluate(individual):
 	boolValues=runFuzzySim(individual)	
 	#print(len(boolValues))
 	for i in range(0, len(evaluateNodes)):
+		#print(evaluateNodes[i])
 		RME=RME+(boolValues[evaluateNodes[i]]-ss[nodeList[evaluateNodes[i]]])**2
 		#print(RME)
 	return RME,
@@ -252,50 +267,33 @@ def mutate(individual):
 	return individual,
 
 def runFatimaSim():
-	filename='inputDataFatima.txt'
-	KEGGfileName='ko04060.xml'
-		
+	dataFileName='C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv'
+	
 	#two dicts for the models
 	nodeUpdateDict={}
 	global ss
-	ss={}
-	loadFatimaData(filename,ss)
+	ss={} 
+	data=loadFpkms(dataFileName)
+	sortFpkms(data,ss)
 	#print(ss.keys())
 	graph = nx.DiGraph()
 	dict={}
 	aliasDict={}
-	KEGGdict=parseKEGGdict('ko00001.keg', aliasDict, dict)
-	
-	inputfile = open(KEGGfileName, 'r')
-	lines = inputfile.readlines()
-	readKEGG(lines, graph, KEGGdict)
-	
-	# KEGGfileName='ko04060.xml'
-	# inputfile = open(KEGGfileName, 'r')
-	# lines = inputfile.readlines()
-	# readKEGG(lines, graph, KEGGdict)
-	
-	KEGGfileName='ko04062.xml'
-	inputfile = open(KEGGfileName, 'r')
-	lines = inputfile.readlines()
-	readKEGG(lines, graph, KEGGdict)
-	#print(graph.nodes())
-	
-	
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)	
 	
 	currentfile='IL1b_pathways.txt'
 	inputfile = open(currentfile, 'r')
 	line = inputfile.read()
 	codelist=re.findall('ko\d\d\d\d\d',line)	
 	print(codelist)
-	uploadKEGGcodes(codelist, graph, KEGGdict)
+	constructor.uploadKEGGcodes(codelist, graph, KEGGdict)
 	for node in graph.nodes():
 		if node in graph.successors(node):
 			graph.remove_edge(node,node)
 	global individualLength
 	individualLength=setupGAparams(graph)
 	#graph input stuff
-
+	print(graph.nodes())
 
 
 
@@ -322,7 +320,7 @@ def runFatimaSim():
 	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
 	#ind1=toolbox.individual()
-	population=toolbox.population(n=1)
+	population=toolbox.population(n=100)
 
 	
 	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
@@ -334,11 +332,11 @@ def runFatimaSim():
 	
 	#finish registering the toolbox functions
 	toolbox.register("mate", tools.cxTwoPoint)
-	toolbox.register("mutate", mutate)
+	toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
 	toolbox.register("select", tools.selBest)
 	toolbox.register("evaluate", evaluate)
 	toolbox.register("similar", numpy.array_equal)
-	algo.eaSimple(population, toolbox, stats=stats, cxpb=.2, mutpb=.2, ngen=2, verbose=True)
+	algo.eaSimple(population, toolbox, stats=stats, cxpb=.2, mutpb=.2, ngen=10, verbose=True)
 	
 	
 	
@@ -409,7 +407,6 @@ def testFuzzySim():
 	graph.add_edge('zero','two', signal='i')
 	graph.add_edge('one','two', signal='i')	
 	individualLength=setupGAparams(graph)
-	global nodeList
 	print(nodeList)
 	print(graph.edges())
 	individual=[0,0,0,0,0,0]
@@ -432,7 +429,6 @@ def testFuzzySim():
 	ss['one']=1
 	ss['two']=1
 	individualLength=setupGAparams(graph)
-	global nodeList
 	print(nodeList)
 	print(graph.edges())
 	individual=[0,0,0,0,0,0]
@@ -452,4 +448,8 @@ def testFuzzySim():
 
 
 if __name__ == '__main__':
-	testFuzzySim()
+	# ss={}
+	# data=loadFpkms('C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv')
+	# sortFpkms(data,ss)
+	# print(ss)
+	runFatimaSim()
