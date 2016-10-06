@@ -88,6 +88,20 @@ def readKEGG(lines, graph, KEGGdict):
 			idstring=idline[1]
 			idline=idstring.split('"')
 			id=idline[0]
+			
+			
+			namelist=[]
+			if '-' in name: 
+				namelines=name.split('-')
+				for x in namelines:
+					if x in KEGGdict.keys():
+						namelist.append(KEGGdict[x])
+					else:
+						namelist.append(x)
+				name=namelist[0]+'-'
+				for x in range(1,len(namelist)):
+					name=name+namelist[x]+'-'
+				name=name[:-1:]
 			if name in KEGGdict.keys():
 				dict[id]=KEGGdict[name]
 			else:

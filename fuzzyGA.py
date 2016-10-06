@@ -134,7 +134,13 @@ def loadFpkms(filename):
 
 def sortFpkms(data,ss):
 	for i in range(1,len(data)):
-		ss[str.upper(data[i][0])]=float(data[i][1])
+		maxdata=0
+		for j in range(1,len(data[i])):
+			if float(data[i][j])>maxdata:
+				maxdata=float(data[i][j])
+		if maxdata==0:
+			maxdata=1
+		ss[str.upper(data[i][0])]=float(data[i][1])/maxdata
 	
 def hill(x):
 	global h
@@ -296,8 +302,27 @@ def runFatimaSim():
 	# print(graph.nodes())
 	# print('sstime')
 	# print(ss.keys())
+	counter=0
+	counter2=0
 
-
+	# for node in nodeList:
+		# if len(graph.predecessors(node))>15:
+			# print(node)
+			# print(len(graph.predecessors(node)))
+			# print(graph.predecessors(node))
+		# if len(graph.predecessors(node))==0:
+			# counter=counter+1
+			# if node in ss.keys():
+				# counter2=counter2+1
+	# print('nodes with no incoming edges')
+	# print(counter)
+	# print('nodes with no incoming edges that are part of transcriptomics data set')
+	# print(counter2)
+	# print('number of datapoints in Fatima data')
+	# print(len(ss.keys()))
+	# print('nodes in overlap')
+	# print(len(evaluateNodes))
+	
 	#setup toolbox
 	toolbox = base.Toolbox()
 
@@ -308,7 +333,7 @@ def runFatimaSim():
 
 	#make a fitness minimization function
 	creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-	#create a class of individuals that are lists from networkx
+	# #create a class of individuals that are lists from networkx
 	creator.create("Individual", list, fitness=creator.FitnessMin)
 
 
@@ -320,7 +345,7 @@ def runFatimaSim():
 	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
 	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
-	#ind1=toolbox.individual()
+	# #ind1=toolbox.individual()
 	population=toolbox.population(n=100)
 
 	
@@ -337,7 +362,7 @@ def runFatimaSim():
 	toolbox.register("select", tools.selBest)
 	toolbox.register("evaluate", evaluate)
 	toolbox.register("similar", numpy.array_equal)
-	algo.eaSimple(population, toolbox, stats=stats, cxpb=.2, mutpb=.2, ngen=10, verbose=True)
+	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=150, stats=stats, cxpb=.2, mutpb=.2, ngen=10, verbose=True)
 	
 	
 	
