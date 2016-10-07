@@ -16,6 +16,7 @@ import urllib2
 import fuzzyNetworkConstructor as constructor
 import csv 
 import sys
+from bs4 import BeautifulSoup
 
 ## Rohith's OLD version, kept for history
 # def parseKEGGdict(filename):
@@ -231,6 +232,73 @@ def readKEGG(lines, graph, KEGGdict):
 				graph.add_edge(node1,node2, color=color, subtype=name, type=type, signal=signal )
 		i=i+1
 
+def readKEGGnew(lines, graph, KEGGdict):
+	#read all lines into a bs4 object using libXML parser
+	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	groups = {} # store group IDs and list of sub-ids
+	id_to_name = {} # map id numbers to names
+
+	for entry in soup.find_all('entry'):
+		entry_name = entry['name'].split(':')[1]
+		entry_name = KEGGdict[entry_name] if entry_name in KEGGdict.keys() else entry_name
+		entry_type = entry['type']
+		entry_id = entry['id']
+		#print entry_name
+		id_to_name[entry_id] = entry_name
+
+		if entry_type == 'group':
+			group_ids = []
+			for component in entry.find_all('component'):
+				group_ids.append(component['id'])
+			groups[entry_id] = group_ids
+		else:
+			graph.add_node(entry_name, {'name': entry_name, 'type': entry_type})
+
+	for relation in soup.find_all('relation'):
+		(color, signal) = ('black', 'a')
+
+		relation_entry1 = relation['entry1']
+		relation_entry2 = relation['entry2']
+		relation_type = relation['type']
+
+		subtype_names = []
+
+		for subtype in relation.find_all('subtype'):
+			subtype_names.append(subtype['name'])
+
+		if ('activation' in subtypes) or ('expression' in subtypes):
+			color='green'
+			signal='a'
+		elif 'inhibition' in subtypes:
+			color='red'
+			signal='i'
+		elif ('binding/association' in subtypes) or('compound' in subtypes):
+			color='purple'
+			signal='a'
+		elif 'phosphorylation' in subtypes:
+			color='orange'
+			signal='a'
+		elif 'dephosphorylation' in subtypes:
+			color='pink'
+			signal='i'
+		elif 'indirect effect' in subtypes:
+			color='cyan'
+			signal='a'
+		elif 'dissociation' in subtypes:
+			color='yellow'
+			signal='i'
+		elif 'ubiquitination' in subtypes:
+			color='cyan'
+			signal='i'
+		else:
+			print('color not detected. Signal assigned to activation arbitrarily')
+			print(subtypes)
+			signal='a'
+
+		# TODO: need to add recursive deconvolution of groups
+		node1 = id_to_name[entry1]
+		node2 = id_to_name[entry2]
+		graph.add_edge(node1,node2, color=color, subtype=subtype_names[0], type=relation_type, signal=signal )
 
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):

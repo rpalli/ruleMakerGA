@@ -31,6 +31,8 @@ assert graph.edges()[-1] == ('VEGFC_D', 'KDR')
 print "readKEGG", currentfile, "tests passed"
 ko04060_graph = graph
 
+fnc.readKEGGnew(lines, graph, KEGGdict)
+
 graph = nx.DiGraph()
 currentfile='testfiles/ko04062.xml'
 inputfile = open(currentfile, 'r')
