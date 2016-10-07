@@ -15,6 +15,8 @@ import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
 import csv 
+import sys
+
 def parseKEGGdict(filename):
 	#makes a dictionary to convert ko numbers from KEGG into real gene names
 	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
@@ -254,24 +256,17 @@ def uploadKEGGcodes(codelist, graph, KEGGdict):
 		#print(graph.nodes())
 
 if __name__ == '__main__':
-	KEGGfileName='ko04060.xml'
-
-	
 	graph = nx.DiGraph()
 	dict={}
 	aliasDict={}
 	KEGGdict=parseKEGGdict('ko00001.keg', aliasDict, dict)
 	
-	inputfile = open(KEGGfileName, 'r')
-	lines = inputfile.readlines()
-	readKEGG(lines, graph, KEGGdict)
-
-	
-	KEGGfileName='ko04062.xml'
-	inputfile = open(KEGGfileName, 'r')
-	lines = inputfile.readlines()
-	readKEGG(lines, graph, KEGGdict)
-	#print(graph.nodes())
+	if len(sys.argv) > 1: #if we have supplied a command-line argument
+		KEGGfileName=sys.argv[1]
+		inputfile = open(KEGGfileName, 'r')
+		lines = inputfile.readlines()
+		readKEGG(lines, graph, KEGGdict)
+		print(graph.nodes())
 	
 	
 	
@@ -285,6 +280,9 @@ if __name__ == '__main__':
 		if node in graph.successors(node):
 			graph.remove_edge(node,node)
 	global individualLength
-	individualLength=setupGAparams(graph)
+
+	#this line breaks the code
+	#individualLength=setupGAparams(graph)
+
 	#graph input stuff
 
