@@ -17,25 +17,26 @@ import fuzzyNetworkConstructor as constructor
 import csv 
 import sys
 
-def parseKEGGdict(filename):
-	#makes a dictionary to convert ko numbers from KEGG into real gene names
-	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
-	dict={}
-	inputfile = open(filename, 'r')
-	lines = inputfile.readlines()
-	for line in lines:
-		if line[0]=='D':
-			kline=line.split('      ')
-			kstring=kline[1]
-			kline=kstring.split('  ')
-			k=kline[0]
-			nameline=line.replace('D      ', 'D')
-			nameline=nameline.split('  ')
-			namestring=nameline[1]
-			nameline=namestring.split(';')
-			name=nameline[0]
-			dict[k]=name
-	return dict
+## Rohith's OLD version, kept for history
+# def parseKEGGdict(filename):
+# 	#makes a dictionary to convert ko numbers from KEGG into real gene names
+# 	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
+# 	dict={}
+# 	inputfile = open(filename, 'r')
+# 	lines = inputfile.readlines()
+# 	for line in lines:
+# 		if line[0]=='D':
+# 			kline=line.split('      ')
+# 			kstring=kline[1]
+# 			kline=kstring.split('  ')
+# 			k=kline[0]
+# 			nameline=line.replace('D      ', 'D')
+# 			nameline=nameline.split('  ')
+# 			namestring=nameline[1]
+# 			nameline=namestring.split(';')
+# 			name=nameline[0]
+# 			dict[k]=name
+# 	return dict
 
 def parseKEGGdict(filename, aliasDict, dict):
 	#reads KEGG dictionary of identifiers between orthology numbers and actual protein names and saves it to a python dictionary
@@ -61,6 +62,7 @@ def parseKEGGdict(filename, aliasDict, dict):
 					aliasDict[nameline[entry].strip()]=name
 			dict[k]=name
 	return dict
+
 def readKEGG(lines, graph, KEGGdict):
 	#the network contained in a KEGG file to the graph. 
 	grouplist=[] #sometimes the network stores a group of things all activated by a single signal as a "group". We need to rewire the arrows to go to each individual component of the group so we save a list of these groups and a dictionary between id numbers and lists of elements that are part of that group
@@ -69,6 +71,7 @@ def readKEGG(lines, graph, KEGGdict):
 	dict={} #identifies internal id numbers with names (much like the code earlier does for groups to id numbers of elements of the group)
 	while i< len(lines):
 		line=lines[i]
+		# print line
 		#add nodes
 		if "<entry" in line:		
 			nameline=line.split('name="')
@@ -79,7 +82,9 @@ def readKEGG(lines, graph, KEGGdict):
 			name=name.replace(' ','-')
 			name=name.replace('ko:','')
 			name=name.replace(':','-')
-			#print(name)
+			
+			# print(name)
+			
 			typeline=line.split('type="')
 			typestring=typeline[1]
 			typeline=typestring.split('"')
