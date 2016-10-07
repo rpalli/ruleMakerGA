@@ -296,6 +296,16 @@ def runFatimaSim():
 	for node in graph.nodes():
 		if node in graph.successors(node):
 			graph.remove_edge(node,node)
+	nodeList=graph.nodes()
+	for node in nodeList:
+		if len(graph.predecessors(node))==0 and not node in ss.keys():
+			graph.remove_node(node)
+	
+	
+	
+	
+	
+	
 	global individualLength
 	individualLength=setupGAparams(graph)
 	#graph input stuff
@@ -304,26 +314,27 @@ def runFatimaSim():
 	# print(ss.keys())
 	counter=0
 	counter2=0
-
-	# for node in nodeList:
-		# if len(graph.predecessors(node))>15:
-			# print(node)
-			# print(len(graph.predecessors(node)))
-			# print(graph.predecessors(node))
-		# if len(graph.predecessors(node))==0:
-			# counter=counter+1
-			# if node in ss.keys():
-				# counter2=counter2+1
-	# print('nodes with no incoming edges')
-	# print(counter)
-	# print('nodes with no incoming edges that are part of transcriptomics data set')
-	# print(counter2)
-	# print('number of datapoints in Fatima data')
-	# print(len(ss.keys()))
-	# print('nodes in overlap')
-	# print(len(evaluateNodes))
+	nodeList=graph.nodes()
+	for node in nodeList:
+		if len(graph.predecessors(node))>15:
+			print(node)
+			print(len(graph.predecessors(node)))
+			print(graph.predecessors(node))
+		if len(graph.predecessors(node))==0:
+			counter=counter+1
+			if node in ss.keys():
+				counter2=counter2+1
+	print('nodes with no incoming edges')
+	print(counter)
+	print('nodes with no incoming edges that are part of transcriptomics data set')
+	print(counter2)
+	print('number of datapoints in Fatima data')
+	print(len(ss.keys()))
+	print('nodes in overlap')
+	print(len(evaluateNodes))
 	
 	#setup toolbox
+	
 	toolbox = base.Toolbox()
 
 	pset = gp.PrimitiveSet("MAIN", arity=1)
@@ -331,21 +342,21 @@ def runFatimaSim():
 	pset.addPrimitive(operator.sub, 2)
 	pset.addPrimitive(operator.mul, 2)
 
-	#make a fitness minimization function
+	# make a fitness minimization function
 	creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-	# #create a class of individuals that are lists from networkx
+	# create a class of individuals that are lists from networkx
 	creator.create("Individual", list, fitness=creator.FitnessMin)
 
 
-	#how to create aliases for your individuals... 
-	#toolbox.register("attr_float", random.random)
-	#need this alias to create new graphs... but we should just be using the first one.... 
+	# how to create aliases for your individuals... 
+	# toolbox.register("attr_float", random.random)
+	# need this alias to create new graphs... but we should just be using the first one.... 
 
 	toolbox.register("genRandomBitString", genRandBits)
 	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
 	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
-	# #ind1=toolbox.individual()
+	ind1=toolbox.individual()
 	population=toolbox.population(n=100)
 
 	
@@ -356,13 +367,13 @@ def runFatimaSim():
 	stats.register("max", numpy.max)
 	hof = tools.HallOfFame(1, similar=numpy.array_equal)
 	
-	#finish registering the toolbox functions
+	# finish registering the toolbox functions
 	toolbox.register("mate", tools.cxTwoPoint)
 	toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
-	toolbox.register("select", tools.selBest)
+	toolbox.register("select", tools.selNSGA2)
 	toolbox.register("evaluate", evaluate)
 	toolbox.register("similar", numpy.array_equal)
-	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=150, stats=stats, cxpb=.2, mutpb=.2, ngen=10, verbose=True)
+	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
 	
 	
 	
