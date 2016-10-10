@@ -23,15 +23,19 @@ currentfile='testfiles/ko04060.xml'
 inputfile = open(currentfile, 'r')
 lines = inputfile.readlines()
 fnc.readKEGG(lines, graph, KEGGdict)
-
 assert len(graph.nodes()) == 212
 assert graph.nodes()[123] == 'TNFSF10'
 assert graph.nodes()[0] == 'LIF'
 assert graph.edges()[-1] == ('VEGFC_D', 'KDR')
 print "readKEGG", currentfile, "tests passed"
-ko04060_graph = graph
 
+graph = nx.DiGraph()
 fnc.readKEGGnew(lines, graph, KEGGdict)
+assert len(graph.nodes()) == 212
+assert graph.nodes()[123] == 'TNFSF10'
+assert graph.nodes()[0] == 'LIF'
+assert graph.edges()[-1] == ('VEGFC_D', 'KDR')
+print "readKEGGnew", currentfile, "tests passed"
 
 graph = nx.DiGraph()
 currentfile='testfiles/ko04062.xml'
@@ -42,5 +46,5 @@ assert len(graph.nodes()) == 61
 assert graph.nodes()[-1] == 'CDC42'
 assert graph.edges()[0] == ('RASGRP2', 'RAP1A-RAP1B')
 print "readKEGG", currentfile, "tests passed"
-ko04062_graph = graph
+
 

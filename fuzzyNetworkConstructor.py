@@ -17,6 +17,7 @@ import fuzzyNetworkConstructor as constructor
 import csv 
 import sys
 from bs4 import BeautifulSoup
+import itertools as it
 
 ## Rohith's OLD version, kept for history
 # def parseKEGGdict(filename):
@@ -243,7 +244,7 @@ def readKEGGnew(lines, graph, KEGGdict):
 		entry_name = KEGGdict[entry_name] if entry_name in KEGGdict.keys() else entry_name
 		entry_type = entry['type']
 		entry_id = entry['id']
-		#print entry_name
+
 		id_to_name[entry_id] = entry_name
 
 		if entry_type == 'group':
@@ -295,10 +296,24 @@ def readKEGGnew(lines, graph, KEGGdict):
 			print(subtypes)
 			signal='a'
 
-		# TODO: need to add recursive deconvolution of groups
-		node1 = id_to_name[relation_entry1]
-		node2 = id_to_name[relation_entry2]
-		graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
+		#given: a node ID that may be a group
+		#returns: a list that contains all group IDs deconvoluted
+		def expand_groups(node_id):
+			node_list = []
+			if node_id in groups.keys():
+				for component_id in groups[node_id]:
+					node_list.extend(expand_groups(component_id))
+			else:
+				node_list.extend([node_id])
+			return node_list
+
+		entry1_list = expand_groups(relation_entry1)
+		entry2_list = expand_groups(relation_entry2)
+
+		for (entry1, entry2) in it.product(entry1_list, entry2_list):
+			node1 = id_to_name[entry1]
+			node2 = id_to_name[entry2]
+			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
 
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):
