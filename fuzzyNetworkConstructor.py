@@ -239,7 +239,7 @@ def readKEGGnew(lines, graph, KEGGdict):
 	id_to_name = {} # map id numbers to names
 
 	for entry in soup.find_all('entry'):
-		entry_name = entry['name'].split(':')[1]
+		entry_name = entry['name'].split(':')[1] if ':' in entry['name'] else entry['name']
 		entry_name = KEGGdict[entry_name] if entry_name in KEGGdict.keys() else entry_name
 		entry_type = entry['type']
 		entry_id = entry['id']
@@ -261,10 +261,10 @@ def readKEGGnew(lines, graph, KEGGdict):
 		relation_entry2 = relation['entry2']
 		relation_type = relation['type']
 
-		subtype_names = []
+		subtypes = []
 
 		for subtype in relation.find_all('subtype'):
-			subtype_names.append(subtype['name'])
+			subtypes.append(subtype['name'])
 
 		if ('activation' in subtypes) or ('expression' in subtypes):
 			color='green'
@@ -296,9 +296,9 @@ def readKEGGnew(lines, graph, KEGGdict):
 			signal='a'
 
 		# TODO: need to add recursive deconvolution of groups
-		node1 = id_to_name[entry1]
-		node2 = id_to_name[entry2]
-		graph.add_edge(node1,node2, color=color, subtype=subtype_names[0], type=relation_type, signal=signal )
+		node1 = id_to_name[relation_entry1]
+		node2 = id_to_name[relation_entry2]
+		graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
 
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):
