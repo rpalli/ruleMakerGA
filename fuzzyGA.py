@@ -290,14 +290,17 @@ def simplifyNetwork(graph, ss):
 		else:
 			graph.add_edge(before,after,signal='a')
 		graph.remove_node(rm)
+	flag=True
+	while(flag):
+		flag=False	
+		# remove nodes with no predecessors or value in given steady state data
+		print(len(graph.nodes()))
+		newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
+		if(len(newNodes)<len(graph.nodes())):
+			flag=True
+		graph=graph.subgraph(newNodes)
 		
-		
-# remove nodes with no predecessors or value in given steady state data
-	print(len(graph.nodes()))
-	newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
-	graph=graph.subgraph(newNodes)
-	
-	print(len(graph.nodes()))
+		print(len(graph.nodes()))
 
 	
 	
@@ -396,7 +399,7 @@ def runFatimaSim():
 	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
 	ind1=toolbox.individual()
-	population=toolbox.population(n=100)
+	population=toolbox.population(n=50)
 
 	
 	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
@@ -412,7 +415,7 @@ def runFatimaSim():
 	toolbox.register("select", tools.selNSGA2)
 	toolbox.register("evaluate", evaluate)
 	toolbox.register("similar", numpy.array_equal)
-	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
+	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=1, verbose=True)
 	
 	
 	
