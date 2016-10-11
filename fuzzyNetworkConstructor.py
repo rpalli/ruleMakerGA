@@ -315,6 +315,17 @@ def readKEGGnew(lines, graph, KEGGdict):
 			node2 = id_to_name[entry2]
 			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
 
+def read_biopax(lines, graph):
+	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	pathways = soup.find_all('pathway')
+	for pathway in pathways:
+		name = pathway.find('NAME').string
+		synonyms = [s.string for s in pathway.find_all('SYNONYMS')]
+		component_ids = [c.get('rdf:resource')[1:] for c in pathway.find_all('PATHWAY-COMPONENTS')]
+		print name
+		for c in component_ids:
+			component = soup.find(attrs={'rdf:ID': c})
+			print component.prettify()
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):
 	#upload KEGG files from a particular folder.

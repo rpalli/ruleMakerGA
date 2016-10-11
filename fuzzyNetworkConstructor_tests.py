@@ -47,4 +47,10 @@ assert graph.nodes()[-1] == 'CDC42'
 assert graph.edges()[0] == ('RASGRP2', 'RAP1A-RAP1B')
 print "readKEGG", currentfile, "tests passed"
 
+graph = nx.DiGraph()
+currentfile = 'testfiles/glycolysis-biopax'
+inputfile = open(currentfile, 'r')
+lines = inputfile.readlines()
+fnc.read_biopax(lines, graph)
+
 
