@@ -374,45 +374,45 @@ def runFatimaSim():
 	
 	# # #setup toolbox
 	
-	# # toolbox = base.Toolbox()
+	toolbox = base.Toolbox()
 
-	# # pset = gp.PrimitiveSet("MAIN", arity=1)
-	# # pset.addPrimitive(operator.add, 2)
-	# # pset.addPrimitive(operator.sub, 2)
-	# # pset.addPrimitive(operator.mul, 2)
+	pset = gp.PrimitiveSet("MAIN", arity=1)
+	pset.addPrimitive(operator.add, 2)
+	pset.addPrimitive(operator.sub, 2)
+	pset.addPrimitive(operator.mul, 2)
 
-	# # # make a fitness minimization function
-	# # creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-	# # # create a class of individuals that are lists from networkx
-	# # creator.create("Individual", list, fitness=creator.FitnessMin)
+	# make a fitness minimization function
+	creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+	# create a class of individuals that are lists from networkx
+	creator.create("Individual", list, fitness=creator.FitnessMin)
 
 
-	# # # how to create aliases for your individuals... 
-	# # # toolbox.register("attr_float", random.random)
-	# # # need this alias to create new graphs... but we should just be using the first one.... 
+	# how to create aliases for your individuals... 
+	# toolbox.register("attr_float", random.random)
+	# need this alias to create new graphs... but we should just be using the first one.... 
 
-	# # toolbox.register("genRandomBitString", genRandBits)
-	# # toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
-	# # toolbox.register("population", tools.initRepeat, list , toolbox.individual)
+	toolbox.register("genRandomBitString", genRandBits)
+	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
+	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
-	# # ind1=toolbox.individual()
-	# # population=toolbox.population(n=100)
+	ind1=toolbox.individual()
+	population=toolbox.population(n=100)
 
 	
-	# # stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-	# # stats.register("avg", numpy.mean)
-	# # stats.register("std", numpy.std)
-	# # stats.register("min", numpy.min)
-	# # stats.register("max", numpy.max)
-	# # hof = tools.HallOfFame(1, similar=numpy.array_equal)
+	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	stats.register("avg", numpy.mean)
+	stats.register("std", numpy.std)
+	stats.register("min", numpy.min)
+	stats.register("max", numpy.max)
+	hof = tools.HallOfFame(1, similar=numpy.array_equal)
 	
-	# # # finish registering the toolbox functions
-	# # toolbox.register("mate", tools.cxTwoPoint)
-	# # toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
-	# # toolbox.register("select", tools.selNSGA2)
-	# # toolbox.register("evaluate", evaluate)
-	# # toolbox.register("similar", numpy.array_equal)
-	# # algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
+	# finish registering the toolbox functions
+	toolbox.register("mate", tools.cxTwoPoint)
+	toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
+	toolbox.register("select", tools.selNSGA2)
+	toolbox.register("evaluate", evaluate)
+	toolbox.register("similar", numpy.array_equal)
+	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
 	
 	
 	
