@@ -272,6 +272,34 @@ def simplifyNetwork(graph, ss):
 # # 2. remove straigth paths. 
 # # 3. 
 
+
+	#collapse complexes of nodes already in the list
+	for node in graph.nodes():
+		predlist=graph.predecessors(node)
+		for pred in predlist:
+			if '-' in pred:
+				print(pred)
+				genes=pred.split('-')
+				flag=True
+				for gene in genes:
+					if not gene in predlist:
+						flag=False
+				if flag:
+					graph.remove_edge(pred,node)
+	flag=True
+	
+	# remove nodes with no predecessors or value in given steady state data
+	while(flag):
+		flag=False	
+		print(len(graph.nodes()))
+		newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
+		if(len(newNodes)<len(graph.nodes())):
+			flag=True
+		graph=graph.subgraph(newNodes)
+		
+		print(len(graph.nodes()))
+		
+	
 #  collapse straight lines
 	print(len(graph.nodes()))
 	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1)and (not (x in ss.keys())))]
@@ -291,17 +319,27 @@ def simplifyNetwork(graph, ss):
 			graph.add_edge(before,after,signal='a')
 		graph.remove_node(rm)
 	flag=True
-	while(flag):
-		flag=False	
-		# remove nodes with no predecessors or value in given steady state data
-		print(len(graph.nodes()))
-		newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
-		if(len(newNodes)<len(graph.nodes())):
-			flag=True
-		graph=graph.subgraph(newNodes)
-		
-		print(len(graph.nodes()))
 
+	#rewire nodes that have only one upstream node
+	print(len(graph.nodes()))
+	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1)and (not (x in ss.keys()))]
+	for rm in removeNodeList:
+		for after in graph.successors(rm):
+			before=graph.predecessors(rm)[0]
+			edge1=graph.get_edge_data(before,rm)['signal']
+			edge2=graph.get_edge_data(rm,after)['signal']
+			inhCount=0
+			if edge1=='i':
+				inhCount=inhCount+1
+			if edge2=='i':
+				inhCount=inhCount+1
+			if inhCount==1:
+				graph.add_edge(before,after,signal='i')
+			else:
+				graph.add_edge(before,after,signal='a')
+		graph.remove_node(rm)
+		flag=True
+	
 	
 	
 def mutate(individual):

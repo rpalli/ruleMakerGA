@@ -15,64 +15,30 @@ import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
 import csv 
-import itertools as iter
+import sys
+from bs4 import BeautifulSoup
+import itertools as it
 
-import pygraphviz
-import matplotlib.patches as mpatches
-from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap, BoundaryNorm
-import networkx.drawing.nx_agraph as agraph
-
-def drawGraph3(representative, filename, KEGGdict):
-	rep=representative.copy()
-	dictionary={}
-	names=nx.get_node_attributes(representative, 'name')
-	for n in rep.nodes():
-		if len(names[n].split())==1:
-			if names[n] in KEGGdict.keys():
-				dictionary[n]=KEGGdict[names[n]]
-				#print(rep.node[n]['name'])
-		else :
-			translated=''
-			for word in names[n].split():
-				word1=word.lstrip('ko:')
-				word1=word1.lstrip('gl:')
-				if word1 in KEGGdict.keys():
-					translated=translated+KEGGdict[word1]+'-'
-				else:
-					translated=translated+word1+'-'
-			dictionary[n]=translated
-	repar= nx.relabel_nodes(rep,dictionary)
-	#print(repar.nodes())
-	#print(repar.edges())
-	B=agraph.to_agraph(repar)        # convert to a graphviz graph\
-	B.layout()            # neato layout
-	B.draw(filename)       # write postscript in k5.ps with neato layout
-
-def drawGraph2(representative, filename):
-	B=agraph.to_agraph(representative)        # convert to a graphviz graph\
-	B.layout()            # neato layout
-	B.draw(filename)       # write postscript in k5.ps with neato layout
-
-def parseKEGGdict(filename):
-	#makes a dictionary to convert ko numbers from KEGG into real gene names
-	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
-	dict={}
-	inputfile = open(filename, 'r')
-	lines = inputfile.readlines()
-	for line in lines:
-		if line[0]=='D':
-			kline=line.split('      ')
-			kstring=kline[1]
-			kline=kstring.split('  ')
-			k=kline[0]
-			nameline=line.replace('D      ', 'D')
-			nameline=nameline.split('  ')
-			namestring=nameline[1]
-			nameline=namestring.split(';')
-			name=nameline[0]
-			dict[k]=name
-	return dict
+## Rohith's OLD version, kept for history
+# def parseKEGGdict(filename):
+# 	#makes a dictionary to convert ko numbers from KEGG into real gene names
+# 	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
+# 	dict={}
+# 	inputfile = open(filename, 'r')
+# 	lines = inputfile.readlines()
+# 	for line in lines:
+# 		if line[0]=='D':
+# 			kline=line.split('      ')
+# 			kstring=kline[1]
+# 			kline=kstring.split('  ')
+# 			k=kline[0]
+# 			nameline=line.replace('D      ', 'D')
+# 			nameline=nameline.split('  ')
+# 			namestring=nameline[1]
+# 			nameline=namestring.split(';')
+# 			name=nameline[0]
+# 			dict[k]=name
+# 	return dict
 
 def parseKEGGdict(filename, aliasDict, dict):
 	#reads KEGG dictionary of identifiers between orthology numbers and actual protein names and saves it to a python dictionary
@@ -98,15 +64,16 @@ def parseKEGGdict(filename, aliasDict, dict):
 					aliasDict[nameline[entry].strip()]=name
 			dict[k]=name
 	return dict
+
 def readKEGG(lines, graph, KEGGdict):
 	#the network contained in a KEGG file to the graph. 
 	grouplist=[] #sometimes the network stores a group of things all activated by a single signal as a "group". We need to rewire the arrows to go to each individual component of the group so we save a list of these groups and a dictionary between id numbers and lists of elements that are part of that group
 	groups={}
 	i=0 #i controls our movement through the lines of code. 
 	dict={} #identifies internal id numbers with names (much like the code earlier does for groups to id numbers of elements of the group)
-	orderDict={}
 	while i< len(lines):
 		line=lines[i]
+		# print line
 		#add nodes
 		if "<entry" in line:		
 			nameline=line.split('name="')
@@ -117,7 +84,9 @@ def readKEGG(lines, graph, KEGGdict):
 			name=name.replace(' ','-')
 			name=name.replace('ko:','')
 			name=name.replace(':','-')
-			#print(name)
+			
+			# print(name)
+			
 			typeline=line.split('type="')
 			typestring=typeline[1]
 			typeline=typestring.split('"')
@@ -138,7 +107,6 @@ def readKEGG(lines, graph, KEGGdict):
 						namelist.append(KEGGdict[x])
 					else:
 						namelist.append(x)
-				namelist.sort()
 				name=namelist[0]+'-'
 				for x in range(1,len(namelist)):
 					name=name+namelist[x]+'-'
@@ -265,6 +233,87 @@ def readKEGG(lines, graph, KEGGdict):
 				graph.add_edge(node1,node2, color=color, subtype=name, type=type, signal=signal )
 		i=i+1
 
+def readKEGGnew(lines, graph, KEGGdict):
+	#read all lines into a bs4 object using libXML parser
+	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	groups = {} # store group IDs and list of sub-ids
+	id_to_name = {} # map id numbers to names
+
+	for entry in soup.find_all('entry'):
+		entry_name = entry['name'].split(':')[1] if ':' in entry['name'] else entry['name']
+		entry_name = KEGGdict[entry_name] if entry_name in KEGGdict.keys() else entry_name
+		entry_type = entry['type']
+		entry_id = entry['id']
+
+		id_to_name[entry_id] = entry_name
+
+		if entry_type == 'group':
+			group_ids = []
+			for component in entry.find_all('component'):
+				group_ids.append(component['id'])
+			groups[entry_id] = group_ids
+		else:
+			graph.add_node(entry_name, {'name': entry_name, 'type': entry_type})
+
+	for relation in soup.find_all('relation'):
+		(color, signal) = ('black', 'a')
+
+		relation_entry1 = relation['entry1']
+		relation_entry2 = relation['entry2']
+		relation_type = relation['type']
+
+		subtypes = []
+
+		for subtype in relation.find_all('subtype'):
+			subtypes.append(subtype['name'])
+
+		if ('activation' in subtypes) or ('expression' in subtypes):
+			color='green'
+			signal='a'
+		elif 'inhibition' in subtypes:
+			color='red'
+			signal='i'
+		elif ('binding/association' in subtypes) or('compound' in subtypes):
+			color='purple'
+			signal='a'
+		elif 'phosphorylation' in subtypes:
+			color='orange'
+			signal='a'
+		elif 'dephosphorylation' in subtypes:
+			color='pink'
+			signal='i'
+		elif 'indirect effect' in subtypes:
+			color='cyan'
+			signal='a'
+		elif 'dissociation' in subtypes:
+			color='yellow'
+			signal='i'
+		elif 'ubiquitination' in subtypes:
+			color='cyan'
+			signal='i'
+		else:
+			print('color not detected. Signal assigned to activation arbitrarily')
+			print(subtypes)
+			signal='a'
+
+		#given: a node ID that may be a group
+		#returns: a list that contains all group IDs deconvoluted
+		def expand_groups(node_id):
+			node_list = []
+			if node_id in groups.keys():
+				for component_id in groups[node_id]:
+					node_list.extend(expand_groups(component_id))
+			else:
+				node_list.extend([node_id])
+			return node_list
+
+		entry1_list = expand_groups(relation_entry1)
+		entry2_list = expand_groups(relation_entry2)
+
+		for (entry1, entry2) in it.product(entry1_list, entry2_list):
+			node1 = id_to_name[entry1]
+			node2 = id_to_name[entry2]
+			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
 
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):
@@ -295,24 +344,17 @@ def uploadKEGGcodes(codelist, graph, KEGGdict):
 		#print(graph.nodes())
 
 if __name__ == '__main__':
-	KEGGfileName='ko04060.xml'
-
-	
 	graph = nx.DiGraph()
 	dict={}
 	aliasDict={}
 	KEGGdict=parseKEGGdict('ko00001.keg', aliasDict, dict)
 	
-	inputfile = open(KEGGfileName, 'r')
-	lines = inputfile.readlines()
-	readKEGG(lines, graph, KEGGdict)
-
-	
-	KEGGfileName='ko04062.xml'
-	inputfile = open(KEGGfileName, 'r')
-	lines = inputfile.readlines()
-	readKEGG(lines, graph, KEGGdict)
-	#print(graph.nodes())
+	if len(sys.argv) > 1: #if we have supplied a command-line argument
+		KEGGfileName=sys.argv[1]
+		inputfile = open(KEGGfileName, 'r')
+		lines = inputfile.readlines()
+		readKEGG(lines, graph, KEGGdict)
+		print(graph.nodes())
 	
 	
 	
@@ -326,6 +368,8 @@ if __name__ == '__main__':
 		if node in graph.successors(node):
 			graph.remove_edge(node,node)
 	global individualLength
-	individualLength=setupGAparams(graph)
-	#graph input stuff
 
+	#this line breaks the code
+	#individualLength=setupGAparams(graph)
+
+	#graph input stuff
