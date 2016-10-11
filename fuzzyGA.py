@@ -15,6 +15,7 @@ import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
 import csv
+import itertools as itertool
 
 def setupGAparams(graph):
 	global individualParse #keep a triplet of how to parse out each individual
@@ -29,7 +30,7 @@ def setupGAparams(graph):
 	global p
 	global hillOn
 	global nodeOrderInvertList
-
+	
 	repeat=True
 	while(repeat):
 		repeat=False
@@ -56,19 +57,19 @@ def setupGAparams(graph):
 		preds=graph.predecessors(nodeList[i])
 		if len(preds)>15:
 			preds=preds[1:15]
-		#print(preds)
+			#print(preds)
 		for j in range(0,len(preds)):
 			preds[j]=nodeDict[preds[j]]
-		#print(preds)
-		#print(nodeList[i])
-		from itertools import product, repeat
-		with_nones = zip(preds, repeat(None))
-		possibilities=list(product(*with_nones))
+		# print(preds)
+		# print(nodeList[i])
+		withNones = zip(preds, itertool.repeat('empty'))
+		
+		possibilities=list(itertool.product(*withNones))
 		activities=[]
 		for j in range(0,len(possibilities)):
 			possibilities[j]=list(possibilities[j])
-			while None in possibilities[j]:
-				possibilities[j].remove(None)
+			while 'empty' in possibilities[j]:
+				possibilities[j].remove('empty')
 			while [] in possibilities[j]:
 				possibilities[j].remove([])
 			# print('possible')
@@ -265,6 +266,39 @@ def evaluate(individual):
 		#print(RME)
 	return RME,
 
+def simplifyNetwork(graph, ss):
+#network simplification algorithm. 
+# # 1. remove nodes which are neither part of input nor have input to them...
+# # 2. remove straigth paths. 
+# # 3. 
+
+#  collapse straight lines
+	print(len(graph.nodes()))
+	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1)and (not (x in ss.keys())))]
+	for rm in removeNodeList:
+		before=graph.predecessors(rm)[0]
+		after=graph.successors(rm)[0]
+		edge1=graph.get_edge_data(before,rm)['signal']
+		edge2=graph.get_edge_data(rm,after)['signal']
+		inhCount=0
+		if edge1=='i':
+			inhCount=inhCount+1
+		if edge2=='i':
+			inhCount=inhCount+1
+		if inhCount==1:
+			graph.add_edge(before,after,signal='i')
+		else:
+			graph.add_edge(before,after,signal='a')
+		graph.remove_node(rm)
+		
+		
+# remove nodes with no predecessors or value in given steady state data
+	print(len(graph.nodes()))
+	newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
+	graph=graph.subgraph(newNodes)
+	
+	print(len(graph.nodes()))
+
 	
 	
 def mutate(individual):
@@ -297,14 +331,8 @@ def runFatimaSim():
 		if node in graph.successors(node):
 			graph.remove_edge(node,node)
 	nodeList=graph.nodes()
-	for node in nodeList:
-		if len(graph.predecessors(node))==0 and not node in ss.keys():
-			graph.remove_node(node)
 	
-	
-	
-	
-	
+	simplifyNetwork(graph,ss)
 	
 	global individualLength
 	individualLength=setupGAparams(graph)
@@ -312,79 +340,90 @@ def runFatimaSim():
 	# print(graph.nodes())
 	# print('sstime')
 	# print(ss.keys())
-	counter=0
-	counter2=0
+	# counter=0
+	# counter2=0
 	nodeList=graph.nodes()
+	subgraphnodes=set()
 	for node in nodeList:
 		if len(graph.predecessors(node))>15:
+			subgraphnodes.add(node)
+			for element in graph.predecessors(node):
+				subgraphnodes.add(element)
+			
+			print('new node')
 			print(node)
 			print(len(graph.predecessors(node)))
 			print(graph.predecessors(node))
-		if len(graph.predecessors(node))==0:
-			counter=counter+1
-			if node in ss.keys():
-				counter2=counter2+1
-	print('nodes with no incoming edges')
-	print(counter)
-	print('nodes with no incoming edges that are part of transcriptomics data set')
-	print(counter2)
-	print('number of datapoints in Fatima data')
-	print(len(ss.keys()))
-	print('nodes in overlap')
-	print(len(evaluateNodes))
+			# for predy in graph.predecessors(node):
+				# if node in graph.predecessors(predy):
+					# print(predy)
+	# graph1=graph.subgraph(subgraphnodes)
+	# constructor.drawGraph2(graph1,'dense_subgraph.png')
+		# if len(graph.predecessors(node))==0:
+			# counter=counter+1
+			# if node in ss.keys():
+				# counter2=counter2+1
+	# print('nodes with no incoming edges')
+	# print(counter)
+	# print('nodes with no incoming edges that are part of transcriptomics data set')
+	# print(counter2)
+	# print('number of datapoints in Fatima data')
+	# print(len(ss.keys()))
+	# print('nodes in overlap')
+	# print(len(evaluateNodes))
 	
-	#setup toolbox
+	# # #setup toolbox
 	
-	toolbox = base.Toolbox()
+	# # toolbox = base.Toolbox()
 
-	pset = gp.PrimitiveSet("MAIN", arity=1)
-	pset.addPrimitive(operator.add, 2)
-	pset.addPrimitive(operator.sub, 2)
-	pset.addPrimitive(operator.mul, 2)
+	# # pset = gp.PrimitiveSet("MAIN", arity=1)
+	# # pset.addPrimitive(operator.add, 2)
+	# # pset.addPrimitive(operator.sub, 2)
+	# # pset.addPrimitive(operator.mul, 2)
 
-	# make a fitness minimization function
-	creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-	# create a class of individuals that are lists from networkx
-	creator.create("Individual", list, fitness=creator.FitnessMin)
+	# # # make a fitness minimization function
+	# # creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+	# # # create a class of individuals that are lists from networkx
+	# # creator.create("Individual", list, fitness=creator.FitnessMin)
 
 
-	# how to create aliases for your individuals... 
-	# toolbox.register("attr_float", random.random)
-	# need this alias to create new graphs... but we should just be using the first one.... 
+	# # # how to create aliases for your individuals... 
+	# # # toolbox.register("attr_float", random.random)
+	# # # need this alias to create new graphs... but we should just be using the first one.... 
 
-	toolbox.register("genRandomBitString", genRandBits)
-	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
-	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
+	# # toolbox.register("genRandomBitString", genRandBits)
+	# # toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
+	# # toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
-	ind1=toolbox.individual()
-	population=toolbox.population(n=100)
+	# # ind1=toolbox.individual()
+	# # population=toolbox.population(n=100)
 
 	
-	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-	stats.register("avg", numpy.mean)
-	stats.register("std", numpy.std)
-	stats.register("min", numpy.min)
-	stats.register("max", numpy.max)
-	hof = tools.HallOfFame(1, similar=numpy.array_equal)
+	# # stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	# # stats.register("avg", numpy.mean)
+	# # stats.register("std", numpy.std)
+	# # stats.register("min", numpy.min)
+	# # stats.register("max", numpy.max)
+	# # hof = tools.HallOfFame(1, similar=numpy.array_equal)
 	
-	# finish registering the toolbox functions
-	toolbox.register("mate", tools.cxTwoPoint)
-	toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
-	toolbox.register("select", tools.selNSGA2)
-	toolbox.register("evaluate", evaluate)
-	toolbox.register("similar", numpy.array_equal)
-	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
+	# # # finish registering the toolbox functions
+	# # toolbox.register("mate", tools.cxTwoPoint)
+	# # toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
+	# # toolbox.register("select", tools.selNSGA2)
+	# # toolbox.register("evaluate", evaluate)
+	# # toolbox.register("similar", numpy.array_equal)
+	# # algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
 	
 	
 	
-	# graphy=nx.DiGraph()
-	# graphy.add_edge(1,2,color='blue',type='typing')	
+	# # # graphy=nx.DiGraph()
+	# # # graphy.add_edge(1,2,color='blue',type='typing')	
 
-	# ind2=population[2]
-	# child1, child2 = [toolbox.clone(ind) for ind in (ind1, ind2)]
-	# tools.cxBlend(child1, child2, 0.5)
-	# del child1.fitness.values
-	# del child2.fitness.values
+	# # # ind2=population[2]
+	# # # child1, child2 = [toolbox.clone(ind) for ind in (ind1, ind2)]
+	# # # tools.cxBlend(child1, child2, 0.5)
+	# # # del child1.fitness.values
+	# # # del child2.fitness.values
 	
 	
 	
