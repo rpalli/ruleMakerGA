@@ -107,6 +107,8 @@ def setupGAparams(graph):
 	# print(initValues)
 	# print(ss)
 	# print(len(ss.keys()))
+	global individualLength
+	individualLength=counter
 	return counter
 	
 	
@@ -306,7 +308,9 @@ def mutate(individual):
 	
 	return individual,
 
-def runFatimaSim():
+	
+	
+def buildFatimaNetwork():
 	dataFileName='C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv'
 	
 	#two dicts for the models
@@ -333,15 +337,9 @@ def runFatimaSim():
 	nodeList=graph.nodes()
 	
 	simplifyNetwork(graph,ss)
+	return graph
 	
-	global individualLength
-	individualLength=setupGAparams(graph)
-	#graph input stuff
-	# print(graph.nodes())
-	# print('sstime')
-	# print(ss.keys())
-	# counter=0
-	# counter2=0
+def printSubgraphs(graph):
 	nodeList=graph.nodes()
 	subgraphnodes=set()
 	for node in nodeList:
@@ -371,6 +369,12 @@ def runFatimaSim():
 	# print(len(ss.keys()))
 	# print('nodes in overlap')
 	# print(len(evaluateNodes))
+
+
+
+def runFatimaSim():
+	graph=buildFatimaNetwork()
+	setupGAparams(graph)
 	
 	# # #setup toolbox
 	

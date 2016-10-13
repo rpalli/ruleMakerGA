@@ -15,7 +15,7 @@ import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
 import csv 
-<<<<<<< HEAD
+
 import itertools as iter
 
 import pygraphviz
@@ -74,7 +74,7 @@ def parseKEGGdict(filename):
 			name=nameline[0]
 			dict[k]=name
 	return dict
-=======
+
 import sys
 from bs4 import BeautifulSoup
 import itertools as it
@@ -99,7 +99,7 @@ import itertools as it
 # 			name=nameline[0]
 # 			dict[k]=name
 # 	return dict
->>>>>>> refs/remotes/origin/master
+
 
 def parseKEGGdict(filename, aliasDict, dict):
 	#reads KEGG dictionary of identifiers between orthology numbers and actual protein names and saves it to a python dictionary
@@ -298,7 +298,7 @@ def readKEGG(lines, graph, KEGGdict):
 
 def readKEGGnew(lines, graph, KEGGdict):
 	#read all lines into a bs4 object using libXML parser
-	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
 	id_to_name = {} # map id numbers to names
 
