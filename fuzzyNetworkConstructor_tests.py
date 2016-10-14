@@ -1,5 +1,6 @@
 import fuzzyNetworkConstructor as fnc
 import networkx as nx
+import matplotlib.pyplot as plt
 
 dict={}
 aliasDict={}
@@ -48,9 +49,16 @@ assert graph.edges()[0] == ('RASGRP2', 'RAP1A-RAP1B')
 print "readKEGG", currentfile, "tests passed"
 
 graph = nx.DiGraph()
-currentfile = 'testfiles/glycolysis-biopax'
+currentfile = 'testfiles/simple-graph.biopax'
 inputfile = open(currentfile, 'r')
 lines = inputfile.readlines()
 fnc.read_biopax(lines, graph)
+for node in graph.nodes():
+	print node
+for edge in graph.edges():
+	print edge
+nx.draw_spring(graph)
+plt.show()
+
 
 
