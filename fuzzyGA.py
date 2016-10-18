@@ -1,6 +1,7 @@
 #import stuff
 from random import random
 from random import shuffle
+from random import gauss
 import numpy as numpy
 from math import floor, ceil, log
 import operator
@@ -16,21 +17,22 @@ import urllib2
 import fuzzyNetworkConstructor as constructor
 import csv
 import itertools as itertool
+import copy as copy
+import cPickle as pickle
 
-def setupGAparams(graph):
-	global individualParse #keep a triplet of how to parse out each individual
-	global steps
-	global nodeList
-	global nodeOrderList
-	global initValues
-	global ss
-	global evaluateNodes #list of indices in nodeList to be evaluated from nodelist
-	global possibilityNumList
-	global h
-	global p
-	global hillOn
-	global nodeOrderInvertList
-	
+def returnSimParams():
+	simSteps=100
+	generations=100
+	popSize=100
+	p=.5
+	h= 3
+	hillOn=False
+	bitFlipProb=.1
+	crossoverProb=.2
+	mutationProb=.2
+	return simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb
+
+def setupGAparams(graph, ss):
 	repeat=True
 	while(repeat):
 		repeat=False
@@ -38,9 +40,7 @@ def setupGAparams(graph):
 			if node in graph.successors(node):
 				graph.remove_edge(node,node)
 				repeat=True
-	hillOn = False
-	p=.5
-	h= 3
+	
 	evaluateNodes=[] 
 	individualParse=[] 
 	nodeOrderList=[] 
@@ -50,18 +50,15 @@ def setupGAparams(graph):
 	nodeDict={}
 	for i in range(0,len(nodeList)):
 		nodeDict[nodeList[i]]=i
-	steps = 5
+	steps = 100
 	counter=0
 	initValues=[]
 	for i in range(0,len(nodeList)):
 		preds=graph.predecessors(nodeList[i])
 		if len(preds)>15:
 			preds=preds[1:15]
-			#print(preds)
 		for j in range(0,len(preds)):
 			preds[j]=nodeDict[preds[j]]
-		# print(preds)
-		# print(nodeList[i])
 		withNones = zip(preds, itertool.repeat('empty'))
 		
 		possibilities=list(itertool.product(*withNones))
@@ -72,8 +69,6 @@ def setupGAparams(graph):
 				possibilities[j].remove('empty')
 			while [] in possibilities[j]:
 				possibilities[j].remove([])
-			# print('possible')
-			# print possibilities[j]
 		while [] in possibilities:
 			possibilities.remove([])
 		for sequence in possibilities:
@@ -104,18 +99,11 @@ def setupGAparams(graph):
 			evaluateNodes.append(i)
 		else:
 			initValues.append(0.5)
-	# print(initValues)
-	# print(ss)
-	# print(len(ss.keys()))
-	global individualLength
-	individualLength=counter
-	return counter
+	return counter, individualParse, nodeList, nodeOrderList, initValues, evaluateNodes, possibilityNumList, nodeOrderInvertList
 	
 	
-def genRandBits():
-	global individualLength
+def genRandBits(individualLength):
 	arr = numpy.random.randint(2, size=(individualLength,))
-	#print(arr)
 	return list(arr)
 	
 def loadFatimaData(filename,tempDict):
@@ -145,127 +133,98 @@ def sortFpkms(data,ss):
 			maxdata=1
 		ss[str.upper(data[i][0])]=float(data[i][1])/maxdata
 	
-def hill(x):
-	global h
-	global p
-	global hillOn
+def hill(x,h,p,hillOn):
 	if hillOn:
 		return ((1+h**p)*x**p)/(h**p+x**p)		
 	else:
 		return x
-	
-	
-def hillInv(x, inverter):
+		
+def hillInv(x, inverter,h,p,hillOn):
 	if inverter:
-		return hill(1-x)
+		return hill(1-x, h,p,hillOn)
 	else:
-		return hill(x)
-
-# def hill(x, h, p):
-	# return ((1+h**p)*x**p)/(h**p+x**p)
-			
+		return hill(x, h,p,hillOn)
+		
 def fuzzyAnd(num1, num2):
 	return min(num1,num2)
 			
 def fuzzyOr(num1, num2):
 	return max(num1, num2)
 
-	
-	
 def bit2int(bitlist):
 	out = 0
 	for bit in bitlist:
 		out = (out << 1) | bit
 	return out
 
-
-def fuzzyUpdate(currentNode,oldValue,individual):
-	global individualParse
-	global nodeList
-	global nodeOrderList
-	global nodeOrderInvertList
-	global possibilityNumList
-	# print(nodeList[currentNode])
+def fuzzyUpdate(currentNode,oldValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn):
 	triple=individualParse[currentNode]
 	nodeOrder=nodeOrderList[currentNode]
 	nodeOrderInvert=nodeOrderInvertList[currentNode]
-	#print(nodeOrderList)
 	if possibilityNumList[currentNode]>0:
-		#print(bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode])
 		logicOperatorFlags=individual[triple[1]:triple[2]]
 		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
 		nodeOrderInvert=nodeOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		# print(nodeList[currentNode])
-		# print(nodeOrderInvert)
-		# print(nodeOrder)
 		if len(nodeOrder)==0:
 			value=oldValue[currentNode]
 		elif len(nodeOrder)==1:
 			#print(nodeOrder[0])
-			value=hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0])
+			value=hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn)
 		else:
 			counter =0
 			if logicOperatorFlags[0]==0:
-				value=fuzzyAnd(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0]),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1]))
+				value=fuzzyAnd(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1],h,p,hillOn))
 			else:
-				value=fuzzyOr(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0]),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1]))
+				value=fuzzyOr(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1],h,p,hillOn))
 			for i in range(2,len(nodeOrder)):
 				if logicOperatorFlags[i]==0:
-					value=fuzzyAnd(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i]))
+					value=fuzzyAnd(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i],h,p,hillOn))
 				else:
-					value=fuzzyOr(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i]))
-		# print('value')
-		# print(value)
+					value=fuzzyOr(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i],h,p,hillOn))
 		return value
 	else:
 		# print('origvalue')
 		# print(oldValue[currentNode])
 		return oldValue[currentNode]						
 				
-def runFuzzySim(individual):
-	#do fuzzy simulation. individual is just a long bitstring... need to seperate it out. 
-	global individualParse
-	global nodeList
-	global initValues
+def runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork):
+	#do fuzzy simulation. individual is just a long bitstring... need to seperate it out.  
 	#list of triples which gives the total list of nodes. 
 	counter=0;
 	newValue=list(initValues)
 	simData=[]
 	simData.append(list(newValue))
-	global steps
 	seq=range(0,len(individualParse))
+	nodeNoise=[]
+	for node in range(0,len(individualParse)):
+		nodeNoise.append(sigmaNode*random())
 	for step in range(0,steps):
 		shuffle(seq)
 		for i in range(0,len(individualParse)):	
-			newValue[seq[i]]=fuzzyUpdate(seq[i],newValue,individual)
+			newValue[seq[i]]=nodeNoise[seq[i]]+fuzzyUpdate(seq[i],newValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn)
 		simData.append(list(newValue))
-	array= [0 for x in range(0,len(newValue))]
-	for step in range(len(simData)-5,len(simData)):
-		#print(simData[step])
-		for element in range(0,len(array)):
-			array[element]=array[element]+simData[step][element]
-	for element in range(0,len(array)):
-		array[element]=array[element]/5
-	return array
-	
-	
+	avg= [0 for x in range(0,len(newValue))]
+	stdev= [0 for x in range(0,len(newValue))]
+	for step in range(0,len(simData)):
+		for element in range(0,len(avg)):
+			simData[step][element]=simData[step][element]+sigmaNetwork*random()
+	for step in range(len(simData)-10,len(simData)):
+		for element in range(0,len(avg)):
+			avg[element]=avg[element]+simData[step][element]
+	for element in range(0,len(avg)):
+		avg[element]=avg[element]/10
+	for step in range(len(simData)-10,len(simData)):
+		for element in range(0,len(avg)):
+			stdev[element]=stdev[element]+abs(simData[step][element]-avg[element])
+		
+	return (avg, stdev)
 			
 #this is the evaluation function. Need to create a graph then recreate everything with it.
-def evaluate(individual):
-	global ss
-	global evaluateNodes
-	#print evaluateNodes
-	RME=1.0
-	#for i in range(0,len(individual)):
-		# print(individual)
-		# print(i)
-		# print(individual[int(i)])
-	boolValues=runFuzzySim(individual)	
-	#print(len(boolValues))
+def evaluate(individual, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn):
+	RME=0
+	boolValues, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,0,0)	
 	for i in range(0, len(evaluateNodes)):
-		#print(evaluateNodes[i])
 		RME=RME+(boolValues[evaluateNodes[i]]-ss[nodeList[evaluateNodes[i]]])**2
-		#print(RME)
 	return RME,
 
 def simplifyNetwork(graph, ss):
@@ -301,21 +260,11 @@ def simplifyNetwork(graph, ss):
 	
 	print(len(graph.nodes()))
 
-	
-	
-def mutate(individual):
-	global nodeList
-	
-	return individual,
-
-	
-	
 def buildFatimaNetwork():
 	dataFileName='C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv'
 	
 	#two dicts for the models
 	nodeUpdateDict={}
-	global ss
 	ss={} 
 	data=loadFpkms(dataFileName)
 	sortFpkms(data,ss)
@@ -337,7 +286,7 @@ def buildFatimaNetwork():
 	nodeList=graph.nodes()
 	
 	simplifyNetwork(graph,ss)
-	return graph
+	return graph, ss
 	
 def printSubgraphs(graph):
 	nodeList=graph.nodes()
@@ -352,32 +301,10 @@ def printSubgraphs(graph):
 			print(node)
 			print(len(graph.predecessors(node)))
 			print(graph.predecessors(node))
-			# for predy in graph.predecessors(node):
-				# if node in graph.predecessors(predy):
-					# print(predy)
-	# graph1=graph.subgraph(subgraphnodes)
-	# constructor.drawGraph2(graph1,'dense_subgraph.png')
-		# if len(graph.predecessors(node))==0:
-			# counter=counter+1
-			# if node in ss.keys():
-				# counter2=counter2+1
-	# print('nodes with no incoming edges')
-	# print(counter)
-	# print('nodes with no incoming edges that are part of transcriptomics data set')
-	# print(counter2)
-	# print('number of datapoints in Fatima data')
-	# print(len(ss.keys()))
-	# print('nodes in overlap')
-	# print(len(evaluateNodes))
 
-
-
-def runFatimaSim():
-	graph=buildFatimaNetwork()
-	setupGAparams(graph)
-	
+			
+def buildToolbox(individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues,simSteps,h,p,hillOn):
 	# # #setup toolbox
-	
 	toolbox = base.Toolbox()
 
 	pset = gp.PrimitiveSet("MAIN", arity=1)
@@ -395,41 +322,115 @@ def runFatimaSim():
 	# toolbox.register("attr_float", random.random)
 	# need this alias to create new graphs... but we should just be using the first one.... 
 
-	toolbox.register("genRandomBitString", genRandBits)
+	toolbox.register("genRandomBitString", genRandBits, individualLength=individualLength)
 	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
 	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
-	
-	ind1=toolbox.individual()
-	population=toolbox.population(n=100)
-
 	
 	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
 	stats.register("avg", numpy.mean)
 	stats.register("std", numpy.std)
 	stats.register("min", numpy.min)
 	stats.register("max", numpy.max)
-	hof = tools.HallOfFame(1, similar=numpy.array_equal)
+	hof = tools.HallOfFame(5, similar=numpy.array_equal)
 	
 	# finish registering the toolbox functions
 	toolbox.register("mate", tools.cxTwoPoint)
-	toolbox.register("mutate", tools.mutFlipBit, indpb=.1)
+	toolbox.register("mutate", tools.mutFlipBit, indpb=bitFlipProb)
 	toolbox.register("select", tools.selNSGA2)
-	toolbox.register("evaluate", evaluate)
+	toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValues=initValues, steps=simSteps, h=h,p=p,hillOn=hillOn)
 	toolbox.register("similar", numpy.array_equal)
-	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=.2, mutpb=.2, ngen=100, verbose=True)
-	
-	
-	
-	# # # graphy=nx.DiGraph()
-	# # # graphy.add_edge(1,2,color='blue',type='typing')	
+	return toolbox, hof, stats
 
-	# # # ind2=population[2]
-	# # # child1, child2 = [toolbox.clone(ind) for ind in (ind1, ind2)]
-	# # # tools.cxBlend(child1, child2, 0.5)
-	# # # del child1.fitness.values
-	# # # del child2.fitness.values
+def runFatimaGA():
+	graph, ss = buildFatimaNetwork()
+	simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb = returnSimParams()
+	individualLength, individualParse, nodeList, nodeOrderList, initValues, evaluateNodes, possibilityNumList, nodeOrderInvertList= setupGAparams(graph, ss)
+	toolbox, hof, stats=buildToolbox(individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues,simSteps,h,p,hillOn)
+	population=toolbox.population(n=popSize)
+	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True, halloffame=hof)
+
 	
-	
+def runFatimaSim(networkNoises, nodeNoises, trials):
+	graph, ss=buildFatimaNetwork()
+	simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb ,mutationProb= returnSimParams()
+	individualLength, individualParse, nodeList, nodeOrderList, initValues, evaluateNodes, possibilityNumList, nodeOrderInvertList=setupGAparams(graph, ss)
+	#open file to save, use noises in name
+	#save graph seperately
+	toolbox, hof, stats=buildToolbox(individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues,simSteps,h,p,hillOn)
+	for networkNoise in networkNoises:
+		print('networkNoise')
+		print(networkNoise)
+		for nodeNoise in nodeNoises:
+			print('nodeNoise')
+			print(nodeNoise)
+			fuzzySimulator(toolbox, hof, stats, graph, trials, ss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValues,simSteps, h,p,hillOn,nodeNoise,networkNoise,popSize ,crossoverProb,mutationProb,generations )
+
+		
+		
+def runFatimaSimTester(networkNoises, nodeNoises, trials):
+	ss={}
+	ss['zero']=1
+	ss['one']=0
+	ss['two']=0
+	print(ss.keys())
+	graph = nx.DiGraph()
+	dict={}
+	aliasDict={}
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)
+	graph.add_edge('zero','one', signal='a')
+	graph.add_edge('zero','two', signal='a')
+	graph.add_edge('one','two', signal='i')	
+	simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb ,mutationProb= returnSimParams()
+	individualLength, individualParse, nodeList, nodeOrderList, initValues, evaluateNodes, possibilityNumList, nodeOrderInvertList=setupGAparams(graph, ss)
+	#open file to save, use noises in name
+	#save graph seperately
+	toolbox, hof, stats=buildToolbox(individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues,simSteps,h,p,hillOn)
+	for networkNoise in networkNoises:
+		print('networkNoise')
+		print(networkNoise)
+		for nodeNoise in nodeNoises:
+			print('nodeNoise')
+			print(nodeNoise)
+			fuzzySimulator(toolbox, hof, stats, graph, trials, ss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValues,simSteps, h,p,hillOn,nodeNoise,networkNoise,popSize ,crossoverProb,mutationProb,generations )
+		
+			
+def fuzzySimulator(toolbox, hof, stats, graph, trials, ss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValues, steps, h,p,hillOn,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations ):
+	avgSSEs=[]
+	hofs=[]
+	truthIndividuals=[]
+	truthAvgs=[]
+	truthStdevs=[]
+	for i in range(0,trials):
+		newSS=copy.deepcopy(ss)
+		individual=genRandBits(individualLength)
+		boolValues, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,nodeNoise,networkNoise)
+		for j in range(0,len(evaluateNodes)):
+			newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
+		toolbox.register("evaluate", evaluate, ss=newSS, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
+		#toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
+		population=toolbox.population(n=popSize)
+		output=algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True)
+		hofs.append(hof)
+		truthIndividuals.append(individual)
+		truthAvgs.append(boolValues)
+		truthStdevs.append(stdev)
+	prefix='fatimaTest_noise_'+str(nodeNoise)+'_networkNoise_'+str(networkNoise)
+	outfile = open(prefix+'_hof.pkl', 'wb')
+	pickle.dump(hof, outfile)
+	outfile.close()
+	print(hof)
+	outfile = open(prefix+'_truth_individual.pkl', 'wb')
+	pickle.dump(truthIndividuals, outfile)
+	outfile.close()
+	print(truthIndividuals)
+	outfile = open(prefix+'_truth_avgs.pkl', 'wb')
+	pickle.dump(truthAvgs, outfile)
+	outfile.close()
+	print(truthAvgs)
+	outfile = open(prefix+'_truth_stdevs.pkl', 'wb')
+	pickle.dump(truthStdevs, outfile)
+	outfile.close()
+	print(truthStdevs)
 	
 def testFuzzySim():
 	filename='inputDataFatima.txt'
@@ -437,7 +438,6 @@ def testFuzzySim():
 		
 	#two dicts for the models
 	nodeUpdateDict={}
-	global ss
 	ss={}
 	for i in range(1,5):
 		ss[str(i)]=0
@@ -452,30 +452,51 @@ def testFuzzySim():
 	graph.add_edge('zero','one', signal='a')
 	graph.add_edge('zero','two', signal='a')
 	graph.add_edge('one','two', signal='i')	
-
-	global individualLength
-	individualLength=setupGAparams(graph)
-	# global nodeOrderInvertList
-	# global nodeOrderList
-	# global nodeList
-	# print(nodeList)
-	# print(nodeOrderList)
-	# print(nodeOrderInvertList)
-	# print(individualLength)
-	global nodeList
+	individualLength, individualParse, nodeList, nodeOrderList, initValues, evaluateNodes, possibilityNumList, nodeOrderInvertList= setupGAparams(graph, ss)
+	simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb=returnSimParams()
 	print(nodeList)
 	print(graph.edges())
 	individual=[0,0,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	steps=simSteps
+	sigmaNode=0
+	sigmaNetwork=0
+	avg, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork)
+	print(avg)
+	print(stdev)
+	sigmaNode=.01
+	sigmaNetwork=.01
+	avg, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork)
+	print(avg)
+	print(stdev)
 	
+	
+	
+	sigmaNode=0
+	sigmaNetwork=0
 	individual=[0,1,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	avg, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork)
+	print(avg)
+	print(stdev)
+	sigmaNode=.01
+	sigmaNetwork=.01
+	avg, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork)
+	print(avg)
+	print(stdev)
 	
+	sigmaNode=0
+	sigmaNetwork=0
 	individual=[1,0,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	avg, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork)
+	print(avg)
+	print(stdev)
+	sigmaNode=.01
+	sigmaNetwork=.01
+	avg, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork)
+	print(avg)
+	print(stdev)
 	
 	
 	
@@ -486,50 +507,44 @@ def testFuzzySim():
 	graph.add_edge('zero','one', signal='a')
 	graph.add_edge('zero','two', signal='i')
 	graph.add_edge('one','two', signal='i')	
-	individualLength=setupGAparams(graph)
+	individualLength=setupGAparams(graph, ss)
 	print(nodeList)
 	print(graph.edges())
 	individual=[0,0,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
 	individual=[0,1,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
 	individual=[1,0,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
-	
-	
-
-	
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
 	ss['zero']=1
 	ss['one']=1
 	ss['two']=1
-	individualLength=setupGAparams(graph)
+	individualLength=setupGAparams(graph, ss)
 	print(nodeList)
 	print(graph.edges())
 	individual=[0,0,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
 	individual=[0,1,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
 	individual=[1,0,0,0,0,0]
 	print(individual)
-	print(runFuzzySim(individual))
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
-
-
-
-
 if __name__ == '__main__':
 	# ss={}
 	# data=loadFpkms('C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv')
 	# sortFpkms(data,ss)
 	# print(ss)
-	runFatimaSim()
+	#runFatimaSim([.001,.005],[.001,.002],1)
+	runFatimaSim([.001],[.001],1)
+	#testFuzzySim()
