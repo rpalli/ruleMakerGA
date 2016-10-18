@@ -22,8 +22,8 @@ import cPickle as pickle
 
 def returnSimParams():
 	simSteps=100
-	generations=10
-	popSize=50
+	generations=100
+	popSize=100
 	p=.5
 	h= 3
 	hillOn=False
@@ -197,7 +197,7 @@ def runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrde
 	seq=range(0,len(individualParse))
 	nodeNoise=[]
 	for node in range(0,len(individualParse)):
-		nodeNoise.append(gauss(0,sigmaNode))
+		nodeNoise.append(sigmaNode*random())
 	for step in range(0,steps):
 		shuffle(seq)
 		for i in range(0,len(individualParse)):	
@@ -207,7 +207,7 @@ def runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrde
 	stdev= [0 for x in range(0,len(newValue))]
 	for step in range(0,len(simData)):
 		for element in range(0,len(avg)):
-			simData[step][element]=simData[step][element]+gauss(0,sigmaNetwork)
+			simData[step][element]=simData[step][element]+sigmaNetwork*random()
 	for step in range(len(simData)-10,len(simData)):
 		for element in range(0,len(avg)):
 			avg[element]=avg[element]+simData[step][element]
@@ -358,33 +358,79 @@ def runFatimaSim(networkNoises, nodeNoises, trials):
 	#save graph seperately
 	toolbox, hof, stats=buildToolbox(individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues,simSteps,h,p,hillOn)
 	for networkNoise in networkNoises:
+		print('networkNoise')
+		print(networkNoise)
 		for nodeNoise in nodeNoises:
+			print('nodeNoise')
+			print(nodeNoise)
 			fuzzySimulator(toolbox, hof, stats, graph, trials, ss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValues,simSteps, h,p,hillOn,nodeNoise,networkNoise,popSize ,crossoverProb,mutationProb,generations )
-	
+
+		
+		
+def runFatimaSimTester(networkNoises, nodeNoises, trials):
+	ss={}
+	ss['zero']=1
+	ss['one']=0
+	ss['two']=0
+	print(ss.keys())
+	graph = nx.DiGraph()
+	dict={}
+	aliasDict={}
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)
+	graph.add_edge('zero','one', signal='a')
+	graph.add_edge('zero','two', signal='a')
+	graph.add_edge('one','two', signal='i')	
+	simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb ,mutationProb= returnSimParams()
+	individualLength, individualParse, nodeList, nodeOrderList, initValues, evaluateNodes, possibilityNumList, nodeOrderInvertList=setupGAparams(graph, ss)
+	#open file to save, use noises in name
+	#save graph seperately
+	toolbox, hof, stats=buildToolbox(individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues,simSteps,h,p,hillOn)
+	for networkNoise in networkNoises:
+		print('networkNoise')
+		print(networkNoise)
+		for nodeNoise in nodeNoises:
+			print('nodeNoise')
+			print(nodeNoise)
+			fuzzySimulator(toolbox, hof, stats, graph, trials, ss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValues,simSteps, h,p,hillOn,nodeNoise,networkNoise,popSize ,crossoverProb,mutationProb,generations )
+		
 			
 def fuzzySimulator(toolbox, hof, stats, graph, trials, ss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValues, steps, h,p,hillOn,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations ):
 	avgSSEs=[]
 	hofs=[]
-	truths=[]
+	truthIndividuals=[]
+	truthAvgs=[]
+	truthStdevs=[]
 	for i in range(0,trials):
 		newSS=copy.deepcopy(ss)
 		individual=genRandBits(individualLength)
-		truths.append(individual)
-		boolValues=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,nodeNoise,networkNoise)
+		boolValues, stdev=runFuzzyModel(individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,nodeNoise,networkNoise)
 		for j in range(0,len(evaluateNodes)):
-			newSS[nodeList[evaluateNodes[j]]]=boolValues[j]
+			newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
 		toolbox.register("evaluate", evaluate, ss=newSS, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
+		#toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
 		population=toolbox.population(n=popSize)
-		algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True)
+		output=algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True)
 		hofs.append(hof)
-		avgSSEs.append(stats)
-	prefix='fatimaTest_noise_'+str(nodeNoise)+'_networkNoise_'+str(networknoise)
+		truthIndividuals.append(individual)
+		truthAvgs.append(boolValues)
+		truthStdevs.append(stdev)
+	prefix='fatimaTest_noise_'+str(nodeNoise)+'_networkNoise_'+str(networkNoise)
 	outfile = open(prefix+'_hof.pkl', 'wb')
-	pickle.dump(outfile,hof)
+	pickle.dump(hof, outfile)
 	outfile.close()
-	pickle.dump(prefix+'_truth.pkl',hof)
-	
-	pickle.dump(prefix+'_hof.pkl',hof)
+	print(hof)
+	outfile = open(prefix+'_truth_individual.pkl', 'wb')
+	pickle.dump(truthIndividuals, outfile)
+	outfile.close()
+	print(truthIndividuals)
+	outfile = open(prefix+'_truth_avgs.pkl', 'wb')
+	pickle.dump(truthAvgs, outfile)
+	outfile.close()
+	print(truthAvgs)
+	outfile = open(prefix+'_truth_stdevs.pkl', 'wb')
+	pickle.dump(truthStdevs, outfile)
+	outfile.close()
+	print(truthStdevs)
 	
 def testFuzzySim():
 	filename='inputDataFatima.txt'
@@ -454,50 +500,51 @@ def testFuzzySim():
 	
 	
 	
-	# # graph = nx.DiGraph()
-	# # dict={}
-	# # aliasDict={}
-	# # KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)
-	# # graph.add_edge('zero','one', signal='a')
-	# # graph.add_edge('zero','two', signal='i')
-	# # graph.add_edge('one','two', signal='i')	
-	# # individualLength=setupGAparams(graph, ss)
-	# # print(nodeList)
-	# # print(graph.edges())
-	# # individual=[0,0,0,0,0,0]
-	# # print(individual)
-	# # print(runFuzzyModel(individual, individualParse, nodeList, initValues))
+	graph = nx.DiGraph()
+	dict={}
+	aliasDict={}
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)
+	graph.add_edge('zero','one', signal='a')
+	graph.add_edge('zero','two', signal='i')
+	graph.add_edge('one','two', signal='i')	
+	individualLength=setupGAparams(graph, ss)
+	print(nodeList)
+	print(graph.edges())
+	individual=[0,0,0,0,0,0]
+	print(individual)
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
-	# # individual=[0,1,0,0,0,0]
-	# # print(individual)
-	# # print(runFuzzyModel(individual, individualParse, nodeList, initValues))
+	individual=[0,1,0,0,0,0]
+	print(individual)
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
-	# # individual=[1,0,0,0,0,0]
-	# # print(individual)
-	# # print(runFuzzyModel(individual, individualParse, nodeList, initValues))
+	individual=[1,0,0,0,0,0]
+	print(individual)
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
-	# # ss['zero']=1
-	# # ss['one']=1
-	# # ss['two']=1
-	# # individualLength=setupGAparams(graph, ss)
-	# # print(nodeList)
-	# # print(graph.edges())
-	# # individual=[0,0,0,0,0,0]
-	# # print(individual)
-	# # print(runFuzzyModel(individual, individualParse, nodeList, initValues))
+	ss['zero']=1
+	ss['one']=1
+	ss['two']=1
+	individualLength=setupGAparams(graph, ss)
+	print(nodeList)
+	print(graph.edges())
+	individual=[0,0,0,0,0,0]
+	print(individual)
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
-	# # individual=[0,1,0,0,0,0]
-	# # print(individual)
-	# # print(runFuzzyModel(individual, individualParse, nodeList, initValues))
+	individual=[0,1,0,0,0,0]
+	print(individual)
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
-	# # individual=[1,0,0,0,0,0]
-	# # print(individual)
-	# # print(runFuzzyModel(individual, individualParse, nodeList, initValues))
+	individual=[1,0,0,0,0,0]
+	print(individual)
+	print(runFuzzyModel(individual, individualParse, nodeList, initValues))
 	
 if __name__ == '__main__':
 	# ss={}
 	# data=loadFpkms('C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv')
 	# sortFpkms(data,ss)
 	# print(ss)
-	#runFatimaSim([.01],[.01],2)
-	testFuzzySim()
+	#runFatimaSim([.001,.005],[.001,.002],1)
+	runFatimaSim([.001],[.001],1)
+	#testFuzzySim()
