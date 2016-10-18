@@ -15,6 +15,66 @@ import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
 import csv 
+
+import itertools as iter
+
+import pygraphviz
+import matplotlib.patches as mpatches
+from matplotlib.collections import LineCollection
+from matplotlib.colors import ListedColormap, BoundaryNorm
+import networkx.drawing.nx_agraph as agraph
+
+def drawGraph3(representative, filename, KEGGdict):
+	rep=representative.copy()
+	dictionary={}
+	names=nx.get_node_attributes(representative, 'name')
+	for n in rep.nodes():
+		if len(names[n].split())==1:
+			if names[n] in KEGGdict.keys():
+				dictionary[n]=KEGGdict[names[n]]
+				#print(rep.node[n]['name'])
+		else :
+			translated=''
+			for word in names[n].split():
+				word1=word.lstrip('ko:')
+				word1=word1.lstrip('gl:')
+				if word1 in KEGGdict.keys():
+					translated=translated+KEGGdict[word1]+'-'
+				else:
+					translated=translated+word1+'-'
+			dictionary[n]=translated
+	repar= nx.relabel_nodes(rep,dictionary)
+	#print(repar.nodes())
+	#print(repar.edges())
+	B=agraph.to_agraph(repar)        # convert to a graphviz graph\
+	B.layout()            # neato layout
+	B.draw(filename)       # write postscript in k5.ps with neato layout
+
+def drawGraph2(representative, filename):
+	B=agraph.to_agraph(representative)        # convert to a graphviz graph\
+	B.layout()            # neato layout
+	B.draw(filename)       # write postscript in k5.ps with neato layout
+
+def parseKEGGdict(filename):
+	#makes a dictionary to convert ko numbers from KEGG into real gene names
+	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
+	dict={}
+	inputfile = open(filename, 'r')
+	lines = inputfile.readlines()
+	for line in lines:
+		if line[0]=='D':
+			kline=line.split('      ')
+			kstring=kline[1]
+			kline=kstring.split('  ')
+			k=kline[0]
+			nameline=line.replace('D      ', 'D')
+			nameline=nameline.split('  ')
+			namestring=nameline[1]
+			nameline=namestring.split(';')
+			name=nameline[0]
+			dict[k]=name
+	return dict
+
 import sys
 from bs4 import BeautifulSoup
 import itertools as it
@@ -39,6 +99,7 @@ import itertools as it
 # 			name=nameline[0]
 # 			dict[k]=name
 # 	return dict
+
 
 def parseKEGGdict(filename, aliasDict, dict):
 	#reads KEGG dictionary of identifiers between orthology numbers and actual protein names and saves it to a python dictionary
@@ -71,6 +132,7 @@ def readKEGG(lines, graph, KEGGdict):
 	groups={}
 	i=0 #i controls our movement through the lines of code. 
 	dict={} #identifies internal id numbers with names (much like the code earlier does for groups to id numbers of elements of the group)
+	orderDict={}
 	while i< len(lines):
 		line=lines[i]
 		# print line
@@ -107,6 +169,7 @@ def readKEGG(lines, graph, KEGGdict):
 						namelist.append(KEGGdict[x])
 					else:
 						namelist.append(x)
+				namelist.sort()
 				name=namelist[0]+'-'
 				for x in range(1,len(namelist)):
 					name=name+namelist[x]+'-'
@@ -235,7 +298,7 @@ def readKEGG(lines, graph, KEGGdict):
 
 def readKEGGnew(lines, graph, KEGGdict):
 	#read all lines into a bs4 object using libXML parser
-	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
 	id_to_name = {} # map id numbers to names
 
