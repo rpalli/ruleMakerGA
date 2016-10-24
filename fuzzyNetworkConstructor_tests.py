@@ -59,6 +59,19 @@ for edge in graph.edges():
 	print edge
 nx.draw_spring(graph)
 plt.show()
+nx.write_graphml(graph, 'testfiles/simple_output.graphml')
 
+graph = nx.DiGraph()
+currentfile = 'testfiles/CD40-PC.biopax'
+inputfile = open(currentfile, 'r')
+lines = inputfile.readlines()
+fnc.read_biopax(lines, graph)
+for node in graph.nodes():
+	print node
+for edge in graph.edges():
+	print edge
+nx.draw_spring(graph)
+plt.show()
+nx.write_graphml(graph, 'testfiles/CD40_output.graphml')
 
 
