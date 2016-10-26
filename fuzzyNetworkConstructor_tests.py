@@ -1,5 +1,6 @@
 import fuzzyNetworkConstructor as fnc
 import networkx as nx
+import matplotlib.pyplot as plt
 
 dict={}
 aliasDict={}
@@ -46,5 +47,31 @@ assert len(graph.nodes()) == 61
 assert graph.nodes()[-1] == 'CDC42'
 assert graph.edges()[0] == ('RASGRP2', 'RAP1A-RAP1B')
 print "readKEGG", currentfile, "tests passed"
+
+graph = nx.DiGraph()
+currentfile = 'testfiles/simple-graph.biopax'
+inputfile = open(currentfile, 'r')
+lines = inputfile.readlines()
+fnc.read_biopax(lines, graph)
+for node in graph.nodes():
+	print node
+for edge in graph.edges():
+	print edge
+nx.draw_spring(graph)
+plt.show()
+nx.write_graphml(graph, 'testfiles/simple_output.graphml')
+
+graph = nx.DiGraph()
+currentfile = 'testfiles/CD40-PC.biopax'
+inputfile = open(currentfile, 'r')
+lines = inputfile.readlines()
+fnc.read_biopax(lines, graph)
+for node in graph.nodes():
+	print node
+for edge in graph.edges():
+	print edge
+nx.draw_spring(graph)
+plt.show()
+nx.write_graphml(graph, 'testfiles/CD40_output.graphml')
 
 

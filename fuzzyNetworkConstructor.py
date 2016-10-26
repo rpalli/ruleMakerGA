@@ -77,6 +77,11 @@ def parseKEGGdict(filename):
 
 
 
+#definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
+edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction', 'Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation', 'Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']
+node_classes = ['PhysicalEntity', 'Complex', 'Dna', 'DnaRegion', 'Protein', 'Rna', 'RnaRegion', 'SmallMolecule', 'Gene']
+graph_classes = ['Pathway']
+
 ## Rohith's OLD version, kept for history
 # def parseKEGGdict(filename):
 # 	#makes a dictionary to convert ko numbers from KEGG into real gene names
@@ -372,6 +377,104 @@ def readKEGGnew(lines, graph, KEGGdict):
 			node1 = id_to_name[entry1]
 			node2 = id_to_name[entry2]
 			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
+
+def read_biopax(lines, graph):
+	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+
+	##old code, potentially useless
+	# pathways = soup.find_all('pathway')
+	# for pathway in pathways:
+	# 	name = pathway.find('NAME').string
+	# 	synonyms = [s.string for s in pathway.find_all('SYNONYMS')]
+	# 	component_ids = [c.get('rdf:resource')[1:] for c in pathway.find_all('PATHWAY-COMPONENTS')]
+	# 	print name
+	# 	for c_id in component_ids:
+	# 		component = soup.find(attrs={'rdf:ID': c_id})
+	# 		print component.prettify()
+	##end old code
+
+
+	#treating edge classes as nodes for now, will simplify later
+	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
+		biopax_objects = soup.find_all(biopax_class)
+		# print biopax_class
+		for biopax_object in biopax_objects:
+			node_id = biopax_object.get('rdf:ID')
+			if node_id == None:
+				node_id = biopax_object.get('rdf:about')
+			try:
+				node_name = unicode(biopax_object.find('displayName').string)
+			except Exception as e:
+				node_name = node_id
+			graph.add_node(node_id, {'name': node_name, 'type': biopax_class})
+
+	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
+		biopax_objects = soup.find_all(biopax_class)
+		for biopax_object in biopax_objects:
+			node_id = biopax_object.get('rdf:ID')
+			if node_id == None:
+				node_id = biopax_object.get('rdf:about')
+			if biopax_class in ['Complex', 'Protein', 'PhysicalEntity']:
+				components = biopax_object.find_all('component')
+				for component in components:
+					resource = component.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'contains'
+					graph.add_edge(node_id, to_node, type=edge_type)
+				members = biopax_object.find_all('memberPhysicalEntity')
+				for member in members:
+					resource = member.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'member'
+					graph.add_edge(node_id, to_node, type=edge_type)
+			if biopax_class in ['Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation']:
+				controllers = biopax_object.find_all('controller')
+				controlleds = biopax_object.find_all('controlled')
+				for controller in controllers:
+					resource = controller.get('rdf:resource')
+					from_node = resource[1:] if resource[0] == '#' else resource
+					try:
+						edge_type = unicode(biopax_object.find('controlType').string)
+					except Exception as e:
+						edge_type = unicode('controller')
+					graph.add_edge(from_node, node_id, type=edge_type)
+				for controlled in controlleds:
+					resource = controlled.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					try:
+						edge_type = unicode(biopax_object.find('controlType').string)
+					except Exception as e:
+						edge_type = unicode('controlled')
+					graph.add_edge(node_id, to_node, type=edge_type)
+			if biopax_class in ['Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']:
+				lefts = biopax_object.find_all('left')
+				rights = biopax_object.find_all('right')
+				for left in lefts:
+					resource = left.get('rdf:resource')
+					from_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'left'
+					graph.add_edge(from_node, node_id, type=edge_type)
+				for right in rights:
+					resource = right.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'right'
+					graph.add_edge(node_id, to_node, type=edge_type)
+			if biopax_class in ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction']:
+				print "ambiguous direction relationship found"
+				participants = biopax_object.find_all('participant')
+				for p1 in participants:
+					resource = p1.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'participant'
+					graph.add_edge(node_id, to_node, type=edge_type)
+			if biopax_class in ['Pathway']:
+				components = biopax_object.find_all('pathwayComponent')
+				for component in components:
+					resource = component.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'component'
+					graph.add_edge(node_id, to_node, type=edge_type)
+
 
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):
