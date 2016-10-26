@@ -342,6 +342,8 @@ def read_biopax(lines, graph):
 		# print biopax_class
 		for biopax_object in biopax_objects:
 			node_id = biopax_object.get('rdf:ID')
+			if node_id == None:
+				node_id = biopax_object.get('rdf:about')
 			try:
 				node_name = unicode(biopax_object.find('displayName').string)
 			except Exception as e:
@@ -352,48 +354,70 @@ def read_biopax(lines, graph):
 		biopax_objects = soup.find_all(biopax_class)
 		for biopax_object in biopax_objects:
 			node_id = biopax_object.get('rdf:ID')
+			if node_id == None:
+				node_id = biopax_object.get('rdf:about')
+			if biopax_class in ['Complex', 'Protein', 'PhysicalEntity']:
+				components = biopax_object.find_all('component')
+				for component in components:
+					resource = component.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'contains'
+					graph.add_edge(node_id, to_node, type=edge_type)
+				members = biopax_object.find_all('memberPhysicalEntity')
+				for member in members:
+					resource = member.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'member'
+					graph.add_edge(node_id, to_node, type=edge_type)
 			if biopax_class in ['Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation']:
 				controllers = biopax_object.find_all('controller')
 				controlleds = biopax_object.find_all('controlled')
 				for controller in controllers:
-					from_node = controller.get('rdf:resource')[1:]
+					resource = controller.get('rdf:resource')
+					from_node = resource[1:] if resource[0] == '#' else resource
 					try:
 						edge_type = unicode(biopax_object.find('controlType').string)
 					except Exception as e:
-						edge_type = unicode("UNKNOWN")
+						edge_type = unicode('controller')
 					graph.add_edge(from_node, node_id, type=edge_type)
 				for controlled in controlleds:
-					to_node = controlled.get('rdf:resource')[1:]
+					resource = controlled.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
 					try:
 						edge_type = unicode(biopax_object.find('controlType').string)
 					except Exception as e:
-						edge_type = unicode("UNKNOWN")
+						edge_type = unicode('controlled')
 					graph.add_edge(node_id, to_node, type=edge_type)
 			if biopax_class in ['Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']:
 				lefts = biopax_object.find_all('left')
 				rights = biopax_object.find_all('right')
 				for left in lefts:
-					from_node = left.get('rdf:resource')[1:]
-					edge_type = 'Conversion'
+					resource = left.get('rdf:resource')
+					from_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'left'
 					graph.add_edge(from_node, node_id, type=edge_type)
 				for right in rights:
-					to_node = right.get('rdf:resource')[1:]	
-					edge_type = 'Conversion'
+					resource = right.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'right'
 					graph.add_edge(node_id, to_node, type=edge_type)
 			if biopax_class in ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction']:
 				print "ambiguous direction relationship found"
 				participants = biopax_object.find_all('participant')
 				for p1 in participants:
-					to_node = p1.get('rdf:resource')[1:]
-					edge_type = 'Interaction'
+					resource = p1.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'participant'
 					graph.add_edge(node_id, to_node, type=edge_type)
-
 			if biopax_class in ['Pathway']:
 				components = biopax_object.find_all('pathwayComponent')
 				for component in components:
-					to_node = component.get('rdf:resource')[1:]
-					edge_type = 'Component'
+					resource = component.get('rdf:resource')
+					to_node = resource[1:] if resource[0] == '#' else resource
+					edge_type = 'component'
 					graph.add_edge(node_id, to_node, type=edge_type)
+
+
 
 def uploadKEGGfiles(filelist, graph, foldername, KEGGdict):
 	#upload KEGG files from a particular folder.
