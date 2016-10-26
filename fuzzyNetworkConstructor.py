@@ -15,9 +15,67 @@ import re
 import urllib2 
 import fuzzyNetworkConstructor as constructor
 import csv 
+import itertools as iter
 import sys
 from bs4 import BeautifulSoup
-import itertools as it
+import pygraphviz
+import matplotlib.patches as mpatches
+from matplotlib.collections import LineCollection
+from matplotlib.colors import ListedColormap, BoundaryNorm
+import networkx.drawing.nx_agraph as agraph
+
+def drawGraph3(representative, filename, KEGGdict):
+	rep=representative.copy()
+	dictionary={}
+	names=nx.get_node_attributes(representative, 'name')
+	for n in rep.nodes():
+		if len(names[n].split())==1:
+			if names[n] in KEGGdict.keys():
+				dictionary[n]=KEGGdict[names[n]]
+				#print(rep.node[n]['name'])
+		else :
+			translated=''
+			for word in names[n].split():
+				word1=word.lstrip('ko:')
+				word1=word1.lstrip('gl:')
+				if word1 in KEGGdict.keys():
+					translated=translated+KEGGdict[word1]+'-'
+				else:
+					translated=translated+word1+'-'
+			dictionary[n]=translated
+	repar= nx.relabel_nodes(rep,dictionary)
+	#print(repar.nodes())
+	#print(repar.edges())
+	B=agraph.to_agraph(repar)        # convert to a graphviz graph\
+	B.layout()            # neato layout
+	B.draw(filename)       # write postscript in k5.ps with neato layout
+
+def drawGraph2(representative, filename):
+	B=agraph.to_agraph(representative)        # convert to a graphviz graph\
+	B.layout()            # neato layout
+	B.draw(filename)       # write postscript in k5.ps with neato layout
+
+def parseKEGGdict(filename):
+	#makes a dictionary to convert ko numbers from KEGG into real gene names
+	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
+	dict={}
+	inputfile = open(filename, 'r')
+	lines = inputfile.readlines()
+	for line in lines:
+		if line[0]=='D':
+			kline=line.split('      ')
+			kstring=kline[1]
+			kline=kstring.split('  ')
+			k=kline[0]
+			nameline=line.replace('D      ', 'D')
+			nameline=nameline.split('  ')
+			namestring=nameline[1]
+			nameline=namestring.split(';')
+			name=nameline[0]
+			dict[k]=name
+	return dict
+
+
 
 #definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
 edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction', 'Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation', 'Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']
@@ -240,7 +298,7 @@ def readKEGG(lines, graph, KEGGdict):
 
 def readKEGGnew(lines, graph, KEGGdict):
 	#read all lines into a bs4 object using libXML parser
-	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
 	id_to_name = {} # map id numbers to names
 
@@ -315,7 +373,7 @@ def readKEGGnew(lines, graph, KEGGdict):
 		entry1_list = expand_groups(relation_entry1)
 		entry2_list = expand_groups(relation_entry2)
 
-		for (entry1, entry2) in it.product(entry1_list, entry2_list):
+		for (entry1, entry2) in iter.product(entry1_list, entry2_list):
 			node1 = id_to_name[entry1]
 			node2 = id_to_name[entry2]
 			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
@@ -476,4 +534,3 @@ if __name__ == '__main__':
 	#individualLength=setupGAparams(graph)
 
 	#graph input stuff
-
