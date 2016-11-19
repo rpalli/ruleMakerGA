@@ -11,36 +11,27 @@ from deap import gp
 from deap import tools
 from deap import algorithms as algo
 import networkx as nx
-#from scipy.stats import logistic
-import re
-import urllib2 
+import fuzzyGA_oldTests as tester
 import fuzzyNetworkConstructor as constructor
 import csv
 import itertools as itertool
 import copy as copy
-import cPickle as pickle
 import gc as gc
-#from scoop import futures
-#import pyximport; pyximport.install()
-#import evaluator
 
 def returnSimParams():
-	iters=100
-	simSteps=100
-	generations=50
-	popSize=100
+	simSteps=100 # number of steps each individual is run when evaluating
+	generations=50 # generations to run
+	popSize=100 #size of population
 	mu= 100#individuals selected
 	lambd= 200#children produced
-	p=.5
-	h= 3
-	hillOn=False
-	bitFlipProb=.1
-	crossoverProb=.2
-	mutationProb=.2
-	async=False
-	complexPenalty=False
-	genSteps=1000
-	return async, iters, simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps
+	bitFlipProb=.1 # prob of flipping bits inside mutation
+	crossoverProb=.2 # prob of crossing over a particular parent
+	mutationProb=.2 # prob of mutating a particular parent
+	async=False # run in asynchronous mode
+	iters=100 #number of simulations to try in asynchronous mode
+	complexPenalty=False #penalize models with increased complexity
+	genSteps=1000 # steps to find steady state with fake data
+	return async, iters, simSteps, generations, popSize, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps
 
 def setupGAparams(graph, sss):
 	repeat=True
@@ -53,9 +44,9 @@ def setupGAparams(graph, sss):
 	
 	evaluateNodes=[] #list of nodes that need to be compared to the steady state values (sss)
 	individualParse=[] #list of triples that contain the start and end of the noder order value and operator flag list for each node
-	nodeOrderList=[] #list of lists of possible node orders for each node
-	nodeOrderInvertList=[] # keeps track of which incoming nodes for each node need to be inverted
-	possibilityNumList=[] # keeps track of length of above nodeOrderList for each node
+	inputOrderList=[] #list of lists of possible node orders for each node
+	inputOrderInvertList=[] # keeps track of which incoming nodes for each node need to be inverted
+	possibilityNumList=[] # keeps track of length of above inputOrderList for each node
 	earlyEvalNodes=[] # nodes that don't have initial value and need to be re-evaluated early on in the simulation
 	
 	nodeList=graph.nodes()#define the node list simply as the nodes in the graph. 
@@ -98,8 +89,8 @@ def setupGAparams(graph, sss):
 				else:
 					activity.append(True)
 			activities.append(activity)
-		nodeOrderList.append(possibilities)
-		nodeOrderInvertList.append(activities)
+		inputOrderList.append(possibilities)
+		inputOrderInvertList.append(activities)
 		possibilityNumList.append(len(possibilities))
 		
 		#deal with nodes with no incoming or only one incoming first
@@ -121,7 +112,7 @@ def setupGAparams(graph, sss):
 			else:
 				initValueList[j].append(0.5)
 				earlyEvalNodes.append(i)
-	return counter-1, individualParse, nodeList, nodeOrderList, initValueList, evaluateNodes, possibilityNumList, nodeOrderInvertList, earlyEvalNodes
+	return counter-1, individualParse, nodeList, inputOrderList, initValueList, evaluateNodes, possibilityNumList, inputOrderInvertList, earlyEvalNodes
 	
 def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
@@ -143,7 +134,6 @@ def loadFpkms(filename): #loads data from fpkms tab delimited csv file
 		for row in reader:
 			data.append(row)
 		return data
-
 def sortFpkms(data): #puts fpkms data into appropriate lists of steady state dictionaries following normalization to largest value (as denominator)
 	sss=[]
 	print(data[1])
@@ -159,26 +149,18 @@ def sortFpkms(data): #puts fpkms data into appropriate lists of steady state dic
 		for j in range(0,len(data[i])-1):
 			sss[j][str.upper(data[i][0])]=float(data[i][1])/maxdata
 	return sss
-	
-def hill(x,h,p,hillOn): #applies hill function if called for
-	if hillOn:
-		return ((1+h**p)*x**p)/(h**p+x**p)		
-	else:
-		return x
-		
-def hillInv(x, inverter,h,p,hillOn): #inverts if necessary then applies hill fun
+def Inv(x, inverter): #inverts if necessary then applies hill fun
 	if inverter:
-		return hill(1-x, h,p,hillOn)
+		return (1-x)
 	else:
-		return hill(x, h,p,hillOn)
-		
+		return (x)
 def fuzzyAnd(num1, num2):
-	return num1*num2
-	#return min(num1,num2)
+	#return num1*num2
+	return min(num1,num2)
 			
 def fuzzyOr(num1, num2):
-	return (num1+num2-(num1*num2))
-	#return max(num1, num2)
+	#return (num1+num2-(num1*num2))
+	return max(num1, num2)
 
 def bit2int(bitlist): #converts bitstring to integer
 	out = 0
@@ -186,86 +168,92 @@ def bit2int(bitlist): #converts bitstring to integer
 		out = (out << 1) | bit
 	return out
 
-def fuzzyUpdate(currentNode,oldValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn):
-	triple=individualParse[currentNode]
-	nodeOrder=nodeOrderList[currentNode]
-	nodeOrderInvert=nodeOrderInvertList[currentNode]
-	# print(len(individual))
-	# print(triple)
+def fuzzyUpdate(currentNode,oldValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
+	triple=individualParse[currentNode] #find locations of bits we need in individual
+	inputOrder=inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+	inputOrderInvert=inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
 	if possibilityNumList[currentNode]>0:
-		logicOperatorFlags=individual[triple[1]:triple[2]]
-		# print(logicOperatorFlags)
-		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		nodeOrderInvert=nodeOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		if len(nodeOrder)==0:
-			value=oldValue[currentNode]
-		elif len(nodeOrder)==1:
-			#print(nodeOrder[0])
-			value=hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn)
-		else:
-			counter =0
-			if logicOperatorFlags[0]==0:
-				value=fuzzyAnd(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1],h,p,hillOn))
+		logicOperatorFlags=individual[triple[1]:triple[2]] # find demarcations on individual for bits we need
+		inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]] # determine what order of inputs is
+		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+		if len(inputOrder)==0:
+			value=oldValue[currentNode] #if no inputs, maintain value
+		elif len(inputOrder)==1:
+			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
+			if individual[triple[0]]==1:
+				value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
 			else:
-				value=fuzzyOr(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1],h,p,hillOn))
-			for i in range(2,len(nodeOrder)):
+				value=oldValue[currentNode]
+		else:
+			#update nodes with more than one input
+			counter =0
+			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
+			if logicOperatorFlags[0]==0:
+				value=fuzzyAnd(Inv(oldValue[inputOrder[0]],inputOrderInvert[0]),Inv(oldValue[inputOrder[1]],inputOrderInvert[1]))
+			else:
+				value=fuzzyOr(Inv(oldValue[inputOrder[0]],inputOrderInvert[0]),Inv(oldValue[inputOrder[1]],inputOrderInvert[1]))
+			for i in range(2,len(inputOrder)):
+				#combines subsequent inputs
 				if logicOperatorFlags[i-1]==0:
-					value=fuzzyAnd(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i],h,p,hillOn))
+					value=fuzzyAnd(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i]))
 				else:
-					value=fuzzyOr(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i],h,p,hillOn))
+					value=fuzzyOr(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i]))
 		return value
 	else:
+		#returns savme value if now inputs
 		return oldValue[currentNode]						
 
-def writeFuzzyNode(currentNode,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList):
+def writeFuzzyNode(currentNode,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
+	#write out evaluation instructions in BooleanNet format. This follows the exact same code as fuzzyUpdate, but writes a string instead of actually updating the values of the nodes
 	triple=individualParse[currentNode]
-	nodeOrder=nodeOrderList[currentNode]
-	nodeOrderInvert=nodeOrderInvertList[currentNode]
+	inputOrder=inputOrderList[currentNode]
+	inputOrderInvert=inputOrderInvertList[currentNode]
 	writenode=''+nodeList[currentNode]+'='
 	if possibilityNumList[currentNode]>0:
 		logicOperatorFlags=individual[triple[1]:triple[2]]
-		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		nodeOrderInvert=nodeOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		if len(nodeOrder)==1:
-			#print(nodeOrder[0])
-			if nodeOrderInvert[0]:
-				writenode=writenode+' not '
-			writenode=writenode+nodeList[nodeOrder[0]]+' '
+		inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		if len(inputOrder)==1:
+			#print(inputOrder[0])
+			if individual[triple[0]]==1:
+				if inputOrderInvert[0]:
+					writenode=writenode+' not '
+				writenode=writenode+nodeList[inputOrder[0]]+' '
+			else:
+				writenode=writenode+' '+ nodeList[currentNode]
 		else:
 			counter =0
-			if nodeOrderInvert[0]:
+			if inputOrderInvert[0]:
 				writenode=writenode+' not '
-			writenode=writenode+nodeList[nodeOrder[0]]+' '
+			writenode=writenode+nodeList[inputOrder[0]]+' '
 			if logicOperatorFlags[0]==0:
 				writenode=writenode+' and '
 			else:
 				writenode=writenode+' or '
-			if nodeOrderInvert[1]:
+			if inputOrderInvert[1]:
 				writenode=writenode+' not '
-			writenode=writenode+nodeList[nodeOrder[1]]+' '
-			for i in range(2,len(nodeOrder)):
+			writenode=writenode+nodeList[inputOrder[1]]+' '
+			for i in range(2,len(inputOrder)):
 				if logicOperatorFlags[i-1]==0:
 					writenode=writenode+' and '
 				else:
 					writenode=writenode+' or '
-				if nodeOrderInvert[i]:
+				if inputOrderInvert[i]:
 					writenode=writenode+' not '
-				writenode=writenode+nodeList[nodeOrder[i]]+' '
-		
+				writenode=writenode+nodeList[inputOrder[i]]+' '
 	else:
-		# print('origvalue')
-		# print(oldValue[currentNode])
 		writenode=writenode+' '+ nodeList[currentNode]
 	return writenode					
 	
-def writeFuzzyModel(individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList):
+def writeFuzzyModel(individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
+	#iterate over nodes to generate a BooleanNet representation for the entire model
 	addString=''
 	for i in range(0,len(nodeList)):
-		addString=addString+writeFuzzyNode(i,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList)
+		addString=addString+writeFuzzyNode(i,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList)
 		addString=addString+'\n'
 	return addString
 
-def runFuzzyModel( individual, async, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork,earlyEvalNodes):
+def runFuzzyModel( individual, async, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValues, steps,sigmaNode, sigmaNetwork,earlyEvalNodes):
 	#do fuzzy simulation. individual is just a long bitstring... need to seperate it out.  
 	#list of triples which gives the total list of nodes. 
 	counter=0;
@@ -275,17 +263,17 @@ def runFuzzyModel( individual, async, individualParse, nodeList, nodeOrderList, 
 	seq=range(0,len(individualParse))
 	earlyEvalNodes=[]
 	for node in range(0,len(earlyEvalNodes)):
-		newValue[earlyEvalNodes[node]]=fuzzyUpdate(earlyEvalNodes[node],newValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn)
+		newValue[earlyEvalNodes[node]]=fuzzyUpdate(earlyEvalNodes[node],newValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, )
 	for step in range(0,steps):
 		oldValue=list(newValue)
 		if async:
 			shuffle(seq)
 		for i in range(0,len(individualParse)):	
-			#print(fuzzyUpdate(seq[i],newValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn))
+			#print(fuzzyUpdate(seq[i],newValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, ))
 			if async:
-				temp=fuzzyUpdate(seq[i],newValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn)
+				temp=fuzzyUpdate(seq[i],newValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, )
 			else:
-				temp=fuzzyUpdate(seq[i],oldValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn)
+				temp=fuzzyUpdate(seq[i],oldValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, )
 
 			if sigmaNode==0:
 				newValue[seq[i]]=temp
@@ -308,10 +296,10 @@ def runFuzzyModel( individual, async, individualParse, nodeList, nodeOrderList, 
 	#return (avg, stdev)
 	return avg
 
-def iterateFuzzyModel(async, iters, individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork,earlyEvalNodes):
+def iterateFuzzyModel(async, iters, individual, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValues, steps ,sigmaNode, sigmaNetwork,earlyEvalNodes):
 	sum=[0 for x in range(0,len(initValues))]
 	for i in range(0,iters):
-		avg,stdev=runFuzzyModel( individual, async, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValues, steps, h,p,hillOn,sigmaNode, sigmaNetwork, earlyEvalNodes)
+		avg,stdev=runFuzzyModel( individual, async, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValues, steps, sigmaNode, sigmaNetwork, earlyEvalNodes)
 		for j in range(0,len(sum)):
 			sum[j]=sum[j]+avg[j]
 	# print(sum)
@@ -321,16 +309,16 @@ def iterateFuzzyModel(async, iters, individual, individualParse, nodeList, nodeO
 	return avgs
 		
 #this is the evaluation function. Need to create a graph then recreate everything with it.
-def evaluate(individual, async, iters, sss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList, steps, h,p,hillOn,earlyEvalNodes,complexPenalty):
+def evaluate(individual, async, iters, sss, evaluateNodes, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList, steps,earlyEvalNodes,complexPenalty):
 	SSEs=[]
 	for j in range(0,len(sss)):
 		ss=sss[j]
 		initValues=initValueList[j]
 		SSE=0
 		if async:
-			boolValues=iterateFuzzyModel(async, iters, individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[j], steps, h,p,hillOn,0,0,earlyEvalNodes)	
+			boolValues=iterateFuzzyModel(async, iters, individual, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[j], steps, 0,0,earlyEvalNodes)	
 		else:
-			boolValues=runFuzzyModel(individual, async, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList,initValueList[j], steps, h,p,hillOn,0,0,earlyEvalNodes)	
+			boolValues=runFuzzyModel(individual, async, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList,initValueList[j], steps,0,0,earlyEvalNodes)	
 		#if len(evaluateNodes)<10:
 		#	print("so few nodes")
 		for i in range(0, len(evaluateNodes)):
@@ -340,7 +328,7 @@ def evaluate(individual, async, iters, sss, evaluateNodes, individualParse, node
 	if complexPenalty:
 		for i in range(0,len(nodeList)):
 			if possibilityNumList[i]>0:
-				edgeDegree=edgeDegree+len(nodeOrderList[i][bit2int(individual[individualParse[i][0]:individualParse[i][1]])%possibilityNumList[i]])
+				edgeDegree=edgeDegree+len(inputOrderList[i][bit2int(individual[individualParse[i][0]:individualParse[i][1]])%possibilityNumList[i]])
 	SSEs.append(edgeDegree/1.)
 	gc.collect()
 	summer=0.
@@ -349,10 +337,10 @@ def evaluate(individual, async, iters, sss, evaluateNodes, individualParse, node
 	return summer,
 
 def simplifyNetwork(graph, ss):
-#network simplification algorithm. 
-# # 1. remove nodes which are neither part of input nor have input to them...
-# # 2. remove straigth paths. 
-# # 3. 
+	#network simplification algorithm. 
+	# # 1. remove nodes which are neither part of input nor have input to them...
+	# # 2. remove straigth paths. 
+	# # 3. 
 
 
 	#collapse complexes of nodes already in the list
@@ -381,7 +369,7 @@ def simplifyNetwork(graph, ss):
 		
 		print(len(graph.nodes()))
 			
-#  collapse straight lines
+	#  collapse straight lines
 	print(len(graph.nodes()))
 	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1)and (not (x in ss.keys())))]
 	for rm in removeNodeList:
@@ -448,20 +436,7 @@ def buildFatimaNetwork():
 	
 	simplifyNetwork(graph,sss[0])
 	return graph, sss
-	
-def printSubgraphs(graph):
-	nodeList=graph.nodes()
-	subgraphnodes=set()
-	for node in nodeList:
-		if len(graph.predecessors(node))>15:
-			subgraphnodes.add(node)
-			for element in graph.predecessors(node):
-				subgraphnodes.add(element)
-			
-			print('new node')
-			print(node)
-			print(len(graph.predecessors(node)))
-			print(graph.predecessors(node))
+
 			
 def buildToolbox( individualLength, bitFlipProb, samples):
 	# # #setup toolbox
@@ -517,10 +492,10 @@ def buildToolbox( individualLength, bitFlipProb, samples):
 			
 def runFatimaGA():
 	graph, ss = buildFatimaNetwork()
-	iters, simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb = returnSimParams()
-	individualLength, individualParse, nodeList, nodeOrderList, initValueList, evaluateNodes, possibilityNumList, nodeOrderInvertList= setupGAparams(graph, ss)
-	toolbox, hof, stats=buildToolbox(iters,individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList,simSteps,h,p,hillOn)
-	toolbox.register("evaluate", evaluate, iters=iters,ss=ss,  evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValueList=initValues, steps=simSteps, h=h,p=p,hillOn=hillOn)
+	iters, simSteps, generations, popSize, bitFlipProb, crossoverProb,mutationProb = returnSimParams()
+	individualLength, individualParse, nodeList, inputOrderList, initValueList, evaluateNodes, possibilityNumList, inputOrderInvertList= setupGAparams(graph, ss)
+	toolbox, hof, stats=buildToolbox(iters,individualLength, bitFlipProb, ss, evaluateNodes, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList,simSteps,)
+	toolbox.register("evaluate", evaluate, iters=iters,ss=ss,  evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, inputOrderList=inputOrderList, inputOrderInvertList=inputOrderInvertList, possibilityNumList=possibilityNumList, initValueList=initValues, steps=simSteps, h=h,p=p,hillOn=hillOn)
 	population=toolbox.population(n=popSize)
 	algo.eaMuCommaLambda(population, toolbox, mu=100, lambda_=200, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True, halloffame=hof)
 
@@ -547,8 +522,8 @@ def runFatimaSim(networkNoises, nodeNoises, trials):
 	graph, sss=buildFatimaNetwork()
 	#sss1=randomizeInputs(sss,samples)
 	sss1=synthesizeInputs(graph,samples)
-	async, iters, simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb ,mutationProb, mu,lambd= returnSimParams()
-	individualLength, individualParse, nodeList, nodeOrderList, initValueList, evaluateNodes, possibilityNumList, nodeOrderInvertList, earlyEvalNodes=setupGAparams(graph, sss1)
+	async, iters, simSteps, generations, popSize, bitFlipProb, crossoverProb ,mutationProb, mu,lambd= returnSimParams()
+	individualLength, individualParse, nodeList, inputOrderList, initValueList, evaluateNodes, possibilityNumList, inputOrderInvertList, earlyEvalNodes=setupGAparams(graph, sss1)
 	print("individualLength")
 	print(individualLength)
 	#open file to save, use noises in name
@@ -562,9 +537,9 @@ def runFatimaSim(networkNoises, nodeNoises, trials):
 		for nodeNoise in nodeNoises:
 			print('nodeNoise')
 			print(nodeNoise)
-			fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss1,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValueList,simSteps, h,p,hillOn,nodeNoise,networkNoise,popSize ,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd)
+			fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss1,individualLength,evaluateNodes, individualParse,nodeList,inputOrderList,inputOrderInvertList,possibilityNumList,initValueList,simSteps ,nodeNoise,networkNoise,popSize ,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd)
 		
-def fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValueList, steps, h,p,hillOn,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd, complexPenalty, genSteps):
+def fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,inputOrderList,inputOrderInvertList,possibilityNumList,initValueList, steps ,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd, complexPenalty, genSteps):
 	hofSize=10
 	avgSSEs=[]
 	hofs=[]
@@ -579,15 +554,15 @@ def fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss,individualLe
 		newSSS=[]
 		for k in range(0,len(sss)):
 			if async:
-				boolValues=iterateFuzzyModel(async, iters,individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[k], genSteps, h,p,hillOn,nodeNoise,networkNoise,earlyEvalNodes)
+				boolValues=iterateFuzzyModel(async, iters,individual, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[k], genSteps,nodeNoise,networkNoise,earlyEvalNodes)
 			else:
-				boolValues=runFuzzyModel(individual, async,individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[k], genSteps, h,p,hillOn,nodeNoise,networkNoise,earlyEvalNodes)
+				boolValues=runFuzzyModel(individual, async,individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[k], genSteps ,nodeNoise,networkNoise,earlyEvalNodes)
 			newSS=copy.deepcopy(sss[k])
 			for j in range(0,len(evaluateNodes)):
 				newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
 			newSSS.append(newSS)
 		#update eval nodes
-		print(evaluate(individual, async, iters, newSSS, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList, steps, h,p,hillOn,earlyEvalNodes,complexPenalty))
+		print(evaluate(individual, async, iters, newSSS, evaluateNodes, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList, steps,earlyEvalNodes,complexPenalty))
 		newInitValueList=[]
 		for j in range(0,len(sss)):
 			newInitValueList.append([])
@@ -599,16 +574,16 @@ def fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss,individualLe
 				else:
 					newInitValueList[k].append(0.5)
 		#print(len(sss))
-		toolbox.register("evaluate", evaluate, iters=iters, async=async, sss=newSSS, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValueList=newInitValueList, steps=steps, h=h,p=p,hillOn=hillOn,earlyEvalNodes=earlyEvalNodes, complexPenalty=complexPenalty)
-		#toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, nodeOrderList=nodeOrderList, nodeOrderInvertList=nodeOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
+		toolbox.register("evaluate", evaluate, iters=iters, async=async, sss=newSSS, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, inputOrderList=inputOrderList, inputOrderInvertList=inputOrderInvertList, possibilityNumList=possibilityNumList, initValueList=newInitValueList, steps=steps, earlyEvalNodes=earlyEvalNodes, complexPenalty=complexPenalty)
+		#toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, inputOrderList=inputOrderList, inputOrderInvertList=inputOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
 		population=toolbox.population(n=popSize)
 		hof = tools.HallOfFame(hofSize, similar=numpy.array_equal)
 		output = tools.Logbook()
 		output=algo.eaMuCommaLambda(population, toolbox, mu=mu, lambda_=lambd, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True, halloffame=hof)
-		truth=(writeFuzzyModel(individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList))
+		truth=(writeFuzzyModel(individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList))
 		
 		for j in range(0,10):
-			bestRun=(writeFuzzyModel(hof[j], individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList))
+			bestRun=(writeFuzzyModel(hof[j], individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList))
 			if truth==bestRun:
 				truthCounter[j]+=1
 				break
@@ -669,320 +644,6 @@ def fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss,individualLe
 	print(len(truthlines))
 
 
-def testSimConvergence(async, iters, toolbox, stats, graph, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValueList, steps, h,p,hillOn,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd, complexPenalty, genSteps):
-	newSSS=[]
-	trueNodeList=[]
-	for i in range(0,trials):
-		individual=genRandBits(individualLength)
-		newSSS=[]
-		for k in range(0,len(sss)):
-			if async:
-				boolValues=iterateFuzzyModel(async, iters,individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[k], genSteps, h,p,hillOn,nodeNoise,networkNoise,earlyEvalNodes)
-			else:
-				boolValues=runFuzzyModel(individual, async,individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[k], genSteps, h,p,hillOn,nodeNoise,networkNoise,earlyEvalNodes)
-			newSS=copy.deepcopy(sss[k])
-			for j in range(0,len(evaluateNodes)):
-				newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
-			newSSS.append(newSS)
-		#update eval nodes
-		newInitValueList=[]
-		for j in range(0,len(sss)):
-			newInitValueList.append([])
-		for j in range(0,len(nodeList)):
-			for k in range(0,len(sss)):
-				ss=newSSS[k]
-				if  nodeList[j] in sss[0].keys():
-					newInitValueList[k].append(ss[nodeList[j]])
-				else:
-					newInitValueList[k].append(0.5)
-		for values in newInitValueList:
-			print(values)
-
-def LiuNetwork1Builder():
-	graph = nx.DiGraph()
-	graph.add_edge('g','k', signal='a')	
-	graph.add_edge('h','j', signal='a')
-	graph.add_edge('j','c', signal='i')	
-	graph.add_edge('f','k', signal='i')
-	graph.add_edge('a','c', signal='a')
-	graph.add_edge('b','d', signal='a')
-	graph.add_edge('c','f', signal='a')	
-	graph.add_edge('c','h', signal='a')
-	graph.add_edge('d','f', signal='a')	
-	graph.add_edge('d','g', signal='a')
-
-	return graph
-def LiuSSS1Builder():
-	sss=[]
-	ss={}
-	ss['a']=1
-	ss['b']=0
-	ss['c']=0
-	ss['d']=0
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=1
-	ss['c']=0
-	ss['d']=0
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=0
-	ss['c']=1
-	ss['d']=0
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=0
-	ss['c']=0
-	ss['d']=1
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=0
-	ss['c']=0
-	ss['d']=0
-	ss['f']=1
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=1
-	# ss['h']=0
-	# ss['j']=0
-	# ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=1
-	# ss['j']=0
-	# ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=0
-	# ss['j']=1
-	# ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=0
-	# ss['j']=0
-	# ss['k']=1
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=1
-	# ss['b']=1
-	# ss['c']=1
-	# ss['d']=1
-	# ss['f']=1
-	# ss['g']=1
-	# ss['h']=1
-	# ss['j']=1
-	# ss['k']=1
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=0
-	# ss['j']=0
-	# ss['k']=0
-	# sss.append(ss)
-	return sss
-def LiuNetwork3Builder():
-	graph = nx.DiGraph()
-	
-	graph.add_edge('EGFR','RAS', signal='a')
-	graph.add_edge('EGFR','PI3K', signal='a')
-	graph.add_edge('TNFR','FADD', signal='a')	
-	graph.add_edge('TNFR','PI3K', signal='a')
-	graph.add_edge('TNFR','RIP1', signal='a')	
-	graph.add_edge('DNA_DAMAGE','ATM', signal='a')
-	graph.add_edge('RAS','ERK', signal='a')	
-	graph.add_edge('RAS','JNK', signal='a')
-	graph.add_edge('FADD','CASP8', signal='a')	
-	graph.add_edge('PI3K','AKT', signal='a')
-	graph.add_edge('RIP1','P38', signal='a')
-	graph.add_edge('RIP1','JNK', signal='a')
-	graph.add_edge('ATM','CHK', signal='a')	
-	graph.add_edge('ATM','P53', signal='a')	
-	graph.add_edge('ERK','RAS', signal='a')
-	graph.add_edge('ERK','MYC', signal='a')	
-	graph.add_edge('ERK','BID', signal='i')
-	graph.add_edge('CASP8','BID', signal='a')	
-	graph.add_edge('CASP8','CASP3', signal='a')
-	graph.add_edge('CASP8','RIP1', signal='i')
-	graph.add_edge('JNK','P53', signal='a')	
-	graph.add_edge('JNK','FOXO1', signal='a')
-	graph.add_edge('AKT','BID', signal='i')	
-	graph.add_edge('AKT','CASP8', signal='i')
-	graph.add_edge('AKT','BIM', signal='i')
-	graph.add_edge('AKT','4EBP1', signal='i')	
-	graph.add_edge('AKT','S6K', signal='a')
-	graph.add_edge('AKT','P53', signal='i')	
-	graph.add_edge('AKT','FOXO1', signal='i')
-	graph.add_edge('P38','CDC25', signal='a')	
-	graph.add_edge('P38','FOXO1', signal='a')
-	graph.add_edge('P38','P53', signal='a')
-	graph.add_edge('CHK','CDC25', signal='i')	
-	graph.add_edge('CHK','P53', signal='a')	
-	graph.add_edge('CDC25','CDK', signal='a')
-	graph.add_edge('P53','PUMA', signal='a')
-	graph.add_edge('P53','FADD', signal='a')
-	graph.add_edge('P53','ATM', signal='a')	
-	graph.add_edge('P53','CHK', signal='i')
-	graph.add_edge('P53','CDK', signal='i')
-	graph.add_edge('P53','CYCLIN', signal='i')	
-	graph.add_edge('P53','BIM', signal='a')
-	graph.add_edge('FOXO1','P27', signal='a')
-	graph.add_edge('BIM','BAX', signal='a')	
-	graph.add_edge('BID','BAX', signal='a')
-	graph.add_edge('MYC','PROLIFERATION', signal='a')	
-	graph.add_edge('PUMA','BAX', signal='a')
-	graph.add_edge('S6K','S6', signal='a')	
-	graph.add_edge('S6K','PI3K', signal='a')
-	graph.add_edge('P27','CYCLIN', signal='i')
-	graph.add_edge('P27','CELL_CYCLE', signal='a')	
-	graph.add_edge('BAX','SMAC', signal='a')
-	graph.add_edge('SMAC','CASP3', signal='a')	
-	graph.add_edge('4EBP1','PROLIFERATION', signal='i')
-	graph.add_edge('S6','PROLIFERATION', signal='a')	
-	graph.add_edge('CYCLIN','CDK', signal='a')
-	graph.add_edge('CYCLIN','PROLIFERATION', signal='a')
-	graph.add_edge('CDK','PROLIFERATION', signal='a')	
-	graph.add_edge('CHK','CELL_CYCLE', signal='a')
-	graph.add_edge('BAX','CASP9', signal='a')	
-	graph.add_edge('CASP9','CASP3', signal='a')
-	graph.add_edge('CASP3','APOPTOSIS', signal='a')	
-	return graph
-
-def LiuNetwork3SimTest(inputNum,trialNum):
-	graph = LiuNetwork3Builder()
-	#runNoiseSimTest(graph, sss, [.001,.002,.005,.01,.02,.05,.1,.2,.5], [0], 10)
-	sss1=synthesizeInputs(graph,inputNum)
-	runNoiseSimTest(graph, sss1, [0], [0], trialNum)
-
-def LiuNetwork1SimTest(inputNum,trialNum):
-	#two dicts for the models
-	#sss=LiuSSS1Builder()
-	graph = LiuNetwork1Builder()
-	#runNoiseSimTest(graph, sss, [.001,.002,.005,.01,.02,.05,.1,.2,.5], [0], 10)
-	sss1=synthesizeInputs(graph,inputNum)
-	runNoiseSimTest(graph, sss1, [.001], [0], trialNum)
-
-def LiuNetwork2SimTest(inputNum,trialNum):
-	#two dicts for the models
-	sss, graph=LiuNetwork2Builder()
-	sss1=synthesizeInputs(graph,inputNum)
-	runNoiseSimTest(graph, sss1, [0], [0], trialNum)
-
-def LiuNetwork2Builder():
-	graph = nx.DiGraph()
-	graph.add_edge('igf1','ras', signal='a')
-	graph.add_edge('tgfa','ras', signal='a')
-	graph.add_edge('igf1','pi3k', signal='a')
-	graph.add_edge('tgfa','pi3k', signal='a')
-	graph.add_edge('ras','pi3k', signal='a')
-	graph.add_edge('ras','map3k1', signal='a')
-	graph.add_edge('ras','mek12', signal='a')
-	graph.add_edge('tnfa','pi3k', signal='a')
-	graph.add_edge('tnfa','jnk12', signal='a')
-	graph.add_edge('tnfa','map3k1', signal='a')
-	graph.add_edge('tnfa','map3k7', signal='a')
-	graph.add_edge('tnfa','mkk4', signal='a')
-	graph.add_edge('il1a','map3k7', signal='a')
-	graph.add_edge('il1a','map3k1', signal='a')
-	graph.add_edge('map3k7','ikk', signal='a')
-	graph.add_edge('map3k7','mkk4', signal='a')
-	graph.add_edge('map3k7','p38', signal='a')
-	graph.add_edge('map3k7','hsp27', signal='a')
-	graph.add_edge('map3k1','ikk', signal='a')
-	graph.add_edge('map3k1','jnk12', signal='a')
-	graph.add_edge('map3k1','mkk4', signal='a')
-	graph.add_edge('pi3k','map3k1', signal='a')
-	graph.add_edge('pi3k','akt', signal='a')
-	graph.add_edge('pi3k','mek12', signal='a')
-	graph.add_edge('akt','mek12', signal='a')
-	graph.add_edge('akt','ikk', signal='a')
-	graph.add_edge('mek12','erk12', signal='a')
-	graph.add_edge('ikk','ikb', signal='a')
-	graph.add_edge('mkk4','jnk12', signal='a')
-	graph.add_edge('mkk4','p38', signal='a')
-	graph.add_edge('erk12','hsp27', signal='a')
-	graph.add_edge('p38','hsp27', signal='a')
-
-	# listy=['igf1','tgfa','ras','tnfa','il1a','map3k7','pi3k','map3k1','akt','mek12','ikk','mkk4','erk12','jk12','ikb','p38','hsp27']
-	# sss=[]
-	# for i in range(0,10):
-	# 	sss.append({})
-	# for element in listy:
-	# 	for i in range(0,10):
-	# 		sss[i][element]=random()
-	return  graph
-
-def runNoiseSimTest(graph, sss, networkNoises, nodeNoises, trials):
-	async, iters, steps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb,mu,lambd, complexPenalty, genSteps= returnSimParams()
-	individualLength, individualParse, nodeList, nodeOrderList, initValueList, evaluateNodes, possibilityNumList, nodeOrderInvertList, earlyEvalNodes=setupGAparams(graph, sss)
-	#open file to save, use noises in name
-	#save graph seperately
-	toolbox, stats=buildToolbox(individualLength, bitFlipProb, len(sss))
-	for networkNoise in networkNoises:
-		print('networkNoise')
-		print(networkNoise)
-		for nodeNoise in nodeNoises:
-			print('nodeNoise')
-			print(nodeNoise)
-			fuzzySimulator(async, iters, toolbox, stats, graph, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValueList, steps, h,p,hillOn,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd, complexPenalty, genSteps)
-
-
-
 def setupBootstrapParams(graph):
 	repeat=True
 	while(repeat):
@@ -994,8 +655,8 @@ def setupBootstrapParams(graph):
 	
 	evaluateNodes=[] 
 	individualParse=[] 
-	nodeOrderList=[] 
-	nodeOrderInvertList=[]
+	inputOrderList=[] 
+	inputOrderInvertList=[]
 	possibilityNumList=[]
 	nodeList=graph.nodes()
 	nodeDict={}
@@ -1035,8 +696,8 @@ def setupBootstrapParams(graph):
 					activity.append(True)
 					#print('i')
 			activities.append(activity)
-		nodeOrderList.append(possibilities)
-		nodeOrderInvertList.append(activities)
+		inputOrderList.append(possibilities)
+		inputOrderInvertList.append(activities)
 		possibilityNumList.append(len(possibilities))
 		if len(possibilities)==0:
 			logNum=0
@@ -1046,42 +707,38 @@ def setupBootstrapParams(graph):
 		counter=counter+logNum+len(possibilities)
 		# print(counter)
 		# print(individualParse)
-	return counter, individualParse, nodeList, nodeOrderList, evaluateNodes, possibilityNumList, nodeOrderInvertList
+	return counter, individualParse, nodeList, inputOrderList, evaluateNodes, possibilityNumList, inputOrderInvertList
 
 def testBootstrap(reSampleNum,sampleSize,inputNum):
-	graph=LiuNetwork2Builder()
+	graph=tester.LiuNetwork2Builder()
 	# graph=nx.DiGraph()
 	# graph.add_edge('1','3',signal='a')
 	# graph.add_edge('2','3',signal='a')
 	sss=synthesizeInputs(graph,inputNum)
-	individualLength, individualParse, nodeList, nodeOrderList, initValueList, evaluateNodes, possibilityNumList, nodeOrderInvertList, earlyEvalNodes= setupGAparams(graph, sss)
+	individualLength, individualParse, nodeList, inputOrderList, initValueList, evaluateNodes, possibilityNumList, inputOrderInvertList, earlyEvalNodes= setupGAparams(graph, sss)
 	nodeNoise=0
 	networkNoise=0
-	async, iters, simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps=returnSimParams()
+	async, iters, simSteps, generations, popSize, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps=returnSimParams()
 
 	#for i in range(0,trials):
 	individual=genRandBits(individualLength)
 	# print(individualLength)
 	# print(individual)
-	print(writeFuzzyModel(individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList))
-
-
-
+	print(writeFuzzyModel(individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList))
 
 	newSSS=[]
 	for k in range(0,len(sss)):
 		if async:
-			boolValues=iterateFuzzyModel(async, iters,individual, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[k], genSteps, h,p,hillOn,nodeNoise,networkNoise,earlyEvalNodes)
+			boolValues=iterateFuzzyModel(async, iters,individual, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[k], genSteps,nodeNoise,networkNoise,earlyEvalNodes)
 		else:
-			boolValues=runFuzzyModel(individual, async,individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList[k], genSteps, h,p,hillOn,nodeNoise,networkNoise,earlyEvalNodes)
+			boolValues=runFuzzyModel(individual, async,individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[k], genSteps ,nodeNoise,networkNoise,earlyEvalNodes)
 		newSS=copy.deepcopy(sss[k])
 		for j in range(0,len(evaluateNodes)):
 			newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
 		newSSS.append(newSS)
 		#update eval nodes
-		#print(evaluate(individual, async, iters, newSSS, evaluateNodes, individualParse, nodeList, nodeOrderList, nodeOrderInvertList, possibilityNumList, initValueList, steps, h,p,hillOn,earlyEvalNodes,complexPenalty))
+		#print(evaluate(individual, async, iters, newSSS, evaluateNodes, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList, steps, ,earlyEvalNodes,complexPenalty))
 	
-
 	initValueList=[]
 	for j in range(0,len(newSSS)):
 		initValueList.append([])
@@ -1100,19 +757,20 @@ def testBootstrap(reSampleNum,sampleSize,inputNum):
 		# print(individualParse[i])
 		deviation=0
 		for steadyStateNum in range(0,len(newSSS)):
-			derivedVal=propUpdate(i,initValueList[steadyStateNum],individual[individualParse[i][0]:individualParse[i][2]], individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn)
+			derivedVal=propUpdate(i,initValueList[steadyStateNum],individual[individualParse[i][0]:individualParse[i][2]], individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, )
 			deviation=deviation+(derivedVal-newSSS[steadyStateNum][nodeList[i]])**2
 		print(deviation)
 
-	bootstrapRules(graph,newSSS,reSampleNum,sampleSize, individualLength, individualParse, nodeList, nodeOrderList, evaluateNodes, possibilityNumList, nodeOrderInvertList)
+	bootstrapRules(graph,newSSS,reSampleNum,sampleSize, individualLength, individualParse, nodeList, inputOrderList, evaluateNodes, possibilityNumList, inputOrderInvertList)
+
 def bitList(n):
     return [1 if digit=='1' else 0 for digit in bin(n)[2:]]
 
-def bootstrapRules(graph,sss,reSampleNum,sampleSize, counter, individualParse, nodeList, nodeOrderList, evaluateNodes, possibilityNumList, nodeOrderInvertList):
+def bootstrapRules(graph,sss,reSampleNum,sampleSize, counter, individualParse, nodeList, inputOrderList, evaluateNodes, possibilityNumList, inputOrderInvertList):
 	ruleList=[]
 	for i in range(0,reSampleNum):
 		sss2=numpy.random.choice(sss, size=sampleSize, replace=True, p=None)
-		ruleList.append(propBoolModel( individualParse, nodeList, nodeOrderList, evaluateNodes, possibilityNumList, nodeOrderInvertList,graph,sss2))
+		ruleList.append(propBoolModel( individualParse, nodeList, inputOrderList, evaluateNodes, possibilityNumList, inputOrderInvertList,graph,sss2))
 	ruleDict=[]
 
 	# for i in range(0,len(nodeList)):
@@ -1125,10 +783,10 @@ def bootstrapRules(graph,sss,reSampleNum,sampleSize, counter, individualParse, n
 	# 		ruleDict[nodeNum][ruleList[trialNum][nodeNum]]=ruleDict[nodeNum][ruleList[trialNum][nodeNum]]+1
 	for item in ruleList:
 		print(item)
-		print(writeFuzzyModel(item, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList))
+		print(writeFuzzyModel(item, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList))
 
-def propBoolModel(individualParse, nodeList, nodeOrderList, evaluateNodes, possibilityNumList, nodeOrderInvertList,graph,sss1):
-	async, iters, simSteps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps=returnSimParams()
+def propBoolModel(individualParse, nodeList, inputOrderList, evaluateNodes, possibilityNumList, inputOrderInvertList,graph,sss1):
+	async, iters, simSteps, generations, popSize, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps=returnSimParams()
 	bestList=[]
 	initValueList=[]
 	for j in range(0,len(sss1)):
@@ -1153,7 +811,7 @@ def propBoolModel(individualParse, nodeList, nodeOrderList, evaluateNodes, possi
 					bits.insert(0,0)
 				deviation=0
 				for steadyStateNum in range(0,len(sss1)):
-					derivedVal=propUpdate(i,initValueList[steadyStateNum],bits, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn)
+					derivedVal=propUpdate(i,initValueList[steadyStateNum],bits, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, )
 					deviation=deviation+(derivedVal-sss1[steadyStateNum][nodeList[i]])**2
 				if(deviation<currentDev):
 					best=bits
@@ -1164,7 +822,7 @@ def propBoolModel(individualParse, nodeList, nodeOrderList, evaluateNodes, possi
 		print(best)
 	return [item for sublist in bestList for item in sublist]
 
-def propUpdate(currentNode,oldValue,individual, individualParse, nodeList,nodeOrderList, nodeOrderInvertList, possibilityNumList, h,p,hillOn):
+def propUpdate(currentNode,oldValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, ):
 	oldTriple=individualParse[currentNode]
 	triple=[]
 	triple.append(0)
@@ -1172,32 +830,32 @@ def propUpdate(currentNode,oldValue,individual, individualParse, nodeList,nodeOr
 	triple.append(oldTriple[2]-oldTriple[0])
 	# print(len(individual))
 
-	nodeOrder=nodeOrderList[currentNode]
-	nodeOrderInvert=nodeOrderInvertList[currentNode]
+	inputOrder=inputOrderList[currentNode]
+	inputOrderInvert=inputOrderInvertList[currentNode]
 	if possibilityNumList[currentNode]>0:
 		logicOperatorFlags=individual[triple[1]:triple[2]]
-		nodeOrder=nodeOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-		nodeOrderInvert=nodeOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
+		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
 		# print(currentNode)
 		# print(triple)
 		# print(individual)
-		if len(nodeOrder)==0:
+		if len(inputOrder)==0:
 			value=oldValue[currentNode]
-		elif len(nodeOrder)==1:
-			#print(nodeOrder[0])
-			value=hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn)
+		elif len(inputOrder)==1:
+			#print(inputOrder[0])
+			value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0],)
 		else:
-			# print(nodeOrder)
+			# print(inputOrder)
 			counter =0
 			if logicOperatorFlags[0]==0:
-				value=fuzzyAnd(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1],h,p,hillOn))
+				value=fuzzyAnd(Inv(oldValue[inputOrder[0]],inputOrderInvert[0],),Inv(oldValue[inputOrder[1]],inputOrderInvert[1],))
 			else:
-				value=fuzzyOr(hillInv(oldValue[nodeOrder[0]],nodeOrderInvert[0],h,p,hillOn),hillInv(oldValue[nodeOrder[1]],nodeOrderInvert[1],h,p,hillOn))
-			for i in range(2,len(nodeOrder)):
+				value=fuzzyOr(Inv(oldValue[inputOrder[0]],inputOrderInvert[0],),Inv(oldValue[inputOrder[1]],inputOrderInvert[1],))
+			for i in range(2,len(inputOrder)):
 				if logicOperatorFlags[i-1]==0:
-					value=fuzzyAnd(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i],h,p,hillOn))
+					value=fuzzyAnd(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i],))
 				else:
-					value=fuzzyOr(value,hillInv(oldValue[nodeOrder[i]],nodeOrderInvert[i],h,p,hillOn))
+					value=fuzzyOr(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i],))
 		return value
 	else:
 		# print('origvalue')
@@ -1210,8 +868,8 @@ if __name__ == '__main__':
 	#data=loadFpkms('C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv')
 	#sortFpkms(data,ss)
 	# print(ss)
-	#LiuNetwork2SimTest()
+	#teseter.LiuNetwork2SimTest()
 	#runFatimaSim([.01,.05],[.01,.02],1)
 	#runFatimaSim([0],[0.001],10)
-	#LiuNetwork2SimTest(20,1)
+	#tester.LiuNetwork2SimTest(20,1)
 	testBootstrap(1,50,50)
