@@ -18,6 +18,15 @@ def hillInv(x, inverter,h,p,hillOn): #inverts if necessary then applies hill fun
 	else:
 		return hill(x, h,p,hillOn)
 
+def randomizeInputs(sss,samples): # randomzes extant inputs for steady state simulations
+	newSS=[]
+	for i in range(0,samples):
+		newSS.append({})
+	for key in sss[0].keys():
+		for i in range(0,samples):
+			newSS[i][key]=random()
+	return newSS
+
 #above are old functions and imports
 	
 def printSubgraphs(graph):
@@ -33,7 +42,7 @@ def printSubgraphs(graph):
 			print(node)
 			print(len(graph.predecessors(node)))
 			print(graph.predecessors(node))
-			
+
 def testSimConvergence(async, iters, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,nodeOrderList,nodeOrderInvertList,possibilityNumList,initValueList, nodeNoise,networkNoise,earlyEvalNodes, genSteps):
 	newSSS=[]
 	trueNodeList=[]
