@@ -72,7 +72,40 @@ def testSimConvergence(async, iters, trials, sss,individualLength,evaluateNodes,
 		for values in newInitValueList:
 			print(values)
 
-
+# def fuzzyUpdate(currentNode,oldValue,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
+# 	triple=individualParse[currentNode] #find locations of bits we need in individual
+# 	inputOrder=inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+# 	inputOrderInvert=inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+# 	if possibilityNumList[currentNode]>0:
+# 		logicOperatorFlags=individual[triple[1]:triple[2]] # find demarcations on individual for bits we need
+# 		inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]] # determine what order of inputs is
+# 		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+# 		if len(inputOrder)==0:
+# 			value=oldValue[currentNode] #if no inputs, maintain value
+# 		elif len(inputOrder)==1:
+# 			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
+# 			if individual[triple[0]]==1:
+# 				value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
+# 			else:
+# 				value=oldValue[currentNode]
+# 		else:
+# 			#update nodes with more than one input
+# 			counter =0
+# 			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
+# 			if logicOperatorFlags[0]==0:
+# 				value=fuzzyAnd(Inv(oldValue[inputOrder[0]],inputOrderInvert[0]),Inv(oldValue[inputOrder[1]],inputOrderInvert[1]))
+# 			else:
+# 				value=fuzzyOr(Inv(oldValue[inputOrder[0]],inputOrderInvert[0]),Inv(oldValue[inputOrder[1]],inputOrderInvert[1]))
+# 			for i in range(2,len(inputOrder)):
+# 				#combines subsequent inputs
+# 				if logicOperatorFlags[i-1]==0:
+# 					value=fuzzyAnd(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i]))
+# 				else:
+# 					value=fuzzyOr(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i]))
+# 		return value
+# 	else:
+# 		#returns savme value if now inputs
+# 		return oldValue[currentNode]						
 def testFuzzySim():
 	filename='inputDataFatima.txt'
 	KEGGfileName='ko04060.xml'
