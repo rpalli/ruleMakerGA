@@ -379,7 +379,7 @@ def readKEGGnew(lines, graph, KEGGdict):
 			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
 
 def read_biopax(lines, graph):
-	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 
 	##old code, potentially useless
 	# pathways = soup.find_all('pathway')
@@ -568,30 +568,34 @@ def download_PC_codes(codelist, graph):
 		print(code)
 
 if __name__ == '__main__':
+
 	graph = nx.DiGraph()
-	dict={}
-	aliasDict={}
-	KEGGdict=parseKEGGdict('ko00001.keg', aliasDict, dict)
+	download_PC_codes(['TNF'], graph)
+	nx.write_graphml(graph,'TNF.graphml')
+	# graph = nx.DiGraph()
+	# dict={}
+	# aliasDict={}
+	# KEGGdict=parseKEGGdict('ko00001.keg', aliasDict, dict)
 	
-	if len(sys.argv) > 1: #if we have supplied a command-line argument
-		KEGGfileName=sys.argv[1]
-		inputfile = open(KEGGfileName, 'r')
-		lines = inputfile.readlines()
-		readKEGG(lines, graph, KEGGdict)
-		print(graph.nodes())
+	# if len(sys.argv) > 1: #if we have supplied a command-line argument
+	# 	KEGGfileName=sys.argv[1]
+	# 	inputfile = open(KEGGfileName, 'r')
+	# 	lines = inputfile.readlines()
+	# 	readKEGG(lines, graph, KEGGdict)
+	# 	print(graph.nodes())
 	
 	
 	
-	currentfile='IL1b_pathways.txt'
-	inputfile = open(currentfile, 'r')
-	line = inputfile.read()
+	# currentfile='IL1b_pathways.txt'
+	# inputfile = open(currentfile, 'r')
+	# line = inputfile.read()
 	
-	codelist=re.findall('ko\d\d\d\d\d',line)	
-	uploadKEGGcodes(codelist, graph, KEGGdict)
-	for node in graph.nodes():
-		if node in graph.successors(node):
-			graph.remove_edge(node,node)
-	global individualLength
+	# codelist=re.findall('ko\d\d\d\d\d',line)	
+	# uploadKEGGcodes(codelist, graph, KEGGdict)
+	# for node in graph.nodes():
+	# 	if node in graph.successors(node):
+	# 		graph.remove_edge(node,node)
+	# global individualLength
 
 	#this line breaks the code
 	#individualLength=setupGAparams(graph)

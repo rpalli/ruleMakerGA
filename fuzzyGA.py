@@ -17,6 +17,7 @@ import csv
 import itertools as itertool
 import copy as copy
 import gc as gc
+import re as re
 
 def returnSimParams():
 	simSteps=100 # number of steps each individual is run when evaluating
@@ -136,7 +137,6 @@ def loadFpkms(filename): #loads data from fpkms tab delimited csv file
 		return data
 def sortFpkms(data): #puts fpkms data into appropriate lists of steady state dictionaries following normalization to largest value (as denominator)
 	sss=[]
-	print(data[1])
 	for j in range(1,len(data[1])):
 		sss.append({})
 	for i in range(1,len(data)):
@@ -479,9 +479,33 @@ def simplifyNetwork(graph, ss):
 			else:
 				graph.add_edge(start,finish,signal='a')
 		graph.remove_node(rm)
+	print(graph.nodes())
 	flag=True
 	return graph
 	
+def logRegPrepNet(graph, ss):
+	newNodes = [x for x in graph.nodes() if  (not (x in ss.keys()))]
+	for node in newNodes:
+		befores=graph.predecessors(node)
+		afters=graph.successors(node)
+		for before in befores:
+			for after in afters:
+				edge1=graph.get_edge_data(before,node)['signal']
+				edge2=graph.get_edge_data(node,after)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(before,after,signal='i')
+				else:
+					graph.add_edge(before,after,signal='a')
+		graph.remove_node(node)
+	print(len(graph.nodes()))
+
+
+
 def buildFatimaNetwork(): #build a network from Fatimas data and from IL1 pathways in KEGG
 	dataFileName='C:/Users/Rohith/Desktop/Rohith_data/ruleMaker_GA/Data/fatima_fpkms.csv'
 	#dataFileName='/home/rohith/Documents/fatima_fpkms.csv'
@@ -507,7 +531,7 @@ def buildFatimaNetwork(): #build a network from Fatimas data and from IL1 pathwa
 			graph.remove_edge(node,node)
 	nodeList=graph.nodes()
 	
-	simplifyNetwork(graph,sss[0])
+	graph=simplifyNetwork(graph,sss[0])
 	return graph, sss
 
 			
@@ -898,13 +922,27 @@ if __name__ == '__main__':
 	#runFatimaSim([.01,.05],[.01,.02],1)
 	#runFatimaSim([0],[0.001],10)
 	#tester.LiuNetwork2SimTest(20,1)
-	inputNum=50
-	counters=[]
-	graphStart=tester.LiuNetwork2Builder()
-	sss=synthesizeInputs(graphStart,inputNum)
-	graph=simplifyNetwork(graphStart,sss[0])
-	nx.write_graphml(graph,'Liu2.graphml')
-	for i in range(0,1):
-		sss=synthesizeInputs(graph,inputNum)
-		counters.append(testBootstrap(5,10,graph,sss))
-	print(counters)
+	# inputNum=50
+	# counters=[]
+	# graphStart=tester.LiuNetwork2Builder()
+	# sss=synthesizeInputs(graphStart,inputNum)
+	# graph=simplifyNetwork(graphStart,sss[0])
+	# nx.write_graphml(graph,'Liu2.graphml')
+	# for i in range(0,1):
+	# 	sss=synthesizeInputs(graph,inputNum)
+	# 	counters.append(testBootstrap(5,10,graph,sss))
+	# print(counters)
+	graph, sss=buildFatimaNetwork()
+	logRegPrepNet(graph,sss[0])
+	nodes=graph.nodes()
+	for i in range(0,len(graph.nodes())):
+		if len(graph.predecessors(nodes[i]))>1:
+			tempString=str(nodes[i])
+			for pred in graph.predecessors(nodes[i]):
+				tempString=tempString+"     "+str(pred)
+			print(tempString)
+	maxy=0
+	for i in range(0,len(graph.nodes())):
+		if len(graph.predecessors(nodes[i]))>maxy:
+			maxy=len(graph.predecessors(nodes[i]))
+	print(maxy)
