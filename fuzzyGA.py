@@ -155,22 +155,24 @@ def Inv(x, inverter): #inverts if necessary then applies hill fun
 	else:
 		return (x)
 def fuzzyAnd(num1, num2):
-	return num1*num2
-	#return min(num1,num2)
+	#return num1*num2
+	return min(num1,num2)
 			
 def fuzzyOr(num1, num2):
-	return (num1+num2-(num1*num2))
-	#return max(num1, num2)
+	#return (num1+num2-(num1*num2))
+	return max(num1, num2)
+
+def propOrE1(num1, num2, index1, index2,corrMat):
+	return (num1+num2)*(2-corrMat[index1][index2])/2
+
+def propAndE1(num1,num2,index1,index2,corrMat):
+	return (num1+num2)*corrMat[index1][index2]/2
 
 def bit2int(bitlist): #converts bitstring to integer
 	out = 0
 	for bit in bitlist:
 		out = (out << 1) | bit
 	return out
-
-
-
-
 
 def propUpdateNet(currentNode,oldValue,individual, triple, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
 	inputOrder=inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
@@ -231,35 +233,7 @@ def propUpdateNode(currentNode,oldValue,individual, individualParse, nodeList,in
 
 	retinue = propUpdateNet(currentNode,oldValue,individual, triple, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList)
 	return retinue
-	# inputOrder=inputOrderList[currentNode]
-	# inputOrderInvert=inputOrderInvertList[currentNode]
-	# if possibilityNumList[currentNode]>0:
-	# 	logicOperatorFlags=individual[triple[1]:triple[2]]
-	# 	inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-	# 	inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]
-	# 	if len(inputOrder)==0:
-	# 		value=oldValue[currentNode]
-	# 	elif len(inputOrder)==1:
-	# 		if individual[0]==1:
-	# 			value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
-	# 		else:
-	# 			value=oldValue[currentNode]
-	# 	else:
-	# 		counter =0
-	# 		if logicOperatorFlags[0]==0:
-	# 			value=fuzzyAnd(Inv(oldValue[inputOrder[0]],inputOrderInvert[0],),Inv(oldValue[inputOrder[1]],inputOrderInvert[1],))
-	# 		else:
-	# 			value=fuzzyOr(Inv(oldValue[inputOrder[0]],inputOrderInvert[0],),Inv(oldValue[inputOrder[1]],inputOrderInvert[1],))
-	# 		for i in range(2,len(inputOrder)):
-	# 			if logicOperatorFlags[i-1]==0:
-	# 				value=fuzzyAnd(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i],))
-	# 			else:
-	# 				value=fuzzyOr(value,Inv(oldValue[inputOrder[i]],inputOrderInvert[i],))
-	# 	return value
-	# else:
-	# 	# print('origvalue')
-	# 	# print(oldValue[currentNode])
-	# 	return oldValue[currentNode]						
+					
 def writeFuzzyNode(currentNode,individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
 	#write out evaluation instructions in BooleanNet format. This follows the exact same code as fuzzyUpdate, but writes a string instead of actually updating the values of the nodes
 	triple=individualParse[currentNode]
@@ -482,59 +456,7 @@ def simplifyNetwork(graph, ss):
 	print(graph.nodes())
 	flag=True
 	return graph
-	
-def logRegPrepNet(graph, ss):
-	newNodes = [x for x in graph.nodes() if  (not (x in ss.keys()))]
-	for node in newNodes:
-		befores=graph.predecessors(node)
-		afters=graph.successors(node)
-		for before in befores:
-			for after in afters:
-				edge1=graph.get_edge_data(before,node)['signal']
-				edge2=graph.get_edge_data(node,after)['signal']
-				inhCount=0
-				if edge1=='i':
-					inhCount=inhCount+1
-				if edge2=='i':
-					inhCount=inhCount+1
-				if inhCount==1:
-					graph.add_edge(before,after,signal='i')
-				else:
-					graph.add_edge(before,after,signal='a')
-		graph.remove_node(node)
-	print(len(graph.nodes()))
 
-
-
-def buildFatimaNetwork(): #build a network from Fatimas data and from IL1 pathways in KEGG
-	dataFileName='C:/Users/Rohith/Desktop/Rohith_data/ruleMaker_GA/Data/fatima_fpkms.csv'
-	#dataFileName='/home/rohith/Documents/fatima_fpkms.csv'
-	#two dicts for the models
-	nodeUpdateDict={}
-	data=loadFpkms(dataFileName)
-	sss=sortFpkms(data)
-	gc.collect()
-	#print(ss.keys())
-	graph = nx.DiGraph()
-	dict={}
-	aliasDict={}
-	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)	
-	
-	currentfile='IL1b_pathways.txt'
-	inputfile = open(currentfile, 'r')
-	line = inputfile.read()
-	codelist=re.findall('ko\d\d\d\d\d',line)	
-	print(codelist)
-	constructor.uploadKEGGcodes(codelist, graph, KEGGdict)
-	for node in graph.nodes():
-		if node in graph.successors(node):
-			graph.remove_edge(node,node)
-	nodeList=graph.nodes()
-	
-	graph=simplifyNetwork(graph,sss[0])
-	return graph, sss
-
-			
 def buildToolbox( individualLength, bitFlipProb, samples):
 	# # #setup toolbox
 	toolbox = base.Toolbox()
@@ -932,17 +854,3 @@ if __name__ == '__main__':
 	# 	sss=synthesizeInputs(graph,inputNum)
 	# 	counters.append(testBootstrap(5,10,graph,sss))
 	# print(counters)
-	graph, sss=buildFatimaNetwork()
-	logRegPrepNet(graph,sss[0])
-	nodes=graph.nodes()
-	for i in range(0,len(graph.nodes())):
-		if len(graph.predecessors(nodes[i]))>1:
-			tempString=str(nodes[i])
-			for pred in graph.predecessors(nodes[i]):
-				tempString=tempString+"     "+str(pred)
-			print(tempString)
-	maxy=0
-	for i in range(0,len(graph.nodes())):
-		if len(graph.predecessors(nodes[i]))>maxy:
-			maxy=len(graph.predecessors(nodes[i]))
-	print(maxy)

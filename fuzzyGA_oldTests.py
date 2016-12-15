@@ -11,7 +11,59 @@ def hill(x,h,p,hillOn): #applies hill function if called for
 		return ((1+h**p)*x**p)/(h**p+x**p)		
 	else:
 		return x
-		
+	
+def logRegPrepNet(graph, ss):
+	newNodes = [x for x in graph.nodes() if  (not (x in ss.keys()))]
+	for node in newNodes:
+		befores=graph.predecessors(node)
+		afters=graph.successors(node)
+		for before in befores:
+			for after in afters:
+				edge1=graph.get_edge_data(before,node)['signal']
+				edge2=graph.get_edge_data(node,after)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(before,after,signal='i')
+				else:
+					graph.add_edge(before,after,signal='a')
+		graph.remove_node(node)
+	print(len(graph.nodes()))
+
+
+
+def buildFatimaNetwork(): #build a network from Fatimas data and from IL1 pathways in KEGG
+	dataFileName='C:/Users/Rohith/Desktop/Rohith_data/ruleMaker_GA/Data/fatima_fpkms.csv'
+	#dataFileName='/home/rohith/Documents/fatima_fpkms.csv'
+	#two dicts for the models
+	nodeUpdateDict={}
+	data=loadFpkms(dataFileName)
+	sss=sortFpkms(data)
+	gc.collect()
+	#print(ss.keys())
+	graph = nx.DiGraph()
+	dict={}
+	aliasDict={}
+	KEGGdict=constructor.parseKEGGdict('ko00001.keg', aliasDict, dict)	
+	
+	currentfile='IL1b_pathways.txt'
+	inputfile = open(currentfile, 'r')
+	line = inputfile.read()
+	codelist=re.findall('ko\d\d\d\d\d',line)	
+	print(codelist)
+	constructor.uploadKEGGcodes(codelist, graph, KEGGdict)
+	for node in graph.nodes():
+		if node in graph.successors(node):
+			graph.remove_edge(node,node)
+	nodeList=graph.nodes()
+	
+	graph=simplifyNetwork(graph,sss[0])
+	return graph, sss
+
+			
 def hillInv(x, inverter,h,p,hillOn): #inverts if necessary then applies hill fun
 	if inverter:
 		return hill(1-x, h,p,hillOn)
