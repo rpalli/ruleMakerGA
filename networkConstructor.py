@@ -30,37 +30,101 @@ edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'Te
 node_classes = ['PhysicalEntity', 'Complex', 'Dna', 'DnaRegion', 'Protein', 'Rna', 'RnaRegion', 'SmallMolecule', 'Gene']
 graph_classes = ['Pathway']
 
+def simplifyNetwork(graph, ss):
+	#network simplification algorithm. 
+	# # 1. remove nodes which are neither part of input nor have input to them...
+	# # 2. remove straigth paths. 
+	# # 3. 
 
-def drawGraph3(representative, filename, KEGGdict):
-	rep=representative.copy()
-	dictionary={}
-	names=nx.get_node_attributes(representative, 'name')
-	for n in rep.nodes():
-		if len(names[n].split())==1:
-			if names[n] in KEGGdict.keys():
-				dictionary[n]=KEGGdict[names[n]]
-				#print(rep.node[n]['name'])
-		else :
-			translated=''
-			for word in names[n].split():
-				word1=word.lstrip('ko:')
-				word1=word1.lstrip('gl:')
-				if word1 in KEGGdict.keys():
-					translated=translated+KEGGdict[word1]+'-'
-				else:
-					translated=translated+word1+'-'
-			dictionary[n]=translated
-	repar= nx.relabel_nodes(rep,dictionary)
-	#print(repar.nodes())
-	#print(repar.edges())
-	B=agraph.to_agraph(repar)        # convert to a graphviz graph\
-	B.layout()            # neato layout
-	B.draw(filename)       # write postscript in k5.ps with neato layout
 
-def drawGraph2(representative, filename):
-	B=agraph.to_agraph(representative)        # convert to a graphviz graph\
-	B.layout()            # neato layout
-	B.draw(filename)       # write postscript in k5.ps with neato layout
+	#collapse complexes of nodes already in the list
+	for node in graph.nodes():
+		predlist=graph.predecessors(node)
+		for pred in predlist:
+			if '-' in pred:
+				# # print(pred)
+				genes=pred.split('-')
+				flag=True
+				for gene in genes:
+					if not gene in predlist:
+						flag=False
+				if flag:
+					graph.remove_edge(pred,node)
+	flag=True
+	
+	# remove nodes with no predecessors or value in given steady state data
+	while(flag):
+		flag=False	
+		# # print(len(graph.nodes()))
+		newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
+		if(len(newNodes)<len(graph.nodes())):
+			flag=True
+		graph=graph.subgraph(newNodes)
+		
+		print(len(graph.nodes()))
+			
+	#  collapse straight lines
+	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1))]
+	for rm in removeNodeList:
+		before=graph.predecessors(rm)[0]
+		after=graph.successors(rm)[0]
+		edge1=graph.get_edge_data(before,rm)['signal']
+		edge2=graph.get_edge_data(rm,after)['signal']
+		inhCount=0
+		if edge1=='i':
+			inhCount=inhCount+1
+		if edge2=='i':
+			inhCount=inhCount+1
+		if inhCount==1:
+			graph.add_edge(before,after,signal='i')
+		else:
+			graph.add_edge(before,after,signal='a')
+		graph.remove_node(rm)
+	flag=True
+
+	#rewire nodes that have only one upstream node
+	print(len(graph.nodes()))
+	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1) ]
+	for rm in removeNodeList:
+		for after in graph.successors(rm):
+			before=graph.predecessors(rm)[0]
+			edge1=graph.get_edge_data(before,rm)['signal']
+			edge2=graph.get_edge_data(rm,after)['signal']
+			inhCount=0
+			if edge1=='i':
+				inhCount=inhCount+1
+			if edge2=='i':
+				inhCount=inhCount+1
+			if inhCount==1:
+				graph.add_edge(before,after,signal='i')
+			else:
+				graph.add_edge(before,after,signal='a')
+		graph.remove_node(rm)
+	flag=True
+
+	#rewire nodes that have only one downstream node
+	print(len(graph.nodes()))
+	removeNodeList= [x for x in graph.nodes() if (len(graph.successors(x))==1) ]
+	for rm in removeNodeList:
+		for start in graph.predecessors(rm):
+			finish=graph.successors(rm)[0]
+			edge1=graph.get_edge_data(start,rm)['signal']
+			edge2=graph.get_edge_data(rm,finish)['signal']
+			inhCount=0
+			if edge1=='i':
+				inhCount=inhCount+1
+			if edge2=='i':
+				inhCount=inhCount+1
+			if inhCount==1:
+				graph.add_edge(start,finish,signal='i')
+			else:
+				graph.add_edge(start,finish,signal='a')
+		graph.remove_node(rm)
+	print(graph.nodes())
+	flag=True
+	return graph
+
+
 
 def parseKEGGdict(filename):
 	#makes a dictionary to convert ko numbers from KEGG into real gene names
@@ -83,28 +147,6 @@ def parseKEGGdict(filename):
 	return dict
 
 
-
-
-## Rohith's OLD version, kept for history
-# def parseKEGGdict(filename):
-# 	#makes a dictionary to convert ko numbers from KEGG into real gene names
-# 	#this is all file formatting. it reads a line, parses the string into the gene name and ko # then adds to a dict that identifies the two.
-# 	dict={}
-# 	inputfile = open(filename, 'r')
-# 	lines = inputfile.readlines()
-# 	for line in lines:
-# 		if line[0]=='D':
-# 			kline=line.split('      ')
-# 			kstring=kline[1]
-# 			kline=kstring.split('  ')
-# 			k=kline[0]
-# 			nameline=line.replace('D      ', 'D')
-# 			nameline=nameline.split('  ')
-# 			namestring=nameline[1]
-# 			nameline=namestring.split(';')
-# 			name=nameline[0]
-# 			dict[k]=name
-# 	return dict
 
 def parseKEGGdict(filename, aliasDict, dict):
 	#reads KEGG dictionary of identifiers between orthology numbers and actual protein names and saves it to a python dictionary
@@ -131,173 +173,6 @@ def parseKEGGdict(filename, aliasDict, dict):
 			dict[k]=name
 	return dict
 
-def readKEGG(lines, graph, KEGGdict):
-	#the network contained in a KEGG file to the graph. 
-	grouplist=[] #sometimes the network stores a group of things all activated by a single signal as a "group". We need to rewire the arrows to go to each individual component of the group so we save a list of these groups and a dictionary between id numbers and lists of elements that are part of that group
-	groups={}
-	i=0 #i controls our movement through the lines of code. 
-	dict={} #identifies internal id numbers with names (much like the code earlier does for groups to id numbers of elements of the group)
-	while i< len(lines):
-		line=lines[i]
-		# print line
-		#add nodes
-		if "<entry" in line:		
-			nameline=line.split('name="')
-			namestring=nameline[1]
-			nameline=namestring.split('"')
-			name=str.lstrip(nameline[0],'ko:')
-			name=str.lstrip(name,'gl:')
-			name=name.replace(' ','-')
-			name=name.replace('ko:','')
-			name=name.replace(':','-')
-			
-			# print(name)
-			
-			typeline=line.split('type="')
-			typestring=typeline[1]
-			typeline=typestring.split('"')
-			type=typeline[0]
-			
-			#build a dictionary internal to this file
-			idline=line.split('id="')
-			idstring=idline[1]
-			idline=idstring.split('"')
-			id=idline[0]
-			
-			
-			namelist=[]
-			if '-' in name: 
-				namelines=name.split('-')
-				for x in namelines:
-					if x in KEGGdict.keys():
-						namelist.append(KEGGdict[x])
-					else:
-						namelist.append(x)
-				name=namelist[0]+'-'
-				for x in range(1,len(namelist)):
-					name=name+namelist[x]+'-'
-				name=name[:-1:]
-			if name in KEGGdict.keys():
-				dict[id]=KEGGdict[name]
-			else:
-				dict[id]=name
-			#print(dict[id])
-			#if the node is a group, we create the data structure to deconvolute the group later
-			if type=='group':
-				i=i+1
-				newgroup=[]
-				grouplist.append(id)
-				while(not '</entry>' in lines[i]):
-					if 'component' in lines[i]:
-						newcompline=lines[i].split('id="')
-						newcompstring=newcompline[1]
-						newcompline=newcompstring.split('"')
-						newcomp=newcompline[0]
-						newgroup.append(newcomp)
-					i=i+1
-				groups[id]=newgroup
-			else:
-				graph.add_node(dict[id],{'name':dict[id],'type':type})
-				#print(name)
-				#print(id)
-				i=i+1
-		#add edges from KEGG file
-		elif "<relation" in line:
-			color='black'
-			signal='a'
-			subtypes=[]
-			
-			entryline=line.split('entry1="')
-			entrystring=entryline[1]
-			entryline=entrystring.split('"')
-			entry1=entryline[0]
-			
-			entryline=line.split('entry2="')
-			entrystring=entryline[1]
-			entryline=entrystring.split('"')
-			entry2=entryline[0]
-			
-
-			
-			typeline=line.split('type="')
-			typestring=typeline[1]
-			typeline=typestring.split('"')
-			type=typeline[0]
-			
-			while(not '</relation>' in lines[i]):
-				if 'subtype' in lines[i]:
-					nameline1=lines[i].split('name="')
-					namestring1=nameline1[1]
-					nameline1=namestring1.split('"')
-					subtypes.append(nameline1[0])
-				i=i+1
-			
-			
-			#color and activation assignament based on the type of interaction in KEGG
-			if ('activation' in subtypes) or ('expression' in subtypes):
-				color='green'
-				signal='a'
-			elif 'inhibition' in subtypes:
-				color='red'
-				signal='i'
-			elif ('binding/association' in subtypes) or('compound' in subtypes):
-				color='purple'
-				signal='a'
-			elif 'phosphorylation' in subtypes:
-				color='orange'
-				signal='a'
-			elif 'dephosphorylation' in subtypes:
-				color='pink'
-				signal='i'
-			elif 'indirect effect' in subtypes:
-				color='cyan'
-				signal='a'
-			elif 'dissociation' in subtypes:
-				color='yellow'
-				signal='i'
-			elif 'ubiquitination' in subtypes:
-				color='cyan'
-				signal='i'
-			else:
-				print('color not detected. Signal assigned to activation arbitrarily')
-				print(subtypes)
-				signal='a'
-			
-			#this code deconvolutes the "groups" that KEGG creates 
-			#each element of the group gets an edge to or from it instead of the group
-			if entry1 in grouplist:
-				for current1 in groups[entry1]:
-					node1=dict[current1]
-					if entry2 in grouplist:
-						for current2 in groups[entry2]:
-							node2=dict[current2]
-							graph.add_edge(node1, node2, color=color, subtype=name, type=type, signal=signal )
-					else:
-						node2=dict[entry2]
-						graph.add_edge(node1, node2, color=color,  subtype=name, type=type, signal=signal )
-			elif entry2 in grouplist:
-				node1=dict[entry1]
-				for current in groups[entry2]:
-					if current in grouplist:
-						for current1 in groups[current]:
-							if current in dict.keys():
-								node2=dict[current]
-								graph.add_edge(node1,node2, color=color,  subtype=name, type=type, signal=signal )
-							else: 
-								print('groups on groups on groups')
-						#print('groups on groups')
-					elif current in dict.keys():
-						node2=dict[current]
-						graph.add_edge(node1,node2, color=color, subtype=name, type=type, signal=signal )
-					else:
-						print('not in the keys')
-						print(current)
-			else:
-				node1=dict[entry1]
-				node2=dict[entry2]
-				
-				graph.add_edge(node1,node2, color=color, subtype=name, type=type, signal=signal )
-		i=i+1
 
 def readKEGGnew(lines, graph, KEGGdict):
 	#read all lines into a bs4 object using libXML parser
@@ -385,24 +260,9 @@ def readKEGGnew(lines, graph, KEGGdict):
 #         graph is an (empty) networkX graph 
 #final: graph has been populated with the data from the file in lines 
 def read_biopax(lines, graph):
-<<<<<<< HEAD
 	soup = BeautifulSoup(''.join(lines), 'xml')
 
-	##old code, potentially useless
-	# pathways = soup.find_all('pathway')
-	# for pathway in pathways:
-	# 	name = pathway.find('NAME').string
-	# 	synonyms = [s.string for s in pathway.find_all('SYNONYMS')]
-	# 	component_ids = [c.get('rdf:resource')[1:] for c in pathway.find_all('PATHWAY-COMPONENTS')]
-	# 	print name
-	# 	for c_id in component_ids:
-	# 		component = soup.find(attrs={'rdf:ID': c_id})
-	# 		print component.prettify()
-	##end old code
-
-
 	#treating edge classes as nodes for now, will simplify later
-=======
 	#constuct a BeautifulSoup4 parser object with the libxml backend
 	#input in lines is given as an array, the join function converts to 1 long string
 	#On windows this fails, try 'lxml' instead of 'lxml-xml'
@@ -413,7 +273,6 @@ def read_biopax(lines, graph):
 	#or participation in these interactions.  Accordingly, we parse all objects into nodes below.
 
 	#for every biopax class name (defined on lines 29-31)
->>>>>>> refs/remotes/origin/master
 	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
 		#use XML parser to get all objects of the current class
 		biopax_objects = soup.find_all(biopax_class)
@@ -868,45 +727,10 @@ def download_PC_codes(codelist, graph):
 		print(code)
 	simplify_biopax_graph(graph)
 
-# def download_PC_codes(codelist, graph):
-# 	for code in codelist:
-# 		url = urllib2.urlopen('http://www.pathwaycommons.org/pc2/graph?source='+code+'&kind=neighborhood')
-# 		text=url.readlines()
-# 		read_biopax_dev(text, graph)
-# 		simplify_biopax_graph(graph)
-# 		print(code)
+
 
 if __name__ == '__main__':
 
 	graph = nx.DiGraph()
 	download_PC_codes(['TNF'], graph)
 	nx.write_graphml(graph,'TNF.graphml')
-	# graph = nx.DiGraph()
-	# dict={}
-	# aliasDict={}
-	# KEGGdict=parseKEGGdict('ko00001.keg', aliasDict, dict)
-	
-	# if len(sys.argv) > 1: #if we have supplied a command-line argument
-	# 	KEGGfileName=sys.argv[1]
-	# 	inputfile = open(KEGGfileName, 'r')
-	# 	lines = inputfile.readlines()
-	# 	readKEGG(lines, graph, KEGGdict)
-	# 	print(graph.nodes())
-	
-	
-	
-	# currentfile='IL1b_pathways.txt'
-	# inputfile = open(currentfile, 'r')
-	# line = inputfile.read()
-	
-	# codelist=re.findall('ko\d\d\d\d\d',line)	
-	# uploadKEGGcodes(codelist, graph, KEGGdict)
-	# for node in graph.nodes():
-	# 	if node in graph.successors(node):
-	# 		graph.remove_edge(node,node)
-	# global individualLength
-
-	#this line breaks the code
-	#individualLength=setupGAparams(graph)
-
-	#graph input stuff
