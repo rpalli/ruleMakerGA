@@ -388,7 +388,7 @@ def read_biopax(lines, graph):
 	#constuct a BeautifulSoup4 parser object with the libxml backend
 	#input in lines is given as an array, the join function converts to 1 long string
 	#On windows this fails, try 'lxml' instead of 'lxml-xml'
-	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 
 	#in BioPAX, both physical objects (proteins, genes, etc.) and interactions (activation, 
 	#inhibition, etc.) are represented as NODES.  The edges in the system represent membership 
@@ -563,7 +563,7 @@ def read_biopax_dev(lines, graph):
 	#constuct a BeautifulSoup4 parser object with the libxml backend
 	#input in lines is given as an array, the join function converts to 1 long string
 	#On windows this fails, try 'lxml' instead of 'lxml-xml'
-	soup = BeautifulSoup(''.join(lines), 'lxml-xml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	node_id_to_name = {}
 
 	#in BioPAX, both physical objects (proteins, genes, etc.) and interactions (activation, 
@@ -753,8 +753,6 @@ def read_biopax_dev(lines, graph):
 					graph.add_edge(node_name, to_node_name, type=edge_type)
 
 
-
-
 def simplify_biopax_graph(graph):
 	protein_names_and_nodes = {}
 
@@ -784,6 +782,7 @@ def simplify_biopax_graph(graph):
 						graph.add_edge(p, s, node[1])
 			graph.remove_node(node[0])
 
+		#to be looked at in the future
 		if node_class in ['Gene', 'Rna', 'Dna']:
 			gene_name = node[1]['name']
 			if gene_name in protein_names_and_nodes.keys():
@@ -844,9 +843,19 @@ def download_PC_codes(codelist, graph):
 	for code in codelist:
 		url = urllib2.urlopen('http://www.pathwaycommons.org/pc2/graph?source='+code+'&kind=neighborhood')
 		text=url.readlines()
-		read_biopax_dev(text, graph)
-		simplify_biopax_graph(graph)
+		read_biopax(text, graph)
+		#uncomment below and comment above to enable beta parser with names as indices
+		# read_biopax_dev(text, graph)
 		print(code)
+	simplify_biopax_graph(graph)
+
+# def download_PC_codes(codelist, graph):
+# 	for code in codelist:
+# 		url = urllib2.urlopen('http://www.pathwaycommons.org/pc2/graph?source='+code+'&kind=neighborhood')
+# 		text=url.readlines()
+# 		read_biopax_dev(text, graph)
+# 		simplify_biopax_graph(graph)
+# 		print(code)
 
 if __name__ == '__main__':
 	graph = nx.DiGraph()
