@@ -18,11 +18,18 @@ import csv
 import itertools as it
 import sys
 from bs4 import BeautifulSoup
-import pygraphviz
-import matplotlib.patches as mpatches
-from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap, BoundaryNorm
+# import pygraphviz
+# import matplotlib.patches as mpatches
+# from matplotlib.collections import LineCollection
+# from matplotlib.colors import ListedColormap, BoundaryNorm
 import networkx.drawing.nx_agraph as agraph
+
+#definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
+#these biopax classes are iteracted over in the biopax methods
+edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction', 'Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation', 'Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']
+node_classes = ['PhysicalEntity', 'Complex', 'Dna', 'DnaRegion', 'Protein', 'Rna', 'RnaRegion', 'SmallMolecule', 'Gene']
+graph_classes = ['Pathway']
+
 
 def drawGraph3(representative, filename, KEGGdict):
 	rep=representative.copy()
@@ -77,10 +84,6 @@ def parseKEGGdict(filename):
 
 
 
-#definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
-edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction', 'Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation', 'Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']
-node_classes = ['PhysicalEntity', 'Complex', 'Dna', 'DnaRegion', 'Protein', 'Rna', 'RnaRegion', 'SmallMolecule', 'Gene']
-graph_classes = ['Pathway']
 
 ## Rohith's OLD version, kept for history
 # def parseKEGGdict(filename):
@@ -378,7 +381,11 @@ def readKEGGnew(lines, graph, KEGGdict):
 			node2 = id_to_name[entry2]
 			graph.add_edge(node1,node2, color=color, subtype='/'.join(subtypes), type=relation_type, signal=signal)
 
+#initial: lines is an array representing strings of each line of the biopax XML+RDF file
+#         graph is an (empty) networkX graph 
+#final: graph has been populated with the data from the file in lines 
 def read_biopax(lines, graph):
+<<<<<<< HEAD
 	soup = BeautifulSoup(''.join(lines), 'xml')
 
 	##old code, potentially useless
@@ -395,60 +402,151 @@ def read_biopax(lines, graph):
 
 
 	#treating edge classes as nodes for now, will simplify later
+=======
+	#constuct a BeautifulSoup4 parser object with the libxml backend
+	#input in lines is given as an array, the join function converts to 1 long string
+	#On windows this fails, try 'lxml' instead of 'lxml-xml'
+	soup = BeautifulSoup(''.join(lines), 'xml')
+
+	#in BioPAX, both physical objects (proteins, genes, etc.) and interactions (activation, 
+	#inhibition, etc.) are represented as NODES.  The edges in the system represent membership 
+	#or participation in these interactions.  Accordingly, we parse all objects into nodes below.
+
+	#for every biopax class name (defined on lines 29-31)
+>>>>>>> refs/remotes/origin/master
 	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
+		#use XML parser to get all objects of the current class
 		biopax_objects = soup.find_all(biopax_class)
-		# print biopax_class
+		
+		#for each instance of this class
 		for biopax_object in biopax_objects:
+			#get the ID of this object.  They should all be unique
 			node_id = biopax_object.get('rdf:ID')
+
+			#this is IMPROPER biopax, but some pathwaycommons files have no ID and specify 
+			#only a URL to an external resource. in this case we use the URL as the ID
 			if node_id == None:
 				node_id = biopax_object.get('rdf:about')
+
+			#every biopax object should have a display name that we can make use of 
+			#but sometimes it is not present.  in that case, we re-use the ID as a name
 			try:
 				node_name = unicode(biopax_object.find('displayName').string)
 			except Exception as e:
 				node_name = node_id
+
+			#add the node to the graph
 			graph.add_node(node_id, {'name': node_name, 'type': biopax_class})
 
+	#at this point, we have all the nodes in the system.  what's left is to connect these nodes
+	#together by looking for references to node IDs in the fields of other nodes member/participant
+	#fields.  the IDs are frequently prepended with the '#' sign, as in HTML internal referencing.
+
+	#we iterate over every type of class, since most of them can contain subcomponents
 	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
+		#use the XML parser to find all objects of the current class
 		biopax_objects = soup.find_all(biopax_class)
+
+		#for each object of the current class:
 		for biopax_object in biopax_objects:
+			#get the ID as above, or use URL of no ID is provided
 			node_id = biopax_object.get('rdf:ID')
 			if node_id == None:
 				node_id = biopax_object.get('rdf:about')
+
+			#if the current object is in the protein, complex, or physicalentity class then
+			#if may contain subcomponents (e.g. a complex of multiple proteins)
 			if biopax_class in ['Complex', 'Protein', 'PhysicalEntity']:
+				#get all labelled components of this object using the XML parser
 				components = biopax_object.find_all('component')
+				#for each of these components
 				for component in components:
+					#get the resource.  this corresponds to the ID or URL of the referred object
 					resource = component.get('rdf:resource')
+					#if the resource is an ID, ir has a # sign in front of it that needs to be removed
 					to_node = resource[1:] if resource[0] == '#' else resource
+					#we label the edge as contains, since the parent contains the component
 					edge_type = 'contains'
+					#add the edge from the parent object to the member
 					graph.add_edge(node_id, to_node, type=edge_type)
+
+				#there's another type of membership for these classes, and it functions similarly
+
+				#get the memberPhysicalEntity objects
 				members = biopax_object.find_all('memberPhysicalEntity')
+				#for each member
 				for member in members:
+					#get the ID/URL
 					resource = member.get('rdf:resource')
+					#strip off leading '#' sign if it is present
 					to_node = resource[1:] if resource[0] == '#' else resource
+					#label the edge as 'member'
 					edge_type = 'member'
+					#add the edge from the parent object to the member
 					graph.add_edge(node_id, to_node, type=edge_type)
+
+			#if the current object is in the following list of classes, it represents a form of 
+			#regulation.  The controlType field has values like "ACTIVATION" or "INHIBITION" that 
+			#define the type of control.  The controller objects are the ones exerting the effect, 
+			#and the controlled objects are the ones that are affected
 			if biopax_class in ['Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation']:
+				#use the XML parser to get all controller objects
 				controllers = biopax_object.find_all('controller')
+				#use the XML parser to get all controlled objects
 				controlleds = biopax_object.find_all('controlled')
+
+				#for each controller object
 				for controller in controllers:
+					#get the node ID / URL
 					resource = controller.get('rdf:resource')
+					#remove the leading # sign if there is one
 					from_node = resource[1:] if resource[0] == '#' else resource
+					#attempt to get the value of the controlTyoe field
 					try:
 						edge_type = unicode(biopax_object.find('controlType').string)
+					#if it is not present provide a generic "controller" label
 					except Exception as e:
 						edge_type = unicode('controller')
+					#add the edge from the controlled object to the interaction
 					graph.add_edge(from_node, node_id, type=edge_type)
+
+				#for each controlled object
 				for controlled in controlleds:
+					#get the node ID / URL
 					resource = controlled.get('rdf:resource')
+					#remove leading # sign if it is present
 					to_node = resource[1:] if resource[0] == '#' else resource
+					#attempt to get the value of the controlType string
 					try:
 						edge_type = unicode(biopax_object.find('controlType').string)
+					#if it is not provided use a generic label
 					except Exception as e:
 						edge_type = unicode('controlled')
+					#add the edge from the interaction to the controlled object
 					graph.add_edge(node_id, to_node, type=edge_type)
+
+			#objects in the following list of classes all represent a chemical reaction.  they have 
+			#a defined left and right side, with flow conventionally going from left to right. They
+			#may also specify RIGHT_TO_LEFT in the reactionDirection field; if so, the roles of left
+			#and right are reversed.
 			if biopax_class in ['Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']:
+				#get all objects on the left side off this reaction
 				lefts = biopax_object.find_all('left')
+				#get all objects on the right side of this reaction
 				rights = biopax_object.find_all('right')
+
+				#check for RIGHT_TO_LEFT in reaction direction, and reverse right and left if found
+				try:
+					direction = unicode(biopax_object.find('reactionDirection').string)
+					if direction == 'RIGHT_TO_LEFT':
+						#reassigns left to right and right to left via tuple packing/unpacking
+						(rights, lefts) = (lefts, rights)
+				except Exception as e:
+					pass
+				
+
+				#add edges as appropriate. left edges go from the reactants to the interaction
+				#and right edges go from the interaction to the products
 				for left in lefts:
 					resource = left.get('rdf:resource')
 					from_node = resource[1:] if resource[0] == '#' else resource
@@ -459,6 +557,8 @@ def read_biopax(lines, graph):
 					to_node = resource[1:] if resource[0] == '#' else resource
 					edge_type = 'right'
 					graph.add_edge(node_id, to_node, type=edge_type)
+
+			#
 			if biopax_class in ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction']:
 				print "ambiguous direction relationship found"
 				participants = biopax_object.find_all('participant')
@@ -474,6 +574,203 @@ def read_biopax(lines, graph):
 					to_node = resource[1:] if resource[0] == '#' else resource
 					edge_type = 'component'
 					graph.add_edge(node_id, to_node, type=edge_type)
+
+#initial: lines is an array representing strings of each line of the biopax XML+RDF file
+#         graph is an (empty) networkX graph 
+#final: graph has been populated with the data from the file in lines 
+def read_biopax_dev(lines, graph):
+	#constuct a BeautifulSoup4 parser object with the libxml backend
+	#input in lines is given as an array, the join function converts to 1 long string
+	#On windows this fails, try 'lxml' instead of 'lxml-xml'
+	soup = BeautifulSoup(''.join(lines), 'xml')
+	node_id_to_name = {}
+
+	#in BioPAX, both physical objects (proteins, genes, etc.) and interactions (activation, 
+	#inhibition, etc.) are represented as NODES.  The edges in the system represent membership 
+	#or participation in these interactions.  Accordingly, we parse all objects into nodes below.
+
+	#for every biopax class name (defined on lines 29-31)
+	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
+		#use XML parser to get all objects of the current class
+		biopax_objects = soup.find_all(biopax_class)
+		
+		#for each instance of this class
+		for biopax_object in biopax_objects:
+			#get the ID of this object.  They should all be unique
+			node_id = biopax_object.get('rdf:ID')
+
+			#this is IMPROPER biopax, but some pathwaycommons files have no ID and specify 
+			#only a URL to an external resource. in this case we use the URL as the ID
+			if node_id == None:
+				node_id = biopax_object.get('rdf:about')
+
+			#every biopax object should have a display name that we can make use of 
+			#but sometimes it is not present.  in that case, we re-use the ID as a name
+			try:
+				node_name = unicode(biopax_object.find('displayName').string)
+				words = node_name.split(' ')
+				if words[-1] == 'mRNA' or words[-1] == 'protein':
+					node_name = ' '.join(words[0:-2])
+			except Exception as e:
+				node_name = node_id
+
+			#add the node to the graph
+			graph.add_node(node_name, {'name': node_name, 'type': biopax_class, 'id': node_id})
+			node_id_to_name[node_id] = node_name
+
+	#at this point, we have all the nodes in the system.  what's left is to connect these nodes
+	#together by looking for references to node IDs in the fields of other nodes member/participant
+	#fields.  the IDs are frequently prepended with the '#' sign, as in HTML internal referencing.
+
+	#we iterate over every type of class, since most of them can contain subcomponents
+	for biopax_class in it.chain(node_classes, edge_classes, graph_classes):
+		#use the XML parser to find all objects of the current class
+		biopax_objects = soup.find_all(biopax_class)
+
+		#for each object of the current class:
+		for biopax_object in biopax_objects:
+			#get the ID as above, or use URL of no ID is provided
+			node_id = biopax_object.get('rdf:ID')
+			if node_id == None:
+				node_id = biopax_object.get('rdf:about')
+
+			node_name = node_id_to_name[node_id]
+
+			#if the current object is in the protein, complex, or physicalentity class then
+			#if may contain subcomponents (e.g. a complex of multiple proteins)
+			if biopax_class in ['Complex', 'Protein', 'PhysicalEntity']:
+				#get all labelled components of this object using the XML parser
+				components = biopax_object.find_all('component')
+				#for each of these components
+				for component in components:
+					#get the resource.  this corresponds to the ID or URL of the referred object
+					resource = component.get('rdf:resource')
+					#if the resource is an ID, ir has a # sign in front of it that needs to be removed
+					to_node_id = resource[1:] if resource[0] == '#' else resource
+					to_node_name = node_id_to_name[to_node_id]
+					#we label the edge as contains, since the parent contains the component
+					edge_type = 'contains'
+					#add the edge from the parent object to the member
+					graph.add_edge(node_name, to_node_name, type=edge_type)
+
+				#there's another type of membership for these classes, and it functions similarly
+
+				#get the memberPhysicalEntity objects
+				members = biopax_object.find_all('memberPhysicalEntity')
+				#for each member
+				for member in members:
+					#get the ID/URL
+					resource = member.get('rdf:resource')
+					#strip off leading '#' sign if it is present
+					to_node_id = resource[1:] if resource[0] == '#' else resource
+					to_node_name = node_id_to_name[to_node_id]
+					#we label the edge as contains, since the parent contains the component
+					edge_type = 'member'
+					#add the edge from the parent object to the member
+					graph.add_edge(node_name, to_node_name, type=edge_type)
+
+			#if the current object is in the following list of classes, it represents a form of 
+			#regulation.  The controlType field has values like "ACTIVATION" or "INHIBITION" that 
+			#define the type of control.  The controller objects are the ones exerting the effect, 
+			#and the controlled objects are the ones that are affected
+			if biopax_class in ['Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation']:
+				#use the XML parser to get all controller objects
+				controllers = biopax_object.find_all('controller')
+				#use the XML parser to get all controlled objects
+				controlleds = biopax_object.find_all('controlled')
+
+				#for each controller object
+				for controller in controllers:
+					#get the node ID / URL
+					resource = controller.get('rdf:resource')
+					#remove the leading # sign if there is one
+					from_node_id = resource[1:] if resource[0] == '#' else resource
+					from_node_name = node_id_to_name[from_node_id]
+
+					#attempt to get the value of the controlTyoe field
+					try:
+						edge_type = unicode(biopax_object.find('controlType').string)
+					#if it is not present provide a generic "controller" label
+					except Exception as e:
+						edge_type = unicode('controller')
+					#add the edge from the controlled object to the interaction
+					graph.add_edge(from_node_name, node_name, type=edge_type)
+
+				#for each controlled object
+				for controlled in controlleds:
+					#get the node ID / URL
+					resource = controlled.get('rdf:resource')
+					#remove leading # sign if it is present
+					to_node_id = resource[1:] if resource[0] == '#' else resource
+					to_node_name = node_id_to_name[to_node_id]
+
+					#attempt to get the value of the controlType string
+					try:
+						edge_type = unicode(biopax_object.find('controlType').string)
+					#if it is not provided use a generic label
+					except Exception as e:
+						edge_type = unicode('controlled')
+					#add the edge from the interaction to the controlled object
+					graph.add_edge(node_name, to_node_name, type=edge_type)
+
+			#objects in the following list of classes all represent a chemical reaction.  they have 
+			#a defined left and right side, with flow conventionally going from left to right. They
+			#may also specify RIGHT_TO_LEFT in the reactionDirection field; if so, the roles of left
+			#and right are reversed.
+			if biopax_class in ['Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']:
+				#get all objects on the left side off this reaction
+				lefts = biopax_object.find_all('left')
+				#get all objects on the right side of this reaction
+				rights = biopax_object.find_all('right')
+
+				#check for RIGHT_TO_LEFT in reaction direction, and reverse right and left if found
+				try:
+					direction = unicode(biopax_object.find('reactionDirection').string)
+					if direction == 'RIGHT_TO_LEFT':
+						#reassigns left to right and right to left via tuple packing/unpacking
+						(rights, lefts) = (lefts, rights)
+				except Exception as e:
+					pass
+				
+
+				#add edges as appropriate. left edges go from the reactants to the interaction
+				#and right edges go from the interaction to the products
+				for left in lefts:
+					resource = left.get('rdf:resource')
+					from_node_id = resource[1:] if resource[0] == '#' else resource
+					from_node_name = node_id_to_name[from_node_id]
+
+					edge_type = 'left'
+					graph.add_edge(from_node_name, node_name, type=edge_type)
+				for right in rights:
+					resource = right.get('rdf:resource')
+					to_node_id = resource[1:] if resource[0] == '#' else resource
+					to_node_name = node_id_to_name[to_node_id]
+
+					edge_type = 'right'
+					graph.add_edge(node_name, to_node_name, type=edge_type)
+
+			#
+			if biopax_class in ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction']:
+				print "ambiguous direction relationship found"
+				participants = biopax_object.find_all('participant')
+				for p1 in participants:
+					resource = p1.get('rdf:resource')
+					to_node_id = resource[1:] if resource[0] == '#' else resource
+					to_node_name = node_id_to_name[to_node_id]
+
+					edge_type = 'participant'
+					graph.add_edge(node_name, to_node_name, type=edge_type)
+			if biopax_class in ['Pathway']:
+				components = biopax_object.find_all('pathwayComponent')
+				for component in components:
+					resource = component.get('rdf:resource')
+					to_node_id = resource[1:] if resource[0] == '#' else resource
+					to_node_name = node_id_to_name[to_node_id]
+
+					edge_type = 'component'
+					graph.add_edge(node_name, to_node_name, type=edge_type)
+
 
 def simplify_biopax_graph(graph):
 	protein_names_and_nodes = {}
@@ -495,7 +792,7 @@ def simplify_biopax_graph(graph):
 	# remove nodes we don't care about
 	for node in graph.nodes(data=True):
 		node_class = node[1]['type']
-		if node_class in ['SmallMolecule', 'BiochemicalReaction']:
+		if node_class in ['SmallMolecule', 'BiochemicalReaction', 'Pathway']:
 			predecessors = graph.predecessors(node[0])
 			successors = graph.successors(node[0])
 			for p in predecessors:
@@ -504,6 +801,7 @@ def simplify_biopax_graph(graph):
 						graph.add_edge(p, s, node[1])
 			graph.remove_node(node[0])
 
+		#to be looked at in the future
 		if node_class in ['Gene', 'Rna', 'Dna']:
 			gene_name = node[1]['name']
 			if gene_name in protein_names_and_nodes.keys():
@@ -528,6 +826,7 @@ def simplify_biopax_graph(graph):
 						if not (graph.has_edge(p,s) or graph.has_edge(s,p)) and p != s:
 							graph.add_edge(p, s)
 					graph.remove_node(c)
+
 
 
 
@@ -564,8 +863,18 @@ def download_PC_codes(codelist, graph):
 		url = urllib2.urlopen('http://www.pathwaycommons.org/pc2/graph?source='+code+'&kind=neighborhood')
 		text=url.readlines()
 		read_biopax(text, graph)
-		simplify_biopax_graph(graph)
+		#uncomment below and comment above to enable beta parser with names as indices
+		# read_biopax_dev(text, graph)
 		print(code)
+	simplify_biopax_graph(graph)
+
+# def download_PC_codes(codelist, graph):
+# 	for code in codelist:
+# 		url = urllib2.urlopen('http://www.pathwaycommons.org/pc2/graph?source='+code+'&kind=neighborhood')
+# 		text=url.readlines()
+# 		read_biopax_dev(text, graph)
+# 		simplify_biopax_graph(graph)
+# 		print(code)
 
 if __name__ == '__main__':
 

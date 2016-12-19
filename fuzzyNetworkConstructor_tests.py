@@ -1,6 +1,6 @@
 import fuzzyNetworkConstructor as fnc
 import networkx as nx
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 dict={}
 aliasDict={}
@@ -57,9 +57,9 @@ for node in graph.nodes():
 	print node
 for edge in graph.edges():
 	print edge
-fnc.simplify_biopax_graph(graph)
-nx.draw_spring(graph)
-plt.show()
+# fnc.simplify_biopax_graph(graph)
+# nx.draw_spring(graph)
+# plt.show()
 nx.write_graphml(graph, 'testfiles/simple_output.graphml')
 
 # graph = nx.DiGraph()
@@ -78,6 +78,6 @@ nx.write_graphml(graph, 'testfiles/simple_output.graphml')
 
 graph = nx.DiGraph()
 fnc.download_PC_codes(['CD40'], graph)
-nx.draw_spring(graph)
-plt.show()
+# nx.draw_spring(graph)
+# plt.show()
 nx.write_graphml(graph, 'testfiles/CD40_output.graphml')
