@@ -1,5 +1,5 @@
 
-
+from random import random
 def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
 	return list(arr) 
@@ -45,6 +45,22 @@ def sortFpkms(data): #puts fpkms data into appropriate lists of steady state dic
 			sss[j][str.upper(data[i][0])]=float(data[i][1])/maxdata
 	return sss
 
+
+class paramClass:
+	def __init__(self):     
+		self.simSteps=100 # number of steps each individual is run when evaluating
+		self.generations=50 # generations to run
+		self.popSize=100 #size of population
+		self.mu= 100#individuals selected
+		self.lambd= 200#children produced
+		self.bitFlipProb=.1 # prob of flipping bits inside mutation
+		self.crossoverProb=.2 # prob of crossing over a particular parent
+		self.mutationProb=.2 # prob of mutating a particular parent
+		self.async=False # run in asynchronous mode
+		self.iters=100 #number of simulations to try in asynchronous mode
+		self.complexPenalty=False #penalize models with increased complexity
+		self.genSteps=10000 # steps to find steady state with fake data
+
 def returnSimParams():
 	simSteps=100 # number of steps each individual is run when evaluating
 	generations=50 # generations to run
@@ -59,9 +75,6 @@ def returnSimParams():
 	complexPenalty=False #penalize models with increased complexity
 	genSteps=10000 # steps to find steady state with fake data
 	return async, iters, simSteps, generations, popSize, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps
-
-
-
 
 def synthesizeInputs(graph,samples): # generates synthetic random inputs for steady state simulations
 	sss=[]

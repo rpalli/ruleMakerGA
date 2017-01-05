@@ -41,7 +41,7 @@ def propBoolModel(individualParse, nodeList, inputOrderList, evaluateNodes, poss
 		# print(best)
 	return [item for sublist in bestList for item in sublist]
 
-def propUpdateNet(currentNode,oldValue,individual, triple, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList):
+def propUpdateNet(currentNode,oldValue,individual, triple, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList,modelType,corrMat):
 	inputOrder=inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
 	inputOrderInvert=inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
 	if possibilityNumList[currentNode]>0:
@@ -69,7 +69,8 @@ def propUpdateNet(currentNode,oldValue,individual, triple, nodeList,inputOrderLi
 			# print(logicOperatorFlags)
 			while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
 				if logicOperatorFlags[counter]==0:
-					tempVal=fuzzyAnd(upstreamVals[counter],upstreamVals[counter+1])
+					if(modelType=='prop'):
+						tempVal=propAndE1(upstreamVals[counter],upstreamVals[counter+1],inputOrder[counter], inputOrder[counter+1],corrMat)
 					inputOrder.pop(counter)
 					inputOrder.pop(counter)
 					logicOperatorFlags.pop(counter)
@@ -82,7 +83,7 @@ def propUpdateNet(currentNode,oldValue,individual, triple, nodeList,inputOrderLi
 
 			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
 			while len(upstreamVals)>1:
-				tempVal=fuzzyOr(upstreamVals.pop(0),upstreamVals.pop(0))
+				tempVal=propOrE1(upstreamVals.pop(0),upstreamVals.pop(0))
 				upstreamVals.insert(0,tempVal)
 				# print(upstreamVals)
 			return upstreamVals[0]

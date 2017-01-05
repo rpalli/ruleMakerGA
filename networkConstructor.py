@@ -13,7 +13,6 @@ import networkx as nx
 from scipy.stats import logistic
 import re
 import urllib2 
-import fuzzyNetworkConstructor as constructor
 import csv 
 import itertools as it
 import sys
@@ -470,12 +469,16 @@ def read_biopax_dev(lines, graph):
 				words = node_name.split(' ')
 				if words[-1] == 'mRNA' or words[-1] == 'protein':
 					node_name = ' '.join(words[0:-2])
+				if node_name==' ' or node_name=='':
+					print("node with blank name")
+					node_name=node_id
 			except Exception as e:
 				node_name = node_id
 
 			#add the node to the graph
 			graph.add_node(node_name, {'name': node_name, 'type': biopax_class, 'id': node_id})
 			node_id_to_name[node_id] = node_name
+			print(node_name)
 
 	#at this point, we have all the nodes in the system.  what's left is to connect these nodes
 	#together by looking for references to node IDs in the fields of other nodes member/participant
@@ -544,8 +547,10 @@ def read_biopax_dev(lines, graph):
 					resource = controller.get('rdf:resource')
 					#remove the leading # sign if there is one
 					from_node_id = resource[1:] if resource[0] == '#' else resource
-					from_node_name = node_id_to_name[from_node_id]
-
+					if from_node_id in node_id_to_name.keys():
+						from_node_name = node_id_to_name[from_node_id]
+					else:
+						from_node_name= from_node_id
 					#attempt to get the value of the controlTyoe field
 					try:
 						edge_type = unicode(biopax_object.find('controlType').string)
@@ -561,8 +566,10 @@ def read_biopax_dev(lines, graph):
 					resource = controlled.get('rdf:resource')
 					#remove leading # sign if it is present
 					to_node_id = resource[1:] if resource[0] == '#' else resource
-					to_node_name = node_id_to_name[to_node_id]
-
+					if to_node_id in node_id_to_name.keys():
+						to_node_name = node_id_to_name[to_node_id]
+					else:
+						to_node_name= to_node_id
 					#attempt to get the value of the controlType string
 					try:
 						edge_type = unicode(biopax_object.find('controlType').string)
@@ -597,15 +604,19 @@ def read_biopax_dev(lines, graph):
 				for left in lefts:
 					resource = left.get('rdf:resource')
 					from_node_id = resource[1:] if resource[0] == '#' else resource
-					from_node_name = node_id_to_name[from_node_id]
-
+					if from_node_id in node_id_to_name.keys():
+						from_node_name = node_id_to_name[from_node_id]
+					else:
+						from_node_name= from_node_id
 					edge_type = 'left'
 					graph.add_edge(from_node_name, node_name, type=edge_type)
 				for right in rights:
 					resource = right.get('rdf:resource')
 					to_node_id = resource[1:] if resource[0] == '#' else resource
-					to_node_name = node_id_to_name[to_node_id]
-
+					if to_node_id in node_id_to_name.keys():
+						to_node_name = node_id_to_name[to_node_id]
+					else:
+						to_node_name= to_node_id
 					edge_type = 'right'
 					graph.add_edge(node_name, to_node_name, type=edge_type)
 
@@ -616,8 +627,10 @@ def read_biopax_dev(lines, graph):
 				for p1 in participants:
 					resource = p1.get('rdf:resource')
 					to_node_id = resource[1:] if resource[0] == '#' else resource
-					to_node_name = node_id_to_name[to_node_id]
-
+					if to_node_id in node_id_to_name.keys():
+						to_node_name = node_id_to_name[to_node_id]
+					else:
+						to_node_name= to_node_id
 					edge_type = 'participant'
 					graph.add_edge(node_name, to_node_name, type=edge_type)
 			if biopax_class in ['Pathway']:
@@ -625,8 +638,10 @@ def read_biopax_dev(lines, graph):
 				for component in components:
 					resource = component.get('rdf:resource')
 					to_node_id = resource[1:] if resource[0] == '#' else resource
-					to_node_name = node_id_to_name[to_node_id]
-
+					if to_node_id in node_id_to_name.keys():
+						to_node_name = node_id_to_name[to_node_id]
+					else:
+						to_node_name= to_node_id
 					edge_type = 'component'
 					graph.add_edge(node_name, to_node_name, type=edge_type)
 
@@ -721,7 +736,7 @@ def download_PC_codes(codelist, graph):
 	for code in codelist:
 		url = urllib2.urlopen('http://www.pathwaycommons.org/pc2/graph?source='+code+'&kind=neighborhood')
 		text=url.readlines()
-		read_biopax(text, graph)
+		read_biopax_dev(text, graph)
 		#uncomment below and comment above to enable beta parser with names as indices
 		# read_biopax_dev(text, graph)
 		print(code)

@@ -4,9 +4,6 @@
 #import pyximport; pyximport.install()
 #import evaluator
 #import cPickle as pickle
-
-
-from random import random
 import networkx as nx
 
 def hill(x,h,p,hillOn): #applies hill function if called for
@@ -1003,6 +1000,7 @@ def read_biopax(lines, graph):
 
 
 	#treating edge classes as nodes for now, will simplify later
+=======
 	#constuct a BeautifulSoup4 parser object with the libxml backend
 	#input in lines is given as an array, the join function converts to 1 long string
 	#On windows this fails, try 'lxml' instead of 'lxml-xml'
@@ -1059,7 +1057,7 @@ def runFatimaSim(networkNoises, nodeNoises, trials):
 		
 		
 
-#if __name__ == '__main__':
+if __name__ == '__main__':
 	# ss={}
 	#data=loadFpkms('C:/Users/Rohith/Desktop/ruleMaker_GA/Data/fatima_fpkms.csv')
 	#sortFpkms(data,ss)
