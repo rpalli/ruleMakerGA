@@ -60,6 +60,44 @@ def evaluate(individual, params, model, simulator, sss):
 		summer+=SSEs[i]
 	return summer,
 	
+#exhaustively search boolean networks for best option going node by node for rules
+def bruteForceSearchModel(model, simulator,graph,sss1):
+	params=paramClass()
+	bestList=[]
+	initValueList=[]
+	for j in range(0,len(sss1)):
+		initValueList.append([])
+	for i in range(0,len(model.nodeList)):
+		for j in range(0,len(sss1)):
+			ss=sss1[j]
+			if  model.nodeList[i] in sss1[0].keys():
+				initValueList[j].append(ss[model.nodeList[i]])
+			else:
+				initValueList[j].append(0.5)
+	for i in range(0,len(model.nodeList)):
+		print(model.nodeList[i])
+		print(model.individualParse[i])
+		currentDev=10*len(sss1)
+		best=[]
+		if model.possibilityNumList[i]>0:
+			for j in range(0,int(2**int(model.individualParse[i][2]-model.individualParse[i][0]+1))):
+				bits=[]
+				bits=bitList(j)
+				while len(bits)<(model.individualParse[i][2]-model.individualParse[i][0]+1):
+					bits.insert(0,0)
+				deviation=0
+				for steadyStateNum in range(0,len(sss1)):
+					derivedVal=updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
+					deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
+				print(bits)
+				print(deviation)
+				if(deviation<currentDev):
+					print("best")
+					best=bits
+					currentDev=deviation	
+		bestList.append(best)
+	return [item for sublist in bestList for item in sublist]
+
 
 def autoSimulator(async, iters, toolbox, stats, graph, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,inputOrderList,inputOrderInvertList,possibilityNumList,initValueList, steps ,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd, complexPenalty, genSteps):
 	hofSize=10

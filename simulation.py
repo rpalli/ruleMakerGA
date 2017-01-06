@@ -149,6 +149,7 @@ class simulatorClass:
 		if simTyping=='propE1':
 			self.And=propOrE1
 			self.Or=propAndE1
+			self.corrMat={}
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
 			self.Or=fuzzyOr
@@ -156,7 +157,8 @@ class simulatorClass:
 			self.And=naiveAnd
 			self.Or=naiveOr
 
-def runModel(individual, params, model, simulator, initValues):
+#run a simulation given a starting state then add noise if noise is TRUE
+def runModel(individual, params, model, simulator, initValues, noise):
 	#do fuzzy simulation. individual is just a long bitstring... need to seperate it out.  
 	#list of triples which gives the total list of nodes. 
 	counter=0;
@@ -165,21 +167,21 @@ def runModel(individual, params, model, simulator, initValues):
 	simData.append(list(newValue))
 	seq=range(0,len(model.individualParse))
 	for node in range(0,len(earlyEvalNodes)):
-		newValue[model.earlyEvalNodes[node]]=updateNet(model.earlyEvalNodes[node],newValue,individual, model,simulator)
+		newValue[model.earlyEvalNodes[node]]=updateNet(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
 	for step in range(0,steps):
 		oldValue=list(newValue)
 		if params.async:
 			shuffle(seq)
 		for i in range(0,len(individualParse)):	
 			if params.async:
-				temp=updateNet(seq[i],newValue,individual, individualParse[seq[i]], nodeList,inputOrderList, inputOrderInvertList, possibilityNumList)
+				temp=updateNet(seq[i],newValue,individual, individualParse[seq[i]],  model,simulator)
 			else:
-				temp=updateNet(seq[i],oldValue,individual, individualParse[seq[i]], nodeList,inputOrderList, inputOrderInvertList, possibilityNumList)
+				temp=updateNet(seq[i],oldValue,individual, individualParse[seq[i]], model,simulator)
 
-			if sigmaNode==0:
+			if not noise:
 				newValue[seq[i]]=temp
 			else:
-				newValue[seq[i]]=temp+sigmaNode*(1-temp/(.1+temp)-temp/10)*random()
+				newValue[seq[i]]=temp+params.sigmaNode*(1-temp/(.1+temp)-temp/10)*random()
 		simData.append(list(newValue))
 	avg= [0 for x in range(0,len(newValue))]
 	stdev= [0 for x in range(0,len(newValue))]
@@ -197,59 +199,17 @@ def runModel(individual, params, model, simulator, initValues):
 	#return (avg, stdev)
 	return avg
 
+#run a simulation and average it over iters trials
 def averageResultModelSim(individual, params, model, simulator, initValues, iters):
 	sum=[0 for x in range(0,len(initValues))]
 	for i in range(0,iters):
-		avg,stdev=runModel( individual, params, model, simulator, initValues)
+		avg,stdev=runModel( individual, params, model, simulator, initValues,False)
 		for j in range(0,len(sum)):
 			sum[j]=sum[j]+avg[j]
 	avgs=list(sum)
 	for i in range(0,len(sum)):
 		avgs[i]=sum[i]/float(iters)
 	return avgs
-
-def propBoolModel(individualParse, nodeList, inputOrderList, evaluateNodes, possibilityNumList, inputOrderInvertList,graph,sss1):
-	async, iters, simSteps, generations, popSize, bitFlipProb, crossoverProb,mutationProb, mu,lambd, complexPenalty, genSteps=returnSimParams()
-	bestList=[]
-	initValueList=[]
-	for j in range(0,len(sss1)):
-		initValueList.append([])
-	for i in range(0,len(nodeList)):
-		for j in range(0,len(sss1)):
-			ss=sss1[j]
-			if  nodeList[i] in sss1[0].keys():
-				initValueList[j].append(ss[nodeList[i]])
-			else:
-				initValueList[j].append(0.5)
-	for i in range(0,len(nodeList)):
-		print(nodeList[i])
-		print(individualParse[i])
-		currentDev=10*len(sss1)
-		best=[]
-		if possibilityNumList[i]>0:
-			for j in range(0,int(2**int(individualParse[i][2]-individualParse[i][0]+1))):
-				#if possibilityNumList[i]==1:
-					# print('single possibility')
-					# print(j)
-				bits=[]
-				bits=bitList(j)
-				while len(bits)<(individualParse[i][2]-individualParse[i][0]+1):
-					bits.insert(0,0)
-				deviation=0
-				for steadyStateNum in range(0,len(sss1)):
-					derivedVal=propUpdateNode(i,initValueList[steadyStateNum],bits, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList, )
-					deviation=deviation+(derivedVal-sss1[steadyStateNum][nodeList[i]])**2
-				print(bits)
-				print(deviation)
-				if(deviation<currentDev):
-					print("best")
-					best=bits
-					currentDev=deviation	
-		# print(i)
-		# print(nodeList[i])
-		bestList.append(best)
-		# print(best)
-	return [item for sublist in bestList for item in sublist]
 
 def updateNet(currentNode,oldValue,individual, triple, model,simulator):
 	inputOrder=inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
@@ -279,8 +239,7 @@ def updateNet(currentNode,oldValue,individual, triple, model,simulator):
 			# print(logicOperatorFlags)
 			while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
 				if logicOperatorFlags[counter]==0:
-					if(modelType=='prop'):
-						tempVal=propAndE1(upstreamVals[counter],upstreamVals[counter+1],inputOrder[counter], inputOrder[counter+1],corrMat)
+					tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],inputOrder[counter], inputOrder[counter+1],simulator.corrMat)
 					inputOrder.pop(counter)
 					inputOrder.pop(counter)
 					logicOperatorFlags.pop(counter)
@@ -293,7 +252,7 @@ def updateNet(currentNode,oldValue,individual, triple, model,simulator):
 
 			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
 			while len(upstreamVals)>1:
-				tempVal=propOrE1(upstreamVals.pop(0),upstreamVals.pop(0))
+				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),inputOrder.pop(0),inputOrder.pop(0),simulator.corrMat)
 				upstreamVals.insert(0,tempVal)
 				# print(upstreamVals)
 			return upstreamVals[0]
