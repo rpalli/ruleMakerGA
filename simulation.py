@@ -163,6 +163,10 @@ class simulatorClass:
 			self.And=propAndE1
 			self.Or=propOrE1
 			self.corrMat={}
+		if simTyping=='propE1=2':
+			self.And=propAndE2
+			self.Or=propOrE2
+			self.corrMat={}
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
 			self.Or=fuzzyOr
