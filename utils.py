@@ -1,4 +1,4 @@
-
+import numpy as numpy
 from random import random
 def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
@@ -55,24 +55,26 @@ def writeModel(individual, model):
 		addString=addString+'\n'
 	return addString
 
+def writeBruteNode(currentNode,individual,model):
+	padindividual=[0 for x in range(0,model.individualParse[currentNode][0])]
+	padindividual.extend(individual)
+	return(writeNode(currentNode, padindividual,model))
 def writeNode(currentNode,individual, model):
 	#write out evaluation instructions in BooleanNet format. This follows the exact same code as fuzzyUpdate, but writes a string instead of actually updating the values of the nodes
 	triple=model.individualParse[currentNode]
 	inputOrder=model.inputOrderList[currentNode]
 	inputOrderInvert=model.inputOrderInvertList[currentNode]
 	writenode=''+model.nodeList[currentNode]+'='
+	# print(individual[triple[0]:triple[1]])
+	# print(triple)
 	if model.possibilityNumList[currentNode]>0:
 		logicOperatorFlags=individual[triple[1]:triple[2]]
 		inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]
 		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]
 		if len(inputOrder)==1:
-			#print(inputOrder[0])
-			if individual[triple[0]]==1:
 				if inputOrderInvert[0]:
 					writenode=writenode+' not '
 				writenode=writenode+model.nodeList[inputOrder[0]]+' '
-			else:
-				writenode=writenode+' '+ model.nodeList[currentNode]
 		else:
 			counter =0
 			if inputOrderInvert[0]:

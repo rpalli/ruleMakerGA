@@ -2040,275 +2040,6 @@ def testFuzzySimTimeCourse():
 
 #above are old testing functions, below are current testing functions
 
-def LiuNetwork1Builder():
-	graph = nx.DiGraph()
-	graph.add_edge('g','k', signal='a')	
-	graph.add_edge('h','j', signal='a')
-	graph.add_edge('j','c', signal='i')	
-	graph.add_edge('f','k', signal='i')
-	graph.add_edge('a','c', signal='a')
-	graph.add_edge('b','d', signal='a')
-	graph.add_edge('c','f', signal='a')	
-	graph.add_edge('c','h', signal='a')
-	graph.add_edge('d','f', signal='a')	
-	graph.add_edge('d','g', signal='a')
-
-	return graph
-def LiuSSS1Builder():
-	sss=[]
-	ss={}
-	ss['a']=1
-	ss['b']=0
-	ss['c']=0
-	ss['d']=0
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=1
-	ss['c']=0
-	ss['d']=0
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=0
-	ss['c']=1
-	ss['d']=0
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=0
-	ss['c']=0
-	ss['d']=1
-	ss['f']=0
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	sss.append(ss)
-	ss={}
-	ss['a']=0
-	ss['b']=0
-	ss['c']=0
-	ss['d']=0
-	ss['f']=1
-	ss['g']=0
-	ss['h']=0
-	ss['j']=0
-	ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=1
-	# ss['h']=0
-	# ss['j']=0
-	# ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=1
-	# ss['j']=0
-	# ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=0
-	# ss['j']=1
-	# ss['k']=0
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=0
-	# ss['j']=0
-	# ss['k']=1
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=1
-	# ss['b']=1
-	# ss['c']=1
-	# ss['d']=1
-	# ss['f']=1
-	# ss['g']=1
-	# ss['h']=1
-	# ss['j']=1
-	# ss['k']=1
-	# sss.append(ss)
-	# ss={}
-	# ss['a']=0
-	# ss['b']=0
-	# ss['c']=0
-	# ss['d']=0
-	# ss['f']=0
-	# ss['g']=0
-	# ss['h']=0
-	# ss['j']=0
-	# ss['k']=0
-	# sss.append(ss)
-	return sss
-def LiuNetwork3Builder():
-	graph = nx.DiGraph()
-	
-	graph.add_edge('EGFR','RAS', signal='a')
-	graph.add_edge('EGFR','PI3K', signal='a')
-	graph.add_edge('TNFR','FADD', signal='a')	
-	graph.add_edge('TNFR','PI3K', signal='a')
-	graph.add_edge('TNFR','RIP1', signal='a')	
-	graph.add_edge('DNA_DAMAGE','ATM', signal='a')
-	graph.add_edge('RAS','ERK', signal='a')	
-	graph.add_edge('RAS','JNK', signal='a')
-	graph.add_edge('FADD','CASP8', signal='a')	
-	graph.add_edge('PI3K','AKT', signal='a')
-	graph.add_edge('RIP1','P38', signal='a')
-	graph.add_edge('RIP1','JNK', signal='a')
-	graph.add_edge('ATM','CHK', signal='a')	
-	graph.add_edge('ATM','P53', signal='a')	
-	graph.add_edge('ERK','RAS', signal='a')
-	graph.add_edge('ERK','MYC', signal='a')	
-	graph.add_edge('ERK','BID', signal='i')
-	graph.add_edge('CASP8','BID', signal='a')	
-	graph.add_edge('CASP8','CASP3', signal='a')
-	graph.add_edge('CASP8','RIP1', signal='i')
-	graph.add_edge('JNK','P53', signal='a')	
-	graph.add_edge('JNK','FOXO1', signal='a')
-	graph.add_edge('AKT','BID', signal='i')	
-	graph.add_edge('AKT','CASP8', signal='i')
-	graph.add_edge('AKT','BIM', signal='i')
-	graph.add_edge('AKT','4EBP1', signal='i')	
-	graph.add_edge('AKT','S6K', signal='a')
-	graph.add_edge('AKT','P53', signal='i')	
-	graph.add_edge('AKT','FOXO1', signal='i')
-	graph.add_edge('P38','CDC25', signal='a')	
-	graph.add_edge('P38','FOXO1', signal='a')
-	graph.add_edge('P38','P53', signal='a')
-	graph.add_edge('CHK','CDC25', signal='i')	
-	graph.add_edge('CHK','P53', signal='a')	
-	graph.add_edge('CDC25','CDK', signal='a')
-	graph.add_edge('P53','PUMA', signal='a')
-	graph.add_edge('P53','FADD', signal='a')
-	graph.add_edge('P53','ATM', signal='a')	
-	graph.add_edge('P53','CHK', signal='i')
-	graph.add_edge('P53','CDK', signal='i')
-	graph.add_edge('P53','CYCLIN', signal='i')	
-	graph.add_edge('P53','BIM', signal='a')
-	graph.add_edge('FOXO1','P27', signal='a')
-	graph.add_edge('BIM','BAX', signal='a')	
-	graph.add_edge('BID','BAX', signal='a')
-	graph.add_edge('MYC','PROLIFERATION', signal='a')	
-	graph.add_edge('PUMA','BAX', signal='a')
-	graph.add_edge('S6K','S6', signal='a')	
-	graph.add_edge('S6K','PI3K', signal='a')
-	graph.add_edge('P27','CYCLIN', signal='i')
-	graph.add_edge('P27','CELL_CYCLE', signal='a')	
-	graph.add_edge('BAX','SMAC', signal='a')
-	graph.add_edge('SMAC','CASP3', signal='a')	
-	graph.add_edge('4EBP1','PROLIFERATION', signal='i')
-	graph.add_edge('S6','PROLIFERATION', signal='a')	
-	graph.add_edge('CYCLIN','CDK', signal='a')
-	graph.add_edge('CYCLIN','PROLIFERATION', signal='a')
-	graph.add_edge('CDK','PROLIFERATION', signal='a')	
-	graph.add_edge('CHK','CELL_CYCLE', signal='a')
-	graph.add_edge('BAX','CASP9', signal='a')	
-	graph.add_edge('CASP9','CASP3', signal='a')
-	graph.add_edge('CASP3','APOPTOSIS', signal='a')	
-	return graph
-
-def LiuNetwork3SimTest(inputNum,trialNum):
-	graph = LiuNetwork3Builder()
-	#runNoiseSimTest(graph, sss, [.001,.002,.005,.01,.02,.05,.1,.2,.5], [0], 10)
-	sss1=synthesizeInputs(graph,inputNum)
-	runNoiseSimTest(graph, sss1, [0], [0], trialNum)
-
-def LiuNetwork1SimTest(inputNum,trialNum):
-	#two dicts for the models
-	#sss=LiuSSS1Builder()
-	graph = LiuNetwork1Builder()
-	#runNoiseSimTest(graph, sss, [.001,.002,.005,.01,.02,.05,.1,.2,.5], [0], 10)
-	sss1=synthesizeInputs(graph,inputNum)
-	runNoiseSimTest(graph, sss1, [.001], [0], trialNum)
-
-def LiuNetwork2SimTest(inputNum,trialNum):
-	#two dicts for the models
-	sss, graph=LiuNetwork2Builder()
-	sss1=synthesizeInputs(graph,inputNum)
-	runNoiseSimTest(graph, sss1, [0], [0], trialNum)
-
-def LiuNetwork2Builder():
-	graph = nx.DiGraph()
-	graph.add_edge('igf1','ras', signal='a')
-	graph.add_edge('tgfa','ras', signal='a')
-	graph.add_edge('igf1','pi3k', signal='a')
-	graph.add_edge('tgfa','pi3k', signal='a')
-	graph.add_edge('ras','pi3k', signal='a')
-	graph.add_edge('ras','map3k1', signal='a')
-	graph.add_edge('ras','mek12', signal='a')
-	graph.add_edge('tnfa','pi3k', signal='a')
-	graph.add_edge('tnfa','jnk12', signal='a')
-	graph.add_edge('tnfa','map3k1', signal='a')
-	graph.add_edge('tnfa','map3k7', signal='a')
-	graph.add_edge('tnfa','mkk4', signal='a')
-	graph.add_edge('il1a','map3k7', signal='a')
-	graph.add_edge('il1a','map3k1', signal='a')
-	graph.add_edge('map3k7','ikk', signal='a')
-	graph.add_edge('map3k7','mkk4', signal='a')
-	graph.add_edge('map3k7','p38', signal='a')
-	graph.add_edge('map3k7','hsp27', signal='a')
-	graph.add_edge('map3k1','ikk', signal='a')
-	graph.add_edge('map3k1','jnk12', signal='a')
-	graph.add_edge('map3k1','mkk4', signal='a')
-	graph.add_edge('pi3k','map3k1', signal='a')
-	graph.add_edge('pi3k','akt', signal='a')
-	graph.add_edge('pi3k','mek12', signal='a')
-	graph.add_edge('akt','mek12', signal='a')
-	graph.add_edge('akt','ikk', signal='a')
-	graph.add_edge('mek12','erk12', signal='a')
-	graph.add_edge('ikk','ikb', signal='a')
-	graph.add_edge('mkk4','jnk12', signal='a')
-	graph.add_edge('mkk4','p38', signal='a')
-	graph.add_edge('erk12','hsp27', signal='a')
-	graph.add_edge('p38','hsp27', signal='a')
-
-	# listy=['igf1','tgfa','ras','tnfa','il1a','map3k7','pi3k','map3k1','akt','mek12','ikk','mkk4','erk12','jk12','ikb','p38','hsp27']
-	# sss=[]
-	# for i in range(0,10):
-	# 	sss.append({})
-	# for element in listy:
-	# 	for i in range(0,10):
-	# 		sss[i][element]=random()
-	return  graph
-
 def runNoiseSimTest(graph, sss, networkNoises, nodeNoises, trials):
 	async, iters, steps, generations, popSize, h, p, hillOn, bitFlipProb, crossoverProb,mutationProb,mu,lambd, complexPenalty, genSteps= returnSimParams()
 	individualLength, individualParse, nodeList, nodeOrderList, initValueList, evaluateNodes, possibilityNumList, nodeOrderInvertList, earlyEvalNodes=setupGAparams(graph, sss)
@@ -2811,3 +2542,100 @@ def loadFatimaData(filename,tempDict): #reads data from differential expression 
 		if line[0]!='#':
 			kline=line.split(' ')
 			tempDict[str.upper(kline[0][3:])]=logistic.cdf(float(kline[1]))
+
+
+def autoSimulator(trials, toolbox, stats,  sss,params, model, simulator):
+	hofSize=10
+	avgSSEs=[]
+	hofs=[]
+	truthIndividuals=[]
+	truthAvgs=[]
+	hofScores=[]
+	newSSS=[]
+	truthCounter=[0 for number in xrange(hofSize)]
+	trueNodeList=[]
+	for i in range(0,trials):
+		individual=genRandBits(individualLength)
+		newSSS=[]
+		for k in range(0,len(sss)):
+			if async:
+				individual, params, model, simulator, initValues, iters
+				boolValues=averageResultModelSim(individual, params, model, simulator, initValueList[k], iters)
+			else:
+				boolValues=runFuzzyModel(individual, params, model, simulator, initValueList[k], 0)
+			newSS=copy.deepcopy(sss[k])
+			for j in range(0,len(evaluateNodes)):
+				newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
+			newSSS.append(newSS)
+		#update eval nodes
+		print(evaluate(individual, params, model, simulator, sss))
+		newInitValueList=[]
+		for j in range(0,len(sss)):
+			newInitValueList.append([])
+		for j in range(0,len(nodeList)):
+			for k in range(0,len(sss)):
+				ss=newSSS[k]
+				if  nodeList[j] in sss[0].keys():
+					newInitValueList[k].append(ss[nodeList[j]])
+				else:
+					newInitValueList[k].append(0.5)
+		#print(len(sss))
+		toolbox.register("evaluate", evaluate, params=params, model=model, simulator=simulator, sss=newSSS)
+		#toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, inputOrderList=inputOrderList, inputOrderInvertList=inputOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
+		population=toolbox.population(n=popSize)
+		hof = tools.HallOfFame(hofSize, similar=numpy.array_equal)
+		output = tools.Logbook()
+		output=algo.eaMuCommaLambda(population, toolbox, mu=mu, lambda_=lambd, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True, halloffame=hof)
+		truth=writeModel(individual, model)
+		for j in range(0,10):
+			bestRun=(writeModel(hof[j], model))
+			if truth==bestRun:
+				truthCounter[j]+=1
+				break
+			
+			elif j==0:
+				truthlines=truth.split('\n')
+				newlines=bestRun.split('\n')
+				trueNodes=0
+				for k in range(0,len(truthlines)):
+					if truthlines[k]==newlines[k]:
+						trueNodes=trueNodes+1
+					else:
+						print("incorrect pair: true then test")
+						print(truthlines[k])
+						print(newlines[k])
+				trueNodeList.append(trueNodes)
+		avgs=[output[1][k]['min'] for k in range(0,len(output[1]))]
+		#print(avgs)
+		hofs.append(hof)
+		temp=[]
+		for hofind in range(0,len(hof)):
+			tempVal=0
+			for bit in range(0,len(hof[hofind])):
+				if not hof[hofind][bit]==individual[bit]:
+					tempVal=tempVal+1
+			temp.append(tempVal)
+		hofScores.append(temp)
+		truthIndividuals.append(individual)
+		truthAvgs.append(boolValues)
+		gc.collect()
+	f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
+	g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	f.write(str(hofScores))
+	f.write('\n')
+	for hofy in range(0,len(hofs)):
+		g.write(str(hofs[hofy]))
+		g.write('\n')
+	h.write(str(truthIndividuals))
+	h.write('\n')
+	f.close()
+	g.close()
+	h.close()
+	print('# true of # trials')
+	for k in range(0,len(truthCounter)):
+		print(truthCounter[k])
+	print(trials)
+	print("for the incorrects, by node")
+	print(trueNodeList)
+	print(len(truthlines))

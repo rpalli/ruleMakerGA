@@ -1,4 +1,5 @@
 import utils as utils
+import liu_networks as liu
 #import stuff
 from random import random
 from random import shuffle
@@ -78,7 +79,6 @@ class modelClass:
 			inputOrderList.append(possibilities)
 			inputOrderInvertList.append(activities)
 			possibilityNumList.append(len(possibilities))
-			
 			#deal with nodes with no incoming or only one incoming first
 			if len(possibilities)==0:
 				individualParse.append([counter,counter,counter])
@@ -87,7 +87,7 @@ class modelClass:
 				counter=int(counter+1)
 			else:
 				logNum=ceil(log(len(possibilities))/log(2))#determine number of bits necessary to store information of which node order is the one for that individual
-				individualParse.append([int(counter),int(counter+logNum-1),int(counter+logNum+len(preds)-2)]) #set up limits: lognum-1 for list then len(preds)-1 for the activity flags
+				individualParse.append([int(counter),int(counter+logNum),int(counter+logNum+len(preds)-1)]) #set up limits: lognum-1 for list then len(preds)-1 for the activity flags
 				counter=int(counter+logNum+len(preds)-1) #uptick the counter so we know where to start on the next node
 			#set up lists of initial values and values that need to be evaluated early
 			for j in range(0,len(sss)):
@@ -98,7 +98,7 @@ class modelClass:
 				else:
 					initValueList[j].append(0.5)
 					earlyEvalNodes.append(i)
-		self.sizeCounter=counter-1
+		self.size=counter
 		self.evaluateNodes=evaluateNodes #list of nodes that need to be compared to the steady state values (sss)
 		self.individualParse=individualParse #list of triples that contain the start and end of the noder order value and operator flag list for each node
 		self.inputOrderList=inputOrderList #list of lists of possible node orders for each node
@@ -112,7 +112,7 @@ class modelClass:
 class paramClass:
 	def __init__(self):     
 		self.simSteps=100 # number of steps each individual is run when evaluating
-		self.generations=50 # generations to run
+		self.generations=15 # generations to run
 		self.popSize=100 #size of population
 		self.mu= 100#individuals selected
 		self.lambd= 200#children produced
@@ -123,6 +123,10 @@ class paramClass:
 		self.iters=100 #number of simulations to try in asynchronous mode
 		self.complexPenalty=False #penalize models with increased complexity
 		self.genSteps=10000 # steps to find steady state with fake data
+		self.sigmaNetwork=0
+		self.sigmaNode=0
+		self.hofSize=10
+		self.cells=100
 
 def fuzzyAnd(num1, num2, index1, index2,corrMat):
 	return min(num1,num2)
@@ -133,9 +137,12 @@ def naiveAnd(num1, num2, index1, index2,corrMat):
 def naiveOr(num1, num2, index1, index2,corrMat):
 	return (num1+num2-(num1*num2))
 def propOrE1(num1, num2, index1, index2,corrMat):
-	return (num1+num2)*(2-corrMat[index1][index2])/2
+	if num1==1 or num2==1:
+		return 1
+	else:
+		return max(0,min(1,(num1+num2-(num1*corrMat[index2][index1]+num2*corrMat[index1][index2])/2)))
 def propAndE1(num1,num2,index1,index2,corrMat):
-	return (num1+num2)*corrMat[index1][index2]/2
+	return max(0,min(1,((num1*corrMat[index2][index1])/2+(num2*corrMat[index1][index2])/2)))
 
 def Inv(x, inverter): #inverts if necessary then applies hill fun
 	if inverter:
@@ -147,15 +154,17 @@ class simulatorClass:
 	def __init__(self,simTyping):
 		self.simType=simTyping
 		if simTyping=='propE1':
-			self.And=propOrE1
-			self.Or=propAndE1
+			self.And=propAndE1
+			self.Or=propOrE1
 			self.corrMat={}
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
 			self.Or=fuzzyOr
+			self.corrMat=0
 		if simTyping=='propNaive':
 			self.And=naiveAnd
 			self.Or=naiveOr
+			self.corrMat=0
 
 #run a simulation given a starting state then add noise if noise is TRUE
 def runModel(individual, params, model, simulator, initValues, noise):
@@ -166,17 +175,17 @@ def runModel(individual, params, model, simulator, initValues, noise):
 	simData=[]
 	simData.append(list(newValue))
 	seq=range(0,len(model.individualParse))
-	for node in range(0,len(earlyEvalNodes)):
+	for node in range(0,len(model.earlyEvalNodes)):
 		newValue[model.earlyEvalNodes[node]]=updateNet(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
-	for step in range(0,steps):
+	for step in range(0,params.simSteps):
 		oldValue=list(newValue)
 		if params.async:
 			shuffle(seq)
-		for i in range(0,len(individualParse)):	
+		for i in range(0,len(model.individualParse)):	
 			if params.async:
-				temp=updateNet(seq[i],newValue,individual, individualParse[seq[i]],  model,simulator)
+				temp=updateNet(seq[i],newValue,individual, model.individualParse[seq[i]],  model,simulator)
 			else:
-				temp=updateNet(seq[i],oldValue,individual, individualParse[seq[i]], model,simulator)
+				temp=updateNet(seq[i],oldValue,individual, model.individualParse[seq[i]], model,simulator)
 
 			if not noise:
 				newValue[seq[i]]=temp
@@ -187,7 +196,7 @@ def runModel(individual, params, model, simulator, initValues, noise):
 	stdev= [0 for x in range(0,len(newValue))]
 	for step in range(0,len(simData)):
 		for element in range(0,len(avg)):
-			simData[step][element]=simData[step][element]+sigmaNetwork*random()
+			simData[step][element]=simData[step][element]+params.sigmaNetwork*random()
 	for step in range(len(simData)-10,len(simData)):
 		for element in range(0,len(avg)):
 			avg[element]=avg[element]+simData[step][element]
@@ -203,7 +212,7 @@ def runModel(individual, params, model, simulator, initValues, noise):
 def averageResultModelSim(individual, params, model, simulator, initValues, iters):
 	sum=[0 for x in range(0,len(initValues))]
 	for i in range(0,iters):
-		avg,stdev=runModel( individual, params, model, simulator, initValues,False)
+		avg=runModel( individual, params, model, simulator, initValues,False)
 		for j in range(0,len(sum)):
 			sum[j]=sum[j]+avg[j]
 	avgs=list(sum)
@@ -212,21 +221,63 @@ def averageResultModelSim(individual, params, model, simulator, initValues, iter
 	return avgs
 
 def updateNet(currentNode,oldValue,individual, triple, model,simulator):
-	inputOrder=inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
-	inputOrderInvert=inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
-	if possibilityNumList[currentNode]>0:
+	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+	if model.possibilityNumList[currentNode]>0:
 		logicOperatorFlags=list(individual[triple[1]:triple[2]]) # find demarcations on individual for bits we need
-		inputOrder=list(inputOrder[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]]) # determine what order of inputs is
-		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+		inputOrder=list(inputOrder[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]) # determine what order of inputs is
+		inputOrderInvert=inputOrderInvert[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
 		if len(inputOrder)==0:
 			value=oldValue[currentNode] #if no inputs, maintain value
 			return value
 		elif len(inputOrder)==1:
 			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
-			if individual[triple[0]]==1:
-				value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
-			else:
-				value=oldValue[currentNode]
+			value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
+			return value
+		else:
+			#update nodes with more than one input
+			# update and then or
+			upstreamVals=[]
+			for upstream in range(0,len(inputOrder)):
+				upstreamVals.append(Inv(oldValue[inputOrder[upstream]],inputOrderInvert[upstream]))
+			counter =0
+			# print(upstreamVals)
+			# print(logicOperatorFlags)
+			while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
+				if logicOperatorFlags[counter]==0:
+					tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],inputOrder[counter], inputOrder[counter+1],simulator.corrMat)
+					inputOrder.pop(counter)
+					inputOrder.pop(counter)
+					logicOperatorFlags.pop(counter)
+					upstreamVals.pop(counter)
+					upstreamVals.pop(counter)
+					upstreamVals.insert(counter,tempVal)
+				else:
+					counter=counter+1
+				# print(upstreamVals)
+
+			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
+			while len(upstreamVals)>1:
+				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),inputOrder.pop(0),inputOrder.pop(0),simulator.corrMat)
+				upstreamVals.insert(0,tempVal)
+				# print(upstreamVals)
+			return upstreamVals[0]
+	else:
+		#returns savme value if now inputs
+		return oldValue[currentNode]						
+def updateNetOLD(currentNode,oldValue,individual, triple, model,simulator):
+	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+	if model.possibilityNumList[currentNode]>0:
+		logicOperatorFlags=list(individual[triple[1]:triple[2]]) # find demarcations on individual for bits we need
+		inputOrder=list(inputOrder[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]) # determine what order of inputs is
+		inputOrderInvert=inputOrderInvert[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+		if len(inputOrder)==0:
+			value=oldValue[currentNode] #if no inputs, maintain value
+			return value
+		elif len(inputOrder)==1:
+			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
+			value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
 			return value
 		else:
 			#update nodes with more than one input
@@ -260,14 +311,14 @@ def updateNet(currentNode,oldValue,individual, triple, model,simulator):
 		#returns savme value if now inputs
 		return oldValue[currentNode]						
 
-def propUpdateNode(currentNode,oldValue,individual, model,simulator):
+def updateNode(currentNode,oldValue,individual, model,simulator):
 	
 	oldTriple=model.individualParse[currentNode]
 	triple=[]
 	triple.append(0)
 	triple.append(oldTriple[1]-oldTriple[0])
 	triple.append(oldTriple[2]-oldTriple[0])
-
-	retinue = propUpdateNet(currentNode,oldValue,individual, triple,model,simulator)
+	retinue = updateNet(currentNode,oldValue,individual, triple,model,simulator)
 	return retinue
 					
+

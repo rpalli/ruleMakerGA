@@ -4,6 +4,20 @@ from deap import creator
 from deap import gp
 from deap import tools
 from deap import algorithms as algo
+from random import random
+import utils as utils
+import liu_networks as liu
+import simulation as sim
+import networkx as nx
+import numpy as numpy
+import copy as copy
+import operator
+import scipy.stats as regress
+class probInitSeqClass:
+	def __init__(self):
+		self.startNodes=[]
+		self.startProbs=[]
+		self.nodeOrder=[]
 
 def buildToolbox( individualLength, bitFlipProb):
 	# # #setup toolbox
@@ -17,7 +31,7 @@ def buildToolbox( individualLength, bitFlipProb):
 	creator.create("Individual", list, fitness=creator.FitnessMin)	# create a class of individuals that are lists
 
 	#register our bitsring generator and how to create an individual, population
-	toolbox.register("genRandomBitString", genRandBits, individualLength=individualLength)
+	toolbox.register("genRandomBitString", utils.genRandBits, individualLength=individualLength)
 	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
 	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
 	
@@ -42,15 +56,15 @@ def evaluate(individual, params, model, simulator, sss):
 		ss=sss[j]
 		initValues=model.initValueList[j]
 		SSE=0
-		if async:
-			boolValues=simulator.iterateModel(individual, params, model, initValueList[j])	
+		if params.async:
+			boolValues=sim.iterateModel(individual, params, model, simulator, model.initValueList[j], False)	
 		else:
-			boolValues=simulator.runModel(individual, params, model,initValueList[j])	
+			boolValues=sim.runModel(individual, params, model,simulator, model.initValueList[j], False)	
 		for i in range(0, len(model.evaluateNodes)):
 			SSE=SSE+(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
 		SSEs.append(SSE)
 	edgeDegree=0
-	if complexPenalty:
+	if params.complexPenalty:
 		for i in range(0,len(model.nodeList)):
 			if model.possibilityNumList[i]>0:
 				edgeDegree=edgeDegree+len(model.inputOrderList[i][bit2int(individual[model.individualParse[i][0]:model.individualParse[i][1]])%model.possibilityNumList[i]])
@@ -62,7 +76,7 @@ def evaluate(individual, params, model, simulator, sss):
 	
 #exhaustively search boolean networks for best option going node by node for rules
 def bruteForceSearchModel(model, simulator,graph,sss1):
-	params=paramClass()
+	params=sim.paramClass()
 	bestList=[]
 	initValueList=[]
 	for j in range(0,len(sss1)):
@@ -74,21 +88,24 @@ def bruteForceSearchModel(model, simulator,graph,sss1):
 				initValueList[j].append(ss[model.nodeList[i]])
 			else:
 				initValueList[j].append(0.5)
+	print(model.initValueList)
+
 	for i in range(0,len(model.nodeList)):
-		print(model.nodeList[i])
-		print(model.individualParse[i])
+		# print(model.nodeList[i])
+		# print(model.individualParse[i])
 		currentDev=10*len(sss1)
 		best=[]
 		if model.possibilityNumList[i]>0:
-			for j in range(0,int(2**int(model.individualParse[i][2]-model.individualParse[i][0]+1))):
+			for j in range(0,int(2**int(model.individualParse[i][2]-model.individualParse[i][0]))):
 				bits=[]
-				bits=bitList(j)
-				while len(bits)<(model.individualParse[i][2]-model.individualParse[i][0]+1):
+				bits=utils.bitList(j)
+				while len(bits)<(model.individualParse[i][2]-model.individualParse[i][0]):
 					bits.insert(0,0)
 				deviation=0
-				for steadyStateNum in range(0,len(sss1)):
-					derivedVal=updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
+				for steadyStateNum in range(0,len(model.initValueList)):
+					derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
 					deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
+				print(utils.writeBruteNode(i,bits,model))
 				print(bits)
 				print(deviation)
 				if(deviation<currentDev):
@@ -96,58 +113,164 @@ def bruteForceSearchModel(model, simulator,graph,sss1):
 					best=bits
 					currentDev=deviation	
 		bestList.append(best)
+		print(model.nodeList[i])
+		print(currentDev)
+
 	return [item for sublist in bestList for item in sublist]
 
+def runProbabilityBooleanSims(individual, model, probInitSeq, sampleNum, cells):
+	samples=[]
+	simulator=sim.simulatorClass('fuzzy')
+	params=sim.paramClass()
+	for i in range(0,sampleNum):
+		cellArray=[]
+		for j in range(0,len(probInitSeq.startProbs)):
+			probInitSeq.startProbs[j]=random()
+		for j in range(0,cells):
+			initValues=genProbabilisticInitValues(individual, model, probInitSeq)
+			cellArray.append(sim.runModel(individual, params, model, simulator, initValues, False))
+		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
+	return samples
 
-def autoSimulator(async, iters, toolbox, stats, graph, trials, sss,individualLength,evaluateNodes, individualParse,nodeList,inputOrderList,inputOrderInvertList,possibilityNumList,initValueList, steps ,nodeNoise,networkNoise,popSize,crossoverProb,mutationProb,generations,earlyEvalNodes, mu,lambd, complexPenalty, genSteps):
-	hofSize=10
+def genProbabilisticInitValues(individual, model, probInitSeq):
+	simulator=sim.simulatorClass('fuzzy')
+	initValues=[0 for x in range(0,len(model.nodeList))]
+	for node in range(0,len(probInitSeq.startNodes)):
+		if random()<probInitSeq.startProbs[node]:
+			initValues[probInitSeq.startNodes[node]]=1 
+	for node in range(0,len(probInitSeq.nodeOrder)):
+		if(sim.updateNet(probInitSeq.nodeOrder[node],initValues,individual, model.individualParse[probInitSeq.nodeOrder[node]],model, simulator)==1):
+			initValues[probInitSeq.nodeOrder[node]]=1
+	return initValues
+
+def updateInitSeq(individual, model, probInitSeq):
+	initSeq=probInitSeqClass()
+	initSeq.startNodes=list(probInitSeq.startNodes)
+	initSeq.startProbs=list(probInitSeq.startProbs)
+	initSeq.nodeOrder=list(probInitSeq.nodeOrder)
+	for i in range(0,len(model.individualParse)):
+		triple=model.individualParse[i]
+		inputOrder=model.inputOrderList[i] # find the list of possible input combinations for the node we are on 
+		inputOrderInvert=model.inputOrderInvertList[i] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+		# print(i)
+		# print(model.possibilityNumList[i])
+		if model.possibilityNumList[i]>0:
+			logicOperatorFlags=list(individual[triple[1]:triple[2]]) # find demarcations on individual for bits we need
+			inputOrder=list(inputOrder[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[i]]) # determine what order of inputs is
+			inputOrderInvert=inputOrderInvert[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[i]] # lookup which inputs need to be inverted ('not')
+			# print(inputOrder)
+			# print(model.nodeList[inputOrder[0]])
+			if len(inputOrder)<1 and i not in initSeq.startNodes:
+				initSeq.startNodes.append(i)
+				initSeq.nodeOrder.pop(i)
+				initSeq.startProbs.append(1)		
+		else:
+			# print('no possibilities')
+			if i not in initSeq.startNodes:
+				# print('added')
+				initSeq.startNodes.append(i)
+				initSeq.nodeOrder.pop(i)
+				initSeq.startProbs.append(1)
+
+	return initSeq
+
+def simTester(trials, model, graph, samples, probInitSeq, simClass):
+	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
+	#trials is the number of different individuals to try
+	#samples is the number of different initial conditions to provide per trial
+	#graph specifies the network we are testing. 
+	#probInitSeq gives the order in which the network should be built
+
+	params=sim.paramClass()
+
 	avgSSEs=[]
 	hofs=[]
 	truthIndividuals=[]
 	truthAvgs=[]
 	hofScores=[]
 	newSSS=[]
-	truthCounter=[0 for number in xrange(hofSize)]
+	truthCounter=[0 for number in xrange(params.hofSize)]
 	trueNodeList=[]
+
+	
+	toolbox, stats=buildToolbox( model.size, params.bitFlipProb)
+	print(model.inputOrderList)
+	print(model.individualParse)
+	print(model.possibilityNumList)
+	print(model.size)
+	print(model.possibilityNumList[0:2])
+	
 	for i in range(0,trials):
-		individual=genRandBits(individualLength)
+		individual=utils.genRandBits(model.size)
+		initSeq=updateInitSeq(individual, model, probInitSeq)
+		output=testPropInference(model, sss, params.cells, samples, initSeq, individual)
 		newSSS=[]
-		for k in range(0,len(sss)):
-			if async:
-				boolValues=iterateFuzzyModel(async, iters,individual, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[k], genSteps,nodeNoise,networkNoise,earlyEvalNodes)
-			else:
-				boolValues=runFuzzyModel(individual, async,individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList[k], genSteps ,nodeNoise,networkNoise,earlyEvalNodes)
+		for k in range(0,samples):
 			newSS=copy.deepcopy(sss[k])
-			for j in range(0,len(evaluateNodes)):
-				newSS[nodeList[evaluateNodes[j]]]=boolValues[evaluateNodes[j]]
+			for j in range(0,len(model.nodeList)):
+				newSS[model.nodeList[j]]=output[k][j]
 			newSSS.append(newSS)
-		#update eval nodes
-		print(evaluate(individual, async, iters, newSSS, evaluateNodes, individualParse, nodeList, inputOrderList, inputOrderInvertList, possibilityNumList, initValueList, steps,earlyEvalNodes,complexPenalty))
 		newInitValueList=[]
 		for j in range(0,len(sss)):
 			newInitValueList.append([])
-		for j in range(0,len(nodeList)):
+		for j in range(0,len(model.nodeList)):
 			for k in range(0,len(sss)):
 				ss=newSSS[k]
-				if  nodeList[j] in sss[0].keys():
-					newInitValueList[k].append(ss[nodeList[j]])
+				if  model.nodeList[j] in sss[0].keys():
+					newInitValueList[k].append(ss[model.nodeList[j]])
 				else:
 					newInitValueList[k].append(0.5)
-		#print(len(sss))
-		toolbox.register("evaluate", evaluate, iters=iters, async=async, sss=newSSS, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, inputOrderList=inputOrderList, inputOrderInvertList=inputOrderInvertList, possibilityNumList=possibilityNumList, initValueList=newInitValueList, steps=steps, earlyEvalNodes=earlyEvalNodes, complexPenalty=complexPenalty)
-		#toolbox.register("evaluate", evaluate, ss=ss, evaluateNodes=evaluateNodes,individualParse= individualParse, nodeList=nodeList, inputOrderList=inputOrderList, inputOrderInvertList=inputOrderInvertList, possibilityNumList=possibilityNumList, initValues=boolValues, steps=steps, h=h,p=p,hillOn=hillOn)
-		population=toolbox.population(n=popSize)
-		hof = tools.HallOfFame(hofSize, similar=numpy.array_equal)
-		output = tools.Logbook()
-		output=algo.eaMuCommaLambda(population, toolbox, mu=mu, lambda_=lambd, stats=stats, cxpb=crossoverProb, mutpb=mutationProb, ngen=generations, verbose=True, halloffame=hof)
-		truth=(writeFuzzyModel(individual, individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList))
+		model.initValueList=newInitValueList
+
+		#set up prop simulator and corr list
+		matt=[]
+		for j in range(0,len(model.nodeList)):
+			templist=[]
+			jarray=[output[q][j] for q in range(0,samples)]
+			for k in range(0,len(model.nodeList)):
+				karray=[output[q][k] for q in range(0,samples)]
+				slope, intercept, r_value, p_value, std_err = regress.linregress(jarray,karray)
+				# print(jarray)
+				# print(karray)
+				# print(slope)
+				# print(intercept)
+				# print(slope-intercept)
+				if((slope+intercept)>0):
+					if (slope+intercept)>1:
+						templist.append(1)
+					else:
+						templist.append(slope+intercept)
+				else:
+					templist.append(0)
+			matt.append(templist)
+		propSimulator=sim.simulatorClass(simClass)
+		propSimulator.corrMat=matt
+		
+		boolValues=evaluate(individual, params, model, propSimulator, newSSS)
+
+		print('\n'.join([''.join(['{:10}'.format(item) for item in row]) for row in matt]))
+		outs=bruteForceSearchModel(model, propSimulator,graph,newSSS)
+		truth=utils.writeModel(individual, model)
+		print("truth")
+		print(truth)
+		BF=utils.writeModel(outs,model)
+		print(BF)
+		stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+		stats.register("avg", numpy.mean)
+		stats.register("std", numpy.std)
+		stats.register("min", numpy.min)
+		stats.register("max", numpy.max)
+		toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
+		
+
+
+		output, hof=GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
 		
 		for j in range(0,10):
-			bestRun=(writeFuzzyModel(hof[j], individualParse, nodeList,inputOrderList, inputOrderInvertList, possibilityNumList))
+			bestRun=(utils.writeModel(hof[j], model))
 			if truth==bestRun:
 				truthCounter[j]+=1
 				break
-			
 			elif j==0:
 				truthlines=truth.split('\n')
 				newlines=bestRun.split('\n')
@@ -160,10 +283,7 @@ def autoSimulator(async, iters, toolbox, stats, graph, trials, sss,individualLen
 						print(truthlines[k])
 						print(newlines[k])
 				trueNodeList.append(trueNodes)
-		# else:
-			# print('WRONG')
-			# print(truth)
-			# print(bestRun)
+		print(trueNodeList)
 		avgs=[output[1][k]['min'] for k in range(0,len(output[1]))]
 		#print(avgs)
 		hofs.append(hof)
@@ -177,11 +297,6 @@ def autoSimulator(async, iters, toolbox, stats, graph, trials, sss,individualLen
 		hofScores.append(temp)
 		truthIndividuals.append(individual)
 		truthAvgs.append(boolValues)
-		gc.collect()
-	# prefix='fatimaTest_noise_'+str(nodeNoise)+'_networkNoise_'+str(networkNoise)
-	# outfile = open(prefix+'_hof.pkl', 'wb')
-	# pickle.dump(hof, outfile)
-	# outfile.close()
 	f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
 	g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
 	h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
@@ -203,6 +318,50 @@ def autoSimulator(async, iters, toolbox, stats, graph, trials, sss,individualLen
 	print(trueNodeList)
 	print(len(truthlines))
 	
-if __name__ == '__main__':
+
+def testPropInference(model, sss, cells, samples, probInitSeq, individual):
 	
-	graph = old.LiuNetwork3Builder()
+	print(utils.writeModel(individual,model))
+	output=runProbabilityBooleanSims(individual, model, probInitSeq, samples, cells)
+	#for node in range(0,len(model.nodeList)):
+	#	initValues.append(sss[0][model.nodeList[node]])
+	#return initValues
+	return output
+
+def liu1probInitSeqBuilder(model):
+	probInitSeq=probInitSeqClass()
+	probInitSeq.startNodes.append(model.nodeDict['j'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['a'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['b'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.nodeOrder.append(model.nodeDict['c'])
+	probInitSeq.nodeOrder.append(model.nodeDict['h'])
+	probInitSeq.nodeOrder.append(model.nodeDict['d'])
+	probInitSeq.nodeOrder.append(model.nodeDict['f'])
+	probInitSeq.nodeOrder.append(model.nodeDict['g'])
+	probInitSeq.nodeOrder.append(model.nodeDict['k'])
+	return probInitSeq
+
+def GAautoSolver(model,params, sss,simClass):
+	propSimulator=simulatorClass(simClass)
+	toolbox, stats=buildToolbox( )
+	toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=sss)
+	return 	GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
+
+def GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats):
+	population=toolbox.population(n=params.popSize)
+	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
+	output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+	return output, hof
+
+if __name__ == '__main__':
+	samples=15
+	trials=1
+	graph=liu.LiuNetwork1Builder()
+	sss=utils.synthesizeInputs(graph,samples)
+	model=sim.modelClass(graph,sss)
+	probInitSeq=liu1probInitSeqBuilder(model)
+	simTester(trials, model, graph, samples, probInitSeq,'propE1')
+	nx.write_graphml(graph,'Liu1.graphml')
