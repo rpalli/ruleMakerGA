@@ -118,6 +118,123 @@ def bruteForceSearchModel(model, simulator,graph,sss1):
 
 	return [item for sublist in bestList for item in sublist]
 
+
+def calcDeviation(i,model,bits,simulator,sss1):
+	oldTriple=model.individualParse[currentNode]
+	triple=[]
+	triple.append(0)
+	triple.append(oldTriple[1]-oldTriple[0])
+	triple.append(oldTriple[2]-oldTriple[0])
+
+	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+	if model.possibilityNumList[currentNode]>0:
+		logicOperatorFlags=list(individual[triple[1]:triple[2]]) # find demarcations on individual for bits we need
+		inputOrder=list(inputOrder[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]) # determine what order of inputs is
+		inputOrderInvert=inputOrderInvert[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+		if len(inputOrder)==0:
+			for oldValue in model.initValueList:
+				value.append(oldValue[currentNode]) #if no inputs, maintain value
+			return value
+		elif len(inputOrder)==1:
+			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
+			for oldValue in model.initValueList:
+				value.append(Inv(oldValue[inputOrder[0]],inputOrderInvert[0]))
+			return value
+		else:
+			#update nodes with more than one input
+			# update and then or
+			upstreamValueHolder=[]
+			for oldValue in model.initValueList:
+				upstreamVals=[]
+				for upstream in range(0,len(inputOrder)):
+					upstreamVals.append(Inv(oldValue[inputOrder[upstream]],inputOrderInvert[upstream]))
+				upstreamValueHolder.append(upstreamVals)
+			counter =0
+			
+			# print(upstreamVals)
+			# print(logicOperatorFlags)
+			while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
+				if logicOperatorFlags[counter]==0:
+
+					node1=[]
+					node2=[]
+					for upstreamVals in upstreamValueHolder:
+						node1.append(upstreamVals[counter])
+						node2.append(upstreamVals[counter+1])
+					slope, intercept, r_value, p_value, std_err = regress.linregress(node2,node1)
+					AB=slope+intercept
+					slope, intercept, r_value, p_value, std_err = regress.linregress(node1,node2)
+					BA=slope+intercept
+					for upstreamVals in upstreamValueHolder:
+						tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],AB,BA)
+						newPartialValues.append(tempVal)
+						upstreamVals.pop(counter)
+						upstreamVals.pop(counter)
+						upstreamVals.insert(counter,tempVal)
+					inputOrder.pop(counter)
+					inputOrder.pop(counter)
+					logicOperatorFlags.pop(counter)
+
+				else:
+					counter=counter+1
+				# print(upstreamVals)
+
+			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
+			while len(upstreamVals)>1:
+				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),inputOrder.pop(0),inputOrder.pop(0),simulator.corrMat)
+				upstreamVals.insert(0,tempVal)
+				# print(upstreamVals)
+			return upstreamVals[0]
+	else:
+		#returns savme value if now inputs
+		return oldValue[currentNode]	
+
+
+	for steadyStateNum in range(0,len(model.initValueList)):
+		derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
+		deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
+#exhaustively searcj noolean networks for best option while simultaneously solving all the rules over all values to continuously update table
+def bruteForceSolveSearch(model, simulator,graph,sss1):
+	params=sim.paramClass()
+	bestList=[]
+	initValueList=[]
+	for j in range(0,len(sss1)):
+		initValueList.append([])
+	for i in range(0,len(model.nodeList)):
+		for j in range(0,len(sss1)):
+			ss=sss1[j]
+			if  model.nodeList[i] in sss1[0].keys():
+				initValueList[j].append(ss[model.nodeList[i]])
+			else:
+				initValueList[j].append(0.5)
+	print(model.initValueList)
+
+	for i in range(0,len(model.nodeList)):
+		# print(model.nodeList[i])
+		# print(model.individualParse[i])
+		currentDev=10*len(sss1)
+		best=[]
+		if model.possibilityNumList[i]>0:
+			for j in range(0,int(2**int(model.individualParse[i][2]-model.individualParse[i][0]))):
+				bits=[]
+				bits=utils.bitList(j)
+				while len(bits)<(model.individualParse[i][2]-model.individualParse[i][0]):
+					bits.insert(0,0)
+				deviation=0
+				deviation=calcDeviation(i,model,bits,simulator,sss1)
+				print(utils.writeBruteNode(i,bits,model))
+				print(bits)
+				print(deviation)
+				if(deviation<currentDev):
+					print("best")
+					best=bits
+					currentDev=deviation	
+		bestList.append(best)
+		print(model.nodeList[i])
+		print(currentDev)
+	return [item for sublist in bestList for item in sublist]
+
 def runProbabilityBooleanSims(individual, model, probInitSeq, sampleNum, cells):
 	samples=[]
 	simulator=sim.simulatorClass('fuzzy')
@@ -193,7 +310,7 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass):
 	trueNodeList=[]
 
 	
-	toolbox, stats=buildToolbox( model.size, params.bitFlipProb)
+	# toolbox, stats=buildToolbox( model.size, params.bitFlipProb)
 	print(model.inputOrderList)
 	print(model.individualParse)
 	print(model.possibilityNumList)
@@ -249,74 +366,74 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass):
 		boolValues=evaluate(individual, params, model, propSimulator, newSSS)
 
 		print('\n'.join([''.join(['{:10}'.format(item) for item in row]) for row in matt]))
-		outs=bruteForceSearchModel(model, propSimulator,graph,newSSS)
+		outs=bruteForceSolveSearch(model, propSimulator,graph,newSSS)
 		truth=utils.writeModel(individual, model)
 		print("truth")
 		print(truth)
 		BF=utils.writeModel(outs,model)
 		print(BF)
-		stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-		stats.register("avg", numpy.mean)
-		stats.register("std", numpy.std)
-		stats.register("min", numpy.min)
-		stats.register("max", numpy.max)
-		toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
+		# stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+		# stats.register("avg", numpy.mean)
+		# stats.register("std", numpy.std)
+		# stats.register("min", numpy.min)
+		# stats.register("max", numpy.max)
+		# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
 		
 
 
-		output, hof=GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
+	# 	output, hof=GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
 		
-		for j in range(0,10):
-			bestRun=(utils.writeModel(hof[j], model))
-			if truth==bestRun:
-				truthCounter[j]+=1
-				break
-			elif j==0:
-				truthlines=truth.split('\n')
-				newlines=bestRun.split('\n')
-				trueNodes=0
-				for k in range(0,len(truthlines)):
-					if truthlines[k]==newlines[k]:
-						trueNodes=trueNodes+1
-					else:
-						print("incorrect pair: true then test")
-						print(truthlines[k])
-						print(newlines[k])
-				trueNodeList.append(trueNodes)
-		print(trueNodeList)
-		avgs=[output[1][k]['min'] for k in range(0,len(output[1]))]
-		#print(avgs)
-		hofs.append(hof)
-		temp=[]
-		for hofind in range(0,len(hof)):
-			tempVal=0
-			for bit in range(0,len(hof[hofind])):
-				if not hof[hofind][bit]==individual[bit]:
-					tempVal=tempVal+1
-			temp.append(tempVal)
-		hofScores.append(temp)
-		truthIndividuals.append(individual)
-		truthAvgs.append(boolValues)
-	f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
-	g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
-	h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
-	f.write(str(hofScores))
-	f.write('\n')
-	for hofy in range(0,len(hofs)):
-		g.write(str(hofs[hofy]))
-		g.write('\n')
-	h.write(str(truthIndividuals))
-	h.write('\n')
-	f.close()
-	g.close()
-	h.close()
-	print('# true of # trials')
-	for k in range(0,len(truthCounter)):
-		print(truthCounter[k])
-	print(trials)
-	print("for the incorrects, by node")
-	print(trueNodeList)
-	print(len(truthlines))
+	# 	for j in range(0,10):
+	# 		bestRun=(utils.writeModel(hof[j], model))
+	# 		if truth==bestRun:
+	# 			truthCounter[j]+=1
+	# 			break
+	# 		elif j==0:
+	# 			truthlines=truth.split('\n')
+	# 			newlines=bestRun.split('\n')
+	# 			trueNodes=0
+	# 			for k in range(0,len(truthlines)):
+	# 				if truthlines[k]==newlines[k]:
+	# 					trueNodes=trueNodes+1
+	# 				else:
+	# 					print("incorrect pair: true then test")
+	# 					print(truthlines[k])
+	# 					print(newlines[k])
+	# 			trueNodeList.append(trueNodes)
+	# 	print(trueNodeList)
+	# 	avgs=[output[1][k]['min'] for k in range(0,len(output[1]))]
+	# 	#print(avgs)
+	# 	hofs.append(hof)
+	# 	temp=[]
+	# 	for hofind in range(0,len(hof)):
+	# 		tempVal=0
+	# 		for bit in range(0,len(hof[hofind])):
+	# 			if not hof[hofind][bit]==individual[bit]:
+	# 				tempVal=tempVal+1
+	# 		temp.append(tempVal)
+	# 	hofScores.append(temp)
+	# 	truthIndividuals.append(individual)
+	# 	truthAvgs.append(boolValues)
+	# f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
+	# g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	# h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	# f.write(str(hofScores))
+	# f.write('\n')
+	# for hofy in range(0,len(hofs)):
+	# 	g.write(str(hofs[hofy]))
+	# 	g.write('\n')
+	# h.write(str(truthIndividuals))
+	# h.write('\n')
+	# f.close()
+	# g.close()
+	# h.close()
+	# print('# true of # trials')
+	# for k in range(0,len(truthCounter)):
+	# 	print(truthCounter[k])
+	# print(trials)
+	# print("for the incorrects, by node")
+	# print(trueNodeList)
+	# print(len(truthlines))
 	
 
 def testPropInference(model, sss, cells, samples, probInitSeq, individual):
@@ -363,5 +480,5 @@ if __name__ == '__main__':
 	sss=utils.synthesizeInputs(graph,samples)
 	model=sim.modelClass(graph,sss)
 	probInitSeq=liu1probInitSeqBuilder(model)
-	simTester(trials, model, graph, samples, probInitSeq,'propE1')
+	simTester(trials, model, graph, samples, probInitSeq,'propE2')
 	nx.write_graphml(graph,'Liu1.graphml')

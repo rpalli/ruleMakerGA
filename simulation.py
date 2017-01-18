@@ -144,6 +144,12 @@ def propOrE1(num1, num2, index1, index2,corrMat):
 def propAndE1(num1,num2,index1,index2,corrMat):
 	return max(0,min(1,((num1*corrMat[index2][index1])/2+(num2*corrMat[index1][index2])/2)))
 
+def propOrE2(A,B,AgivenB, BgivenA):
+	return max(0,min(1,A+B-(B*AgivenB+A*BgivenA)/2))
+
+def propAndE2(A,B,AgivenB, BgivenA):
+	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
+
 def Inv(x, inverter): #inverts if necessary then applies hill fun
 	if inverter:
 		return (1-x)
