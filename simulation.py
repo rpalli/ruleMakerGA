@@ -145,7 +145,7 @@ def propAndE1(num1,num2,index1,index2,corrMat):
 	return max(0,min(1,((num1*corrMat[index2][index1])/2+(num2*corrMat[index1][index2])/2)))
 
 def propOrE2(A,B,AgivenB, BgivenA):
-	return max(0,min(1,A+B-(B*AgivenB+A*BgivenA)/2))
+	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
 
 def propAndE2(A,B,AgivenB, BgivenA):
 	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
@@ -163,7 +163,7 @@ class simulatorClass:
 			self.And=propAndE1
 			self.Or=propOrE1
 			self.corrMat={}
-		if simTyping=='propE1=2':
+		if simTyping=='propE2':
 			self.And=propAndE2
 			self.Or=propOrE2
 			self.corrMat={}
@@ -264,17 +264,17 @@ def updateNet(currentNode,oldValue,individual, triple, model,simulator):
 					upstreamVals.insert(counter,tempVal)
 				else:
 					counter=counter+1
-				# print(upstreamVals)
 
 			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
 			while len(upstreamVals)>1:
-				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),inputOrder.pop(0),inputOrder.pop(0),simulator.corrMat)
+				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),2,1,simulator.corrMat)
 				upstreamVals.insert(0,tempVal)
+
 				# print(upstreamVals)
 			return upstreamVals[0]
 	else:
 		#returns savme value if now inputs
-		return oldValue[currentNode]						
+		return oldValue[currentNode]							
 def updateNetOLD(currentNode,oldValue,individual, triple, model,simulator):
 	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
 	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)

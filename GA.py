@@ -13,6 +13,7 @@ import numpy as numpy
 import copy as copy
 import operator
 import scipy.stats as regress
+import matplotlib.pyplot as plt
 class probInitSeqClass:
 	def __init__(self):
 		self.startNodes=[]
@@ -119,13 +120,13 @@ def bruteForceSearchModel(model, simulator,graph,sss1):
 	return [item for sublist in bestList for item in sublist]
 
 
-def calcDeviation(i,model,bits,simulator,sss1):
+def calcDeviation(currentNode,model,individual,simulator,sss1):
 	oldTriple=model.individualParse[currentNode]
 	triple=[]
 	triple.append(0)
 	triple.append(oldTriple[1]-oldTriple[0])
 	triple.append(oldTriple[2]-oldTriple[0])
-
+	value=[]
 	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
 	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
 	if model.possibilityNumList[currentNode]>0:
@@ -135,12 +136,10 @@ def calcDeviation(i,model,bits,simulator,sss1):
 		if len(inputOrder)==0:
 			for oldValue in model.initValueList:
 				value.append(oldValue[currentNode]) #if no inputs, maintain value
-			return value
 		elif len(inputOrder)==1:
 			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
 			for oldValue in model.initValueList:
-				value.append(Inv(oldValue[inputOrder[0]],inputOrderInvert[0]))
-			return value
+				value.append(sim.Inv(oldValue[inputOrder[0]],inputOrderInvert[0]))
 		else:
 			#update nodes with more than one input
 			# update and then or
@@ -148,7 +147,7 @@ def calcDeviation(i,model,bits,simulator,sss1):
 			for oldValue in model.initValueList:
 				upstreamVals=[]
 				for upstream in range(0,len(inputOrder)):
-					upstreamVals.append(Inv(oldValue[inputOrder[upstream]],inputOrderInvert[upstream]))
+					upstreamVals.append(sim.Inv(oldValue[inputOrder[upstream]],inputOrderInvert[upstream]))
 				upstreamValueHolder.append(upstreamVals)
 			counter =0
 			
@@ -162,13 +161,10 @@ def calcDeviation(i,model,bits,simulator,sss1):
 					for upstreamVals in upstreamValueHolder:
 						node1.append(upstreamVals[counter])
 						node2.append(upstreamVals[counter+1])
-					slope, intercept, r_value, p_value, std_err = regress.linregress(node2,node1)
-					AB=slope+intercept
-					slope, intercept, r_value, p_value, std_err = regress.linregress(node1,node2)
-					BA=slope+intercept
+					slope1, intercept1, r_value, p_value, std_err = regress.linregress(node2,node1)
+					slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,node2)
 					for upstreamVals in upstreamValueHolder:
-						tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],AB,BA)
-						newPartialValues.append(tempVal)
+						tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],slope1*upstreamVals[counter+1]+intercept1,slope2*upstreamVals[counter]+intercept2)
 						upstreamVals.pop(counter)
 						upstreamVals.pop(counter)
 						upstreamVals.insert(counter,tempVal)
@@ -181,19 +177,30 @@ def calcDeviation(i,model,bits,simulator,sss1):
 				# print(upstreamVals)
 
 			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
-			while len(upstreamVals)>1:
-				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),inputOrder.pop(0),inputOrder.pop(0),simulator.corrMat)
-				upstreamVals.insert(0,tempVal)
-				# print(upstreamVals)
-			return upstreamVals[0]
+			while len(upstreamValueHolder[0])>1:
+				node1=[]
+				node2=[]
+				for upstreamVals in upstreamValueHolder:
+					node1.append(upstreamVals[0])
+					node2.append(upstreamVals[1])
+				slope1, intercept1, r_value, p_value, std_err = regress.linregress(node2,node1)
+				slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,node2)
+				for upstreamVals in upstreamValueHolder:
+					tempVal=simulator.Or(upstreamVals[0],upstreamVals[1],slope1*upstreamVals[1]+intercept1,slope2*upstreamVals[0]+intercept2)
+					upstreamVals.pop(0)
+					upstreamVals.pop(0)
+					upstreamVals.insert(0,tempVal)
+			for upstreamVals in upstreamValueHolder:
+				value.append(upstreamVals[0])
 	else:
 		#returns savme value if now inputs
-		return oldValue[currentNode]	
-
-
+		for oldValue in model.initValueList:
+			value.append(oldValue[currentNode]) #if no inputs, maintain value
+	deviation=0
 	for steadyStateNum in range(0,len(model.initValueList)):
-		derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
-		deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
+		deviation=deviation+(value[steadyStateNum]-sss1[steadyStateNum][model.nodeList[currentNode]])**2
+	return deviation
+
 #exhaustively searcj noolean networks for best option while simultaneously solving all the rules over all values to continuously update table
 def bruteForceSolveSearch(model, simulator,graph,sss1):
 	params=sim.paramClass()
@@ -223,16 +230,18 @@ def bruteForceSolveSearch(model, simulator,graph,sss1):
 					bits.insert(0,0)
 				deviation=0
 				deviation=calcDeviation(i,model,bits,simulator,sss1)
-				print(utils.writeBruteNode(i,bits,model))
-				print(bits)
-				print(deviation)
+				# print(utils.writeBruteNode(i,bits,model))
+				# print(bits)
+				# print(deviation)
 				if(deviation<currentDev):
 					print("best")
+					print(deviation)
+					print(utils.writeBruteNode(i,bits,model))
 					best=bits
 					currentDev=deviation	
 		bestList.append(best)
-		print(model.nodeList[i])
-		print(currentDev)
+		#print(model.nodeList[i])
+		#print(currentDev)
 	return [item for sublist in bestList for item in sublist]
 
 def runProbabilityBooleanSims(individual, model, probInitSeq, sampleNum, cells):
@@ -248,6 +257,31 @@ def runProbabilityBooleanSims(individual, model, probInitSeq, sampleNum, cells):
 			cellArray.append(sim.runModel(individual, params, model, simulator, initValues, False))
 		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
 	return samples
+
+
+
+def runProbabilityBooleanSimsUnbiased(individual, model, probInitSeq, sampleNum, cells):
+	samples=[]
+	simulator=sim.simulatorClass('fuzzy')
+	params=sim.paramClass()
+	for i in range(0,sampleNum):
+		cellArray=[]
+		randomStarts=[]
+		for j in range(0,len(model.nodeList)):
+			randomStarts.append(random())
+		for j in range(0,cells):
+			initValues=genRandomInitValues(individual, model, randomStarts)
+			cellArray.append(sim.runModel(individual, params, model, simulator, initValues, False))
+		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
+	return samples
+
+def genRandomInitValues(individual, model, randomStarts):
+	simulator=sim.simulatorClass('fuzzy')
+	initValues=[0 for x in range(0,len(model.nodeList))]
+	for node in range(0,len(randomStarts)):
+		if random()<randomStarts[node]:
+			initValues[node]=1 
+	return initValues
 
 def genProbabilisticInitValues(individual, model, probInitSeq):
 	simulator=sim.simulatorClass('fuzzy')
@@ -291,7 +325,7 @@ def updateInitSeq(individual, model, probInitSeq):
 
 	return initSeq
 
-def simTester(trials, model, graph, samples, probInitSeq, simClass):
+def simTester(trials, model, graph, samples, probInitSeq, simClass, unbiased):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
 	#samples is the number of different initial conditions to provide per trial
@@ -311,16 +345,16 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass):
 
 	
 	# toolbox, stats=buildToolbox( model.size, params.bitFlipProb)
-	print(model.inputOrderList)
-	print(model.individualParse)
-	print(model.possibilityNumList)
-	print(model.size)
-	print(model.possibilityNumList[0:2])
+	# print(model.inputOrderList)
+	# print(model.individualParse)
+	# print(model.possibilityNumList)
+	# print(model.size)
+	# print(model.possibilityNumList[0:2])
 	
 	for i in range(0,trials):
 		individual=utils.genRandBits(model.size)
 		initSeq=updateInitSeq(individual, model, probInitSeq)
-		output=testPropInference(model, sss, params.cells, samples, initSeq, individual)
+		output=testPropInference(model, sss, params.cells, samples, initSeq, individual,unbiased)
 		newSSS=[]
 		for k in range(0,samples):
 			newSS=copy.deepcopy(sss[k])
@@ -340,32 +374,34 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass):
 		model.initValueList=newInitValueList
 
 		#set up prop simulator and corr list
-		matt=[]
-		for j in range(0,len(model.nodeList)):
-			templist=[]
-			jarray=[output[q][j] for q in range(0,samples)]
-			for k in range(0,len(model.nodeList)):
-				karray=[output[q][k] for q in range(0,samples)]
-				slope, intercept, r_value, p_value, std_err = regress.linregress(jarray,karray)
-				# print(jarray)
-				# print(karray)
-				# print(slope)
-				# print(intercept)
-				# print(slope-intercept)
-				if((slope+intercept)>0):
-					if (slope+intercept)>1:
-						templist.append(1)
-					else:
-						templist.append(slope+intercept)
-				else:
-					templist.append(0)
-			matt.append(templist)
+		# matt=[]
+		# for j in range(0,len(model.nodeList)):
+		# 	templist=[]
+		# 	jarray=[output[q][j] for q in range(0,samples)]
+		# 	for k in range(0,len(model.nodeList)):
+		# 		karray=[output[q][k] for q in range(0,samples)]
+		# 		slope, intercept, r_value, p_value, std_err = regress.linregress(jarray,karray)
+		# 		plt.scatter(jarray,karray)
+		# 		plt.show()
+		# 		# print(jarray)
+		# 		# print(karray)
+		# 		# print(slope)
+		# 		# print(intercept)
+		# 		# print(slope-intercept)
+		# 		if((slope+intercept)>0):
+		# 			if (slope+intercept)>1:
+		# 				templist.append(1)
+		# 			else:
+		# 				templist.append(slope+intercept)
+		# 		else:
+		# 			templist.append(0)
+		# 	matt.append(templist)
 		propSimulator=sim.simulatorClass(simClass)
-		propSimulator.corrMat=matt
+		# propSimulator.corrMat=matt
 		
-		boolValues=evaluate(individual, params, model, propSimulator, newSSS)
+		# boolValues=evaluate(individual, params, model, propSimulator, newSSS)
 
-		print('\n'.join([''.join(['{:10}'.format(item) for item in row]) for row in matt]))
+		# print('\n'.join([''.join(['{:10}'.format(item) for item in row]) for row in matt]))
 		outs=bruteForceSolveSearch(model, propSimulator,graph,newSSS)
 		truth=utils.writeModel(individual, model)
 		print("truth")
@@ -436,10 +472,13 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass):
 	# print(len(truthlines))
 	
 
-def testPropInference(model, sss, cells, samples, probInitSeq, individual):
-	
-	print(utils.writeModel(individual,model))
-	output=runProbabilityBooleanSims(individual, model, probInitSeq, samples, cells)
+def testPropInference(model, sss, cells, samples, probInitSeq, individual,unbiased):
+	if(unbiased==True):
+		output=runProbabilityBooleanSimsUnbiased(individual, model, probInitSeq, samples, cells)
+	else:	
+		output=runProbabilityBooleanSims(individual, model, probInitSeq, samples, cells)
+
+
 	#for node in range(0,len(model.nodeList)):
 	#	initValues.append(sss[0][model.nodeList[node]])
 	#return initValues
@@ -477,8 +516,10 @@ if __name__ == '__main__':
 	samples=15
 	trials=1
 	graph=liu.LiuNetwork1Builder()
+	graph.add_edge('a','f', signal='a')
 	sss=utils.synthesizeInputs(graph,samples)
 	model=sim.modelClass(graph,sss)
 	probInitSeq=liu1probInitSeqBuilder(model)
-	simTester(trials, model, graph, samples, probInitSeq,'propE2')
+	unbiased=True
+	simTester(trials, model, graph, samples, probInitSeq,'propE2',unbiased)
 	nx.write_graphml(graph,'Liu1.graphml')
