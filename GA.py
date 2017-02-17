@@ -89,7 +89,7 @@ def bruteForceSearchModel(model, simulator,graph,sss1):
 				initValueList[j].append(ss[model.nodeList[i]])
 			else:
 				initValueList[j].append(0.5)
-	print(model.initValueList)
+	#print(model.initValueList)
 
 	for i in range(0,len(model.nodeList)):
 		# print(model.nodeList[i])
@@ -106,16 +106,16 @@ def bruteForceSearchModel(model, simulator,graph,sss1):
 				for steadyStateNum in range(0,len(model.initValueList)):
 					derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
 					deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
-				print(utils.writeBruteNode(i,bits,model))
-				print(bits)
-				print(deviation)
+				# print(utils.writeBruteNode(i,bits,model))
+				# print(bits)
+				# print(deviation)
 				if(deviation<currentDev):
-					print("best")
+					# print("best")
 					best=bits
 					currentDev=deviation	
 		bestList.append(best)
-		print(model.nodeList[i])
-		print(currentDev)
+		# print(model.nodeList[i])
+		# print(currentDev)
 
 	return [item for sublist in bestList for item in sublist]
 
@@ -215,7 +215,7 @@ def bruteForceSolveSearch(model, simulator,graph,sss1):
 				initValueList[j].append(ss[model.nodeList[i]])
 			else:
 				initValueList[j].append(0.5)
-	print(model.initValueList)
+	# print(model.initValueList)
 
 	for i in range(0,len(model.nodeList)):
 		# print(model.nodeList[i])
@@ -234,9 +234,9 @@ def bruteForceSolveSearch(model, simulator,graph,sss1):
 				# print(bits)
 				# print(deviation)
 				if(deviation<currentDev):
-					print("best")
-					print(deviation)
-					print(utils.writeBruteNode(i,bits,model))
+					# print("best")
+					# print(deviation)
+					# print(utils.writeBruteNode(i,bits,model))
 					best=bits
 					currentDev=deviation	
 		bestList.append(best)
@@ -340,9 +340,9 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass, unbiased):
 	truthAvgs=[]
 	hofScores=[]
 	newSSS=[]
-	truthCounter=[0 for number in xrange(params.hofSize)]
+	#truthCounter=[0 for number in xrange(params.hofSize)]
 	trueNodeList=[]
-
+	truthCounter=0
 	
 	# toolbox, stats=buildToolbox( model.size, params.bitFlipProb)
 	# print(model.inputOrderList)
@@ -350,7 +350,6 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass, unbiased):
 	# print(model.possibilityNumList)
 	# print(model.size)
 	# print(model.possibilityNumList[0:2])
-	
 	for i in range(0,trials):
 		individual=utils.genRandBits(model.size)
 		initSeq=updateInitSeq(individual, model, probInitSeq)
@@ -402,20 +401,42 @@ def simTester(trials, model, graph, samples, probInitSeq, simClass, unbiased):
 		# boolValues=evaluate(individual, params, model, propSimulator, newSSS)
 
 		# print('\n'.join([''.join(['{:10}'.format(item) for item in row]) for row in matt]))
+		
 		outs=bruteForceSolveSearch(model, propSimulator,graph,newSSS)
 		truth=utils.writeModel(individual, model)
-		print("truth")
-		print(truth)
+		# print("truth")
+		# print(truth)
 		BF=utils.writeModel(outs,model)
-		print(BF)
+		# print(BF)
+
+
+
+
+
 		# stats = tools.Statistics(key=lambda ind: ind.fitness.values)
 		# stats.register("avg", numpy.mean)
 		# stats.register("std", numpy.std)
 		# stats.register("min", numpy.min)
 		# stats.register("max", numpy.max)
 		# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
-		
-
+		if truth==BF:
+			truthCounter=truthCounter+1
+		else:
+			truthlines=truth.split('\n')
+			newlines=BF.split('\n')
+			trueNodes=0
+			for k in range(0,len(truthlines)):
+				if truthlines[k]==newlines[k]:
+					trueNodes=trueNodes+1
+				else:
+					print("incorrect pair: true then test")
+					print(truthlines[k])
+					print(newlines[k])
+			trueNodeList.append(trueNodes)
+		print(i)
+	print(trueNodeList)
+	print(truthCounter)
+		#print(avgs)
 
 	# 	output, hof=GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
 		
@@ -514,7 +535,7 @@ def GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats):
 
 if __name__ == '__main__':
 	samples=15
-	trials=1
+	trials=20
 	graph=liu.LiuNetwork1Builder()
 	graph.add_edge('a','f', signal='a')
 	sss=utils.synthesizeInputs(graph,samples)

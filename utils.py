@@ -1,18 +1,14 @@
+# import necessary python packages
 import numpy as numpy
 from random import random
+import csv as csv
+
 def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
 	return list(arr) 
 
 def bitList(n):
     return [1 if digit=='1' else 0 for digit in bin(n)[2:]]
-
-def bit2int(bitlist): #converts bitstring to integer
-	out = 0
-	for bit in bitlist:
-		out = (out << 1) | bit
-	return out
-
 
 def loadFpkms(filename): #loads data from fpkms tab delimited csv file
 	with open(filename) as csvfile:
@@ -21,7 +17,6 @@ def loadFpkms(filename): #loads data from fpkms tab delimited csv file
 		for row in reader:
 			data.append(row)
 		return data
-
 
 def sortFpkms(data): #puts fpkms data into appropriate lists of steady state dictionaries following normalization to largest value (as denominator)
 	sss=[]
@@ -38,7 +33,7 @@ def sortFpkms(data): #puts fpkms data into appropriate lists of steady state dic
 			sss[j][str.upper(data[i][0])]=float(data[i][1])/maxdata
 	return sss
 
-def synthesizeInputs(graph,samples): # generates synthetic random inputs for steady state simulations
+def synthesizeInputs(graph,samples): # generates synthetic completely random inputs for simulation to steady state
 	sss=[]
 	for i in range(0,samples):
 		sss.append({})
