@@ -106,13 +106,13 @@ class paramClass:
 		self.hofSize=10
 		self.cells=100
 
-def fuzzyAnd(num1, num2, index1, index2,corrMat):
+def fuzzyAnd(num1, num2):
 	return min(num1,num2)
-def fuzzyOr(num1, num2, index1, index2,corrMat):
+def fuzzyOr(num1, num2):
 	return max(num1, num2)
-def naiveAnd(num1, num2, index1, index2,corrMat):
+def naiveAnd(num1, num2):
 	return num1*num2	
-def naiveOr(num1, num2, index1, index2,corrMat):
+def naiveOr(num1, num2):
 	return (num1+num2-(num1*num2))
 def propOr(A,B,AgivenB, BgivenA):
 	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
@@ -131,14 +131,17 @@ class simulatorClass:
 			self.And=propAnd
 			self.Or=propOr
 			self.corrMat={}
+			self.switch=1
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
 			self.Or=fuzzyOr
 			self.corrMat=0
+			self.switch=0
 		if simTyping=='propNaive':
 			self.And=naiveAnd
 			self.Or=naiveOr
 			self.corrMat=0
+			self.switch=0
 
 def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 	# we update node by updating shadow and nodes then combining them to update or nodes. 
@@ -156,29 +159,75 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 		return value
 	else:
 		#update nodes with more than one input
-		# update and then or
-		
-		upstreamVals=[]
-		for upstream in range(0,len(inputOrder)):
-			upstreamVals.append(Inv(oldValue[inputOrder[upstream]],andNodeInvertList[upstream]))
-		counter =0
-		while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
-			if logicOperatorFlags[counter]==0:
-				tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],inputOrder[counter], inputOrder[counter+1],simulator.corrMat)
-				inputOrder.pop(counter)
-				inputOrder.pop(counter)
-				logicOperatorFlags.pop(counter)
-				upstreamVals.pop(counter)
-				upstreamVals.pop(counter)
-				upstreamVals.insert(counter,tempVal)
-			else:
-				counter=counter+1
-			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
-		while len(upstreamVals)>1:
-			tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),2,1,simulator.corrMat)
-			upstreamVals.insert(0,tempVal)
-				# print(upstreamVals)
-		return upstreamVals[0]		
+
+		# first deal with case of simple logic without need of linear regression
+		if simulator.switch==0:
+			counter =0
+			orset=[]
+			# go through list of possible shadow and nodes to see which ones actually contribute
+			for andindex in range(len(individual)):
+				if individual[andindex]==1:
+					# if a shadow and contributes, compute its value using its upstream nodes
+					newval=oldValue[andNodes[andindex][0]]
+					for addnode in range(1,len(andNodes[andindex])):
+						newval=simulator.And(newval,sim.Inv(andNodes[andindex][addnode],andNodeInvertList[andindex][addnode]))
+					orset.append(newval)
+			#combine the shadow and nodes with or operations
+			newval=orset.pop()
+			for val in orset:
+				newval=simulator.Or(newval,val)
+			return newval
+		else:
+			#now we have the case of a proportional boolean network to solve. 
+			ortraininglist=[]
+			orset=[]
+			for andindex in range(len(individual)):
+				if individual[andindex]==1:
+					# if a shadow and contributes, compute its value using its upstream nodes
+					if len(andNodes[andindex])==1:
+						orset.append(oldValue[andNodes[andindex][0]])
+					else:
+						#calculate values across AND nodes
+						for nodeIn in range(len(andNodes[addindex])):
+							#set up initial vars with first node in the set of nodes to be connnected by AND
+							if nodeIn==0:
+								node1index=andNodes[andindex][0]
+								node1=[]
+								for sample in simulator.trainingData:
+									node1.append(sample[node1index])
+								temptraining=node1
+								tempVal=oldValue[node1index]
+							else:
+								# update training data and value using AND rule
+								node1index=andNodes[andindex][nodeIn]
+								node1=[]
+								for sample in simulator.trainingData:
+									node1.append(sample[node1index])
+								slope1, intercept1, r_value, p_value, std_err = regress.linregress(temptraining,node1)
+								slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,temptraining)
+								for sample in range(len(simulator.trainingData)):
+									temptraining[sample]=simulator.And(simulator.trainingData[sample][node1index],temptraining[sample],slope1*temptraining[sample]+intercept1,slope2*simulator.trainingData[sample][node1index]+intercept2)
+								tempVal=simulator.And(oldValue[node1index],tempVal,slope1*tempVal+intercept1,slope2*oldValue[node1index]+intercept2)
+
+						ortraininglist.append(temptraining)
+						orset.append(ortraininglist)
+
+						# combine or nodes below
+						currentrain=[]
+						currentval=[]
+						for i in range(len(orset)):
+							if i==0:
+								#set up initial or value
+								currentrain=ortraininglist[0]
+								currentval=orset[0]
+							else:
+								# update with OR values
+								slope1, intercept1, r_value, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
+								slope2, intercept2, r_value, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
+								for j in ortraininglist[i]:
+									currentrain[j]=simulator.Or(currentrain[j],ortraininglist[i][j],slope1*ortraininglist[i][j]+intercept1,slope2*currentrain[j]+intercept2)
+								currentval=simulator.Or(currentval,orset[i],slope1*orset[i]+intercept1,slope2*currentval+intercept2)
+						return currentval
 
 #run a simulation given a starting state
 def runModel(individual, params, model, simulator, initValues):
