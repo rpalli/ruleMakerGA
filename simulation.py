@@ -6,6 +6,7 @@ from random import shuffle
 import operator
 import networkx as nx
 import itertools as itertool
+import scipy.stats as regress
 
 class modelClass:
      def __init__(self,graph, sss): 
@@ -77,6 +78,7 @@ class modelClass:
 			else:
 				earlyEvalNodes.append(i)
 		self.size=counter
+		individualParse.append(counter)
 		self.evaluateNodes=evaluateNodes #list of nodes that need to be compared to the steady state values (sss)
 		self.individualParse=individualParse #index of start value of current node on the individual
 		self.andNodeList=andNodeList # shadow add node inputs
@@ -104,7 +106,9 @@ class paramClass:
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
-		self.cells=100
+		self.cells=1000
+		self.samples=4
+		self.trials=10
 
 def fuzzyAnd(num1, num2):
 	return min(num1,num2)
@@ -127,6 +131,7 @@ def Inv(x, inverter): #inverts if necessary then applies hill fun
 class simulatorClass:
 	def __init__(self,simTyping):
 		self.simType=simTyping
+		self.trainingData=[]
 		if simTyping=='prop':
 			self.And=propAnd
 			self.Or=propOr
@@ -147,11 +152,11 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 	# we update node by updating shadow and nodes then combining them to update or nodes. 
 	andNodes=model.andNodeList[currentNode] # find the list of shadow and nodes we must compute before computing value of current nodes
 	andNodeInvertList=model.andNodeInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
-	if andLenList[currentNode]==0:
+	if model.andLenList[currentNode]==0:
 		return oldValue[currentNode] #if no inputs, maintain value
-	elif len(andNodes)==1: 
+	elif len(andNodes)==1 or sum(nodeIndividual)==0: 
 		#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
-		if individual[0]==1:
+		if nodeIndividual[0]==1:
 			#if only one input, then set to that number
 			value=Inv(oldValue[andNodes[0][0]],andNodeInvertList[0][0])
 		else:
@@ -165,14 +170,18 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 			counter =0
 			orset=[]
 			# go through list of possible shadow and nodes to see which ones actually contribute
-			for andindex in range(len(individual)):
-				if individual[andindex]==1:
+			for andindex in range(len(nodeIndividual)):
+				if nodeIndividual[andindex]==1:
 					# if a shadow and contributes, compute its value using its upstream nodes
 					newval=oldValue[andNodes[andindex][0]]
 					for addnode in range(1,len(andNodes[andindex])):
-						newval=simulator.And(newval,sim.Inv(andNodes[andindex][addnode],andNodeInvertList[andindex][addnode]))
+						newval=simulator.And(newval,Inv(andNodes[andindex][addnode],andNodeInvertList[andindex][addnode]))
 					orset.append(newval)
 			#combine the shadow and nodes with or operations
+			if len(orset)==0:
+				print('no and nodes!!!!')
+				print(nodeIndividual)
+				print(andNodes)
 			newval=orset.pop()
 			for val in orset:
 				newval=simulator.Or(newval,val)
@@ -181,14 +190,20 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 			#now we have the case of a proportional boolean network to solve. 
 			ortraininglist=[]
 			orset=[]
-			for andindex in range(len(individual)):
-				if individual[andindex]==1:
+			for andindex in range(len(nodeIndividual)):
+				if nodeIndividual[andindex]==1:
 					# if a shadow and contributes, compute its value using its upstream nodes
 					if len(andNodes[andindex])==1:
+						node1index=andNodes[andindex][0]
 						orset.append(oldValue[andNodes[andindex][0]])
+						node1=[]
+						for sample in simulator.trainingData:
+							node1.append(sample[node1index])
+							node1index=andNodes[andindex][0]
+						ortraininglist.append(node1)
 					else:
 						#calculate values across AND nodes
-						for nodeIn in range(len(andNodes[addindex])):
+						for nodeIn in range(len(andNodes[andindex])):
 							#set up initial vars with first node in the set of nodes to be connnected by AND
 							if nodeIn==0:
 								node1index=andNodes[andindex][0]
@@ -210,47 +225,52 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 								tempVal=simulator.And(oldValue[node1index],tempVal,slope1*tempVal+intercept1,slope2*oldValue[node1index]+intercept2)
 
 						ortraininglist.append(temptraining)
-						orset.append(ortraininglist)
+						orset.append(tempVal)
 
 						# combine or nodes below
 						currentrain=[]
-						currentval=[]
-						for i in range(len(orset)):
-							if i==0:
-								#set up initial or value
-								currentrain=ortraininglist[0]
-								currentval=orset[0]
-							else:
-								# update with OR values
-								slope1, intercept1, r_value, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
-								slope2, intercept2, r_value, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
-								for j in ortraininglist[i]:
-									currentrain[j]=simulator.Or(currentrain[j],ortraininglist[i][j],slope1*ortraininglist[i][j]+intercept1,slope2*currentrain[j]+intercept2)
-								currentval=simulator.Or(currentval,orset[i],slope1*orset[i]+intercept1,slope2*currentval+intercept2)
-						return currentval
+			for i in range(len(orset)):
+				if i==0:
+					#set up initial or value
+					currentval=orset[0]
+					if len(orset)>1:
+						currentrain=ortraininglist[0]
+				else:
+					# update with OR values
+					slope1, intercept1, r_value, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
+					slope2, intercept2, r_value, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
+					for j in range(len(ortraininglist[i])):
+						currentrain[j]=simulator.Or(currentrain[j],ortraininglist[i][j],slope1*ortraininglist[i][j]+intercept1,slope2*currentrain[j]+intercept2)
+					currentval=simulator.Or(currentval,orset[i],slope1*orset[i]+intercept1,slope2*currentval+intercept2)
+			return currentval
 
 #run a simulation given a starting state
-def runModel(individual, params, model, simulator, initValues):
+def runModel(individual, model, simulator, initValues):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	
+	params=paramClass()
 	# set up data storage for simulation, add step 0
 	newValue=list(initValues)
 	simData=[]
 	simData.append(list(newValue))
 
 	# set up the sequence of nodes to be updated
-	seq=range(0,len(model.individualParse))
+	seq=range(0,len(model.nodeList))
 	for node in range(0,len(model.earlyEvalNodes)):
 		newValue[model.earlyEvalNodes[node]]=updateNode(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
 	for step in range(0,params.simSteps):
 		oldValue=list(newValue)
 		if params.async:
 			shuffle(seq)
-		for i in range(0,len(model.individualParse)):	
-			if params.async:
-				temp=updateNode(seq[i],newValue,individual, model.individualParse[seq[i]],  model,simulator)
+		for i in range(0,len(model.nodeList)):
+			if seq[i]==len(model.nodeList)-1:
+				end= model.size
 			else:
-				temp=updateNode(seq[i],oldValue,individual, model.individualParse[seq[i]], model,simulator)
+				end=model.individualParse[seq[i]+1]	 
+			if params.async:
+				temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
+			else:
+				temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:end], model,simulator)
 			newValue[seq[i]]=temp
 
 		simData.append(list(newValue))
