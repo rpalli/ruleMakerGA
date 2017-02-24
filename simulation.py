@@ -173,7 +173,8 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 			for andindex in range(len(nodeIndividual)):
 				if nodeIndividual[andindex]==1:
 					# if a shadow and contributes, compute its value using its upstream nodes
-					newval=oldValue[andNodes[andindex][0]]
+					# calculate value of first then use and to append rest in list of predecessors
+					newval=Inv(oldValue[andNodes[andindex][0]],andNodeInvertList[andindex][0])
 					for addnode in range(1,len(andNodes[andindex])):
 						newval=simulator.And(newval,Inv(andNodes[andindex][addnode],andNodeInvertList[andindex][addnode]))
 					orset.append(newval)
@@ -193,13 +194,15 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 			for andindex in range(len(nodeIndividual)):
 				if nodeIndividual[andindex]==1:
 					# if a shadow and contributes, compute its value using its upstream nodes
+					# first for special case of only a single node as pred to shadow and node
 					if len(andNodes[andindex])==1:
 						node1index=andNodes[andindex][0]
+						# add value of that pred to list of shadow and node values
 						orset.append(oldValue[andNodes[andindex][0]])
 						node1=[]
+						# compute value of this shadow and across the training data
 						for sample in simulator.trainingData:
 							node1.append(sample[node1index])
-							node1index=andNodes[andindex][0]
 						ortraininglist.append(node1)
 					else:
 						#calculate values across AND nodes
@@ -223,12 +226,11 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 								for sample in range(len(simulator.trainingData)):
 									temptraining[sample]=simulator.And(simulator.trainingData[sample][node1index],temptraining[sample],slope1*temptraining[sample]+intercept1,slope2*simulator.trainingData[sample][node1index]+intercept2)
 								tempVal=simulator.And(oldValue[node1index],tempVal,slope1*tempVal+intercept1,slope2*oldValue[node1index]+intercept2)
-
-						ortraininglist.append(temptraining)
-						orset.append(tempVal)
-
-						# combine or nodes below
-						currentrain=[]
+							# append calculated values of training and test 
+							ortraininglist.append(temptraining)
+							orset.append(tempVal)
+			# combine or nodes below
+			currentrain=[]
 			for i in range(len(orset)):
 				if i==0:
 					#set up initial or value

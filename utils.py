@@ -68,21 +68,18 @@ def writeNode(currentNode,nodeIndividual, model):
 	writenode=''+model.nodeList[currentNode]+'=' # set up the initial string to use to write node
 
 
-	if model.andLenList[currentNode]==0:
+	if model.andLenList[currentNode]==0 or sum(nodeIndividual)==0:
 		return writenode + ' ' + model.nodeList[currentNode] #if no inputs, maintain value
-	elif len(andNodes)==1 or sum(nodeIndividual)==0: 
+	elif len(andNodes)==1: 
 		#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
-		print(model.andLenList[currentNode])
-		print(nodeIndividual)
-		value=''
-		if nodeIndividual[0]==1:
-			#if only one input, then set to that number
-			if andNodeInvertList[0][0]==0:
-				value= value+ 'not ' + model.nodeList[andNodes[0][0]]
-			else:
-				value= value + model.nodeList[andNodes[0][0]]
+		# print(model.andLenList[currentNode])
+		# print(nodeIndividual)
+		value=''	
+		#if only one input, then set to that number
+		if andNodeInvertList[0][0]==0:
+			value= value+ 'not ' + model.nodeList[andNodes[0][0]]
 		else:
-			value= model.nodeList[currentNode] #if no inputs, maintain value
+			value= value + model.nodeList[andNodes[0][0]]
 		return writenode + value 
 	else:
 		#update nodes with more than one input

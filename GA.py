@@ -164,7 +164,7 @@ def bruteForceSearchModel(model, sss1, simulator):
 		currentDev=10*len(sss1)
 		best=[]
 		if model.andLenList[i]>0:
-			for j in range(2**(model.andLenList[i]+1)):
+			for j in range(1,2**(model.andLenList[i])):
 				bits=[]
 				bits=utils.bitList(j,model.andLenList[i] )
 				deviation=0
