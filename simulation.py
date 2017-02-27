@@ -102,14 +102,14 @@ class paramClass:
 		self.mutationProb=.2 # prob of mutating a particular parent
 		self.async=False # run in asynchronous mode
 		self.iters=100 #number of simulations to try in asynchronous mode
-		self.complexPenalty=False #penalize models with increased complexity
 		self.genSteps=10000 # steps to find steady state with fake data
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
 		self.samples=4
-		self.trials=10
+		self.trials=1
+		self.IC=1 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def fuzzyAnd(num1, num2):
 	return min(num1,num2)
@@ -153,7 +153,50 @@ class simulatorClass:
 			self.switch=0
 			params=paramClass()
 			self.simSteps= params.simSteps
-			
+	def train(self, model):
+		#self.trainingData
+		self.andTrainer=[]
+		# saved as [m,b,m,b],....[m, b, m, b], [train]
+		for currentNode in range(0,len(model.nodeList)):
+			andNodes=model.andNodeList[currentNode] # find the list of shadow and nodes we must compute before computing value of current nodes
+			andNodeInvertList=model.andNodeInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+			if model.andLenList[currentNode]==0:
+				self.andTrainer.append([]) #if no inputs, no and nodes
+			elif len(andNodes)==1 : 
+				#if only one input, still don't need shadow and nodes
+				self.andTrainer.append([])
+			else:
+				#if more than one input, we need to train and nodes
+				tempTrainer=[] # store all and nodes for a particular node
+
+				#go through and nodes and produce solutions for each
+				for andindex in range(0,len(andNodes)):
+					temp=[] #store values for a particular and node
+					if not len(andNodes[andindex])==1:
+						#do iterative calculation on AND nodes storing as you go.... 
+						for nodeIn in range(len(andNodes[andindex])):
+							#set up initial vars with first node in the set of nodes to be connnected by AND
+								if nodeIn==0:
+									node1index=andNodes[andindex][0]
+									node1=[]
+									for sample in self.trainingData:
+										node1.append(sample[node1index])
+									tempdata=node1
+								else:
+										# update training data and value using AND rule
+									node1index=andNodes[andindex][nodeIn]
+									node1=[]
+									for sample in self.trainingData:
+										node1.append(sample[node1index])
+									slope1, intercept1, r_value, p_value, std_err = regress.linregress(tempdata,node1)
+									slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,tempdata)
+									temp.append([slope1,intercept1, slope2, intercept2])
+									for sample in range(len(self.trainingData)):
+										tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],slope1*tempdata[sample]+intercept1,slope2*self.trainingData[sample][node1index]+intercept2)
+									# append calculated values of training and test 
+						temp.append(tempdata)
+					tempTrainer.append(temp)
+				self.andTrainer.append(tempTrainer)
 
 def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 	# we update node by updating shadow and nodes then combining them to update or nodes. 
@@ -225,16 +268,13 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 							else:
 								# update training data and value using AND rule
 								node1index=andNodes[andindex][nodeIn]
-								node1=[]
-								for sample in simulator.trainingData:
-									node1.append(sample[node1index])
-								slope1, intercept1, r_value, p_value, std_err = regress.linregress(temptraining,node1)
-								slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,temptraining)
-								for sample in range(len(simulator.trainingData)):
-									temptraining[sample]=simulator.And(simulator.trainingData[sample][node1index],temptraining[sample],slope1*temptraining[sample]+intercept1,slope2*simulator.trainingData[sample][node1index]+intercept2)
+								slope1=simulator.andTrainer[currentNode][andindex][nodeIn][0]
+								intercept1=simulator.andTrainer[currentNode][andindex][nodeIn][1]
+								slope2=simulator.andTrainer[currentNode][andindex][nodeIn][2]
+								intercept2=simulator.andTrainer[currentNode][andindex][nodeIn][3]
 								tempVal=simulator.And(oldValue[node1index],tempVal,slope1*tempVal+intercept1,slope2*oldValue[node1index]+intercept2)
 							# append calculated values of training and test 
-							ortraininglist.append(temptraining)
+							ortraininglist.append(simulator.andTrainer[currentNode][andindex][-1])
 							orset.append(tempVal)
 			# combine or nodes below
 			currentrain=[]
@@ -261,20 +301,30 @@ def runModel(individual, model, simulator, initValues):
 	newValue=list(initValues)
 	simData=[]
 	simData.append(list(newValue))
+	totalNodes=0
 
 	# set up the sequence of nodes to be updated
 	seq=range(0,len(model.nodeList))
 	for node in range(0,len(model.earlyEvalNodes)):
 		newValue[model.earlyEvalNodes[node]]=updateNode(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
+	
+	#iterate over number of steps necessary
 	for step in range(0,simulator.simSteps):
 		oldValue=list(newValue)
-		if params.async:
+		if params.async: #shuffle if async
 			shuffle(seq)
 		for i in range(0,len(model.nodeList)):
+			#find start and finish for each node to update from the individualParse list
 			if seq[i]==len(model.nodeList)-1:
 				end= model.size
 			else:
 				end=model.individualParse[seq[i]+1]	 
+			#sum up number of nodes in rule
+			if i==0:
+				for bit in range(model.individualParse[seq[i]],end):
+					if individual[bit]==1:
+						totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
+			#update based on sync or async assumptions
 			if params.async:
 				temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
 			else:
@@ -297,9 +347,9 @@ def runModel(individual, model, simulator, initValues):
 			#for element in range(0,len(avg)):
 				#stdev[element]=stdev[element]+(simData[step][element]-avg[element])^2
 		#return (avg, stdev)
-		return avg
+		return avg, totalNodes
 	else:
-		return simData.pop()
+		return simData.pop(), totalNodes
 
 #run a simulation and average it over iters trials
 def averageResultModelSim(individual, params, model, simulator, initValues, iters):

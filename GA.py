@@ -15,6 +15,7 @@ import operator
 import matplotlib.pyplot as plt
 import liu_networks as liu
 from random import shuffle
+import math as math
 class probInitSeqClass:
 	def __init__(self):
 		self.startNodes=[]
@@ -58,20 +59,20 @@ def evaluate(individual, params, model, simulator, sss):
 		ss=sss[j]
 		initValues=model.initValueList[j]
 		SSE=0
-		boolValues=sim.runModel(individual, model,simulator, model.initValueList[j])	
+		boolValues, addnodeNums=sim.runModel(individual, model,simulator, model.initValueList[j])	
 		for i in range(0, len(model.evaluateNodes)):
-			SSE=SSE+(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+			SSE+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
 		SSEs.append(SSE)
-	edgeDegree=0
-	if params.complexPenalty:
-		for i in range(0,len(model.nodeList)):
-			if model.possibilityNumList[i]>0:
-				edgeDegree=edgeDegree+len(model.inputOrderList[i][bit2int(individual[model.individualParse[i][0]:model.individualParse[i][1]])%model.possibilityNumList[i]])
-	SSEs.append(edgeDegree/1.)
-	summer=0.
+	summer=0
 	for i in range(0,len(SSEs)):
 		summer+=SSEs[i]
-	return summer,
+	summer=summer/len(SSEs)
+	if params.IC==1:
+		return addnodeNums-math.log(1-summer/len(model.andLenList)),
+	elif params.IC==2:
+		return addnodeNums*math.log(len(sss))-2*math.log(1-summer/len(model.andLenList)),
+	else:
+		return summer,
 	
 
 # generates a random set of samples made up of cells by using parameteris from probInit seq
@@ -92,7 +93,8 @@ def runProbabilityBooleanSims(individual, model, probInitSeq, sampleNum, cells):
 			#get initial values for all nodes
 			initValues=genPBNInitValues(individual, model, probInitSeq)
 			# run Boolean simulation with initial values and append
-			cellArray.append(sim.runModel(individual, model, simulator, initValues))
+			vals, nums=sim.runModel(individual, model, simulator, initValues)
+			cellArray.append(vals)
 		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
 	return samples
 
@@ -183,7 +185,6 @@ def bruteForceSearchModel(model, sss1, simulator):
 
 	return [item for sublist in bestList for item in sublist]
 
-
 def simTester(model, probInitSeq, simClass):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
@@ -241,22 +242,14 @@ def simTester(model, probInitSeq, simClass):
 		# set up PBN-based simulator
 		propSimulator=sim.simulatorClass(simClass)
 		propSimulator.trainingData=model.initValueList
-		
+		propSimulator.train(model)
 		#perform brute force search
 		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
-		
-
-
 		print(individual)
-		# print(bruteOut)
+		print(bruteOut)
 		truth=utils.writeModel(individual, model)
-		# BF=utils.writeModel(bruteOut,model)
-		# print(BF)
-
-
-
-
-
+		BF=utils.writeModel(bruteOut,model)
+		print(BF)
 	# 	if truth==BF:
 	# 		truthCounter=truthCounter+1
 	# 	else:
@@ -321,8 +314,7 @@ def simTester(model, probInitSeq, simClass):
 	# g.close()
 	# h.close()
 	print('# true of # trials')
-	for k in range(0,len(truthCounter)):
-		print(truthCounter[k])
+	print(truthCounter)
 	print(trials)
 	print("for the incorrects, by node")
 	print(trueNodeList)
