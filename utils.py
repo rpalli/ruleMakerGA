@@ -48,8 +48,6 @@ def synthesizeInputs(graph,samples): # generates synthetic completely random inp
 def writeModel(individual, model):
 	#iterate over nodes to generate a BooleanNet representation for the entire model
 	addString=''
-	print(model.andLenList)
-	print(model.individualParse)
 	for i in range(0,len(model.nodeList)):
 		addString=addString+writeNode(i,individual[model.individualParse[i]:model.individualParse[i+1]], model)
 		addString=addString+'\n'
@@ -101,7 +99,6 @@ def writeNode(currentNode,nodeIndividual, model):
 					newval=newval+model.nodeList[andNodes[andindex][addnode]]
 				orset.append(newval +')')
 			#combine the shadow and nodes with or operations
-		print(nodeIndividual)
 		writenode=writenode + orset.pop()
 		for val in orset:
 			writenode = writenode + ' or ' + val

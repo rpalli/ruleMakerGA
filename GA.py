@@ -58,10 +58,7 @@ def evaluate(individual, params, model, simulator, sss):
 		ss=sss[j]
 		initValues=model.initValueList[j]
 		SSE=0
-		if params.async:
-			boolValues=sim.iterateModel(individual, params, model, simulator, model.initValueList[j], False)	
-		else:
-			boolValues=sim.runModel(individual, params, model,simulator, model.initValueList[j], False)	
+		boolValues=sim.runModel(individual, model,simulator, model.initValueList[j])	
 		for i in range(0, len(model.evaluateNodes)):
 			SSE=SSE+(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
 		SSEs.append(SSE)
@@ -129,7 +126,9 @@ def updateInitSeq(individual, model, probInitSeq):
 
 def GAautoSolver(model, sss, propSimulator):
 	params=sim.paramClass()
-	toolbox, stats=buildToolbox( )
+	toolbox, stats=buildToolbox(model.size,params.bitFlipProb)
+	# reset simSteps to 1 so we just see first step in Sim...
+	propSimulator.simSteps=1
 	toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=sss)
 	population=toolbox.population(n=params.popSize)
 	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
@@ -226,9 +225,9 @@ def simTester(model, probInitSeq, simClass):
 		newInitValueList=[]
 		for j in range(0,len(sss)):
 			newInitValueList.append([])
-		print(len(newSSS))
-		print(samples)
-		print(len(sss))
+		# print(len(newSSS))
+		# print(samples)
+		# print(len(sss))
 		for j in range(0,len(model.nodeList)):
 			for k in range(0,len(sss)):
 				ss=newSSS[k]
@@ -249,67 +248,65 @@ def simTester(model, probInitSeq, simClass):
 
 
 		print(individual)
-		print(bruteOut)
+		# print(bruteOut)
 		truth=utils.writeModel(individual, model)
-		BF=utils.writeModel(bruteOut,model)
+		# BF=utils.writeModel(bruteOut,model)
 		# print(BF)
 
 
 
 
 
-		if truth==BF:
-			truthCounter=truthCounter+1
-		else:
-			truthlines=truth.split('\n')
-			newlines=BF.split('\n')
-			trueNodes=0
-			for k in range(0,len(truthlines)):
-				if truthlines[k]==newlines[k]:
-					trueNodes=trueNodes+1
-				else:
-					print("incorrect pair: true then test")
-					print(truthlines[k])
-					print(newlines[k])
-			trueNodeList.append(trueNodes)
-		print(i)
-	print(trueNodeList)
-	print(truthCounter)
+	# 	if truth==BF:
+	# 		truthCounter=truthCounter+1
+	# 	else:
+	# 		truthlines=truth.split('\n')
+	# 		newlines=BF.split('\n')
+	# 		trueNodes=0
+	# 		for k in range(0,len(truthlines)):
+	# 			if truthlines[k]==newlines[k]:
+	# 				trueNodes=trueNodes+1
+	# 			else:
+	# 				print("incorrect pair: true then test")
+	# 				print(truthlines[k])
+	# 				print(newlines[k])
+	# 		trueNodeList.append(trueNodes)
+	# 	print(i)
+	# print(trueNodeList)
+	# print(truthCounter)
 		#print(avgs)
 
-	# 	output, hof=GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
+		output, hof=GAautoSolver(model,sss, propSimulator)
 		
-	# 	for j in range(0,10):
-	# 		bestRun=(utils.writeModel(hof[j], model))
-	# 		if truth==bestRun:
-	# 			truthCounter[j]+=1
-	# 			break
-	# 		elif j==0:
-	# 			truthlines=truth.split('\n')
-	# 			newlines=bestRun.split('\n')
-	# 			trueNodes=0
-	# 			for k in range(0,len(truthlines)):
-	# 				if truthlines[k]==newlines[k]:
-	# 					trueNodes=trueNodes+1
-	# 				else:
-	# 					print("incorrect pair: true then test")
-	# 					print(truthlines[k])
-	# 					print(newlines[k])
-	# 			trueNodeList.append(trueNodes)
-	# 	print(trueNodeList)
-	# 	avgs=[output[1][k]['min'] for k in range(0,len(output[1]))]
-	# 	#print(avgs)
-	# 	hofs.append(hof)
-	# 	temp=[]
-	# 	for hofind in range(0,len(hof)):
-	# 		tempVal=0
-	# 		for bit in range(0,len(hof[hofind])):
-	# 			if not hof[hofind][bit]==individual[bit]:
-	# 				tempVal=tempVal+1
-	# 		temp.append(tempVal)
-	# 	hofScores.append(temp)
-	# 	truthIndividuals.append(individual)
-	# 	truthAvgs.append(boolValues)
+		for j in range(0,10):
+			bestRun=(utils.writeModel(hof[j], model))
+			if truth==bestRun:
+				truthCounter[j]+=1
+				break
+			elif j==0:
+				truthlines=truth.split('\n')
+				newlines=bestRun.split('\n')
+				trueNodes=0
+				for k in range(0,len(truthlines)):
+					if truthlines[k]==newlines[k]:
+						trueNodes=trueNodes+1
+					else:
+						print("incorrect pair: true then test")
+						print(truthlines[k])
+						print(newlines[k])
+				trueNodeList.append(trueNodes)
+		print(trueNodeList)
+		#print(avgs)
+		hofs.append(hof)
+		temp=[]
+		for hofind in range(0,len(hof)):
+			tempVal=0
+			for bit in range(0,len(hof[hofind])):
+				if not hof[hofind][bit]==individual[bit]:
+					tempVal=tempVal+1
+			temp.append(tempVal)
+		hofScores.append(temp)
+		truthIndividuals.append(individual)
 	# f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
 	# g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
 	# h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
@@ -323,13 +320,13 @@ def simTester(model, probInitSeq, simClass):
 	# f.close()
 	# g.close()
 	# h.close()
-	# print('# true of # trials')
-	# for k in range(0,len(truthCounter)):
-	# 	print(truthCounter[k])
-	# print(trials)
-	# print("for the incorrects, by node")
-	# print(trueNodeList)
-	# print(len(truthlines))
+	print('# true of # trials')
+	for k in range(0,len(truthCounter)):
+		print(truthCounter[k])
+	print(trials)
+	print("for the incorrects, by node")
+	print(trueNodeList)
+	print(len(truthlines))
 	
 
 

@@ -89,6 +89,7 @@ class modelClass:
 		self.nodeDict=nodeDict #identifies names of nodes with their index in the node list.. provide name, get index
 		self.initValueList=initValueList #puts an empty and correctly structured initValueList together for later population. 
 
+		
 class paramClass:
 	def __init__(self):     
 		self.simSteps=100 # number of steps each individual is run when evaluating
@@ -136,17 +137,23 @@ class simulatorClass:
 			self.And=propAnd
 			self.Or=propOr
 			self.corrMat={}
-			self.switch=1
+			self.switch=1			
+			self.simSteps=1
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
 			self.Or=fuzzyOr
 			self.corrMat=0
 			self.switch=0
+			params=paramClass()
+			self.simSteps= params.simSteps
 		if simTyping=='propNaive':
 			self.And=naiveAnd
 			self.Or=naiveOr
 			self.corrMat=0
 			self.switch=0
+			params=paramClass()
+			self.simSteps= params.simSteps
+			
 
 def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 	# we update node by updating shadow and nodes then combining them to update or nodes. 
@@ -249,7 +256,6 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 #run a simulation given a starting state
 def runModel(individual, model, simulator, initValues):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
-	
 	params=paramClass()
 	# set up data storage for simulation, add step 0
 	newValue=list(initValues)
@@ -260,7 +266,7 @@ def runModel(individual, model, simulator, initValues):
 	seq=range(0,len(model.nodeList))
 	for node in range(0,len(model.earlyEvalNodes)):
 		newValue[model.earlyEvalNodes[node]]=updateNode(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
-	for step in range(0,params.simSteps):
+	for step in range(0,simulator.simSteps):
 		oldValue=list(newValue)
 		if params.async:
 			shuffle(seq)
@@ -276,21 +282,24 @@ def runModel(individual, model, simulator, initValues):
 			newValue[seq[i]]=temp
 
 		simData.append(list(newValue))
-	avg= [0 for x in range(0,len(newValue))]
-	stdev= [0 for x in range(0,len(newValue))]
-	for step in range(0,len(simData)):
+	if simulator.switch==0:
+		avg= [0 for x in range(0,len(newValue))]
+		stdev= [0 for x in range(0,len(newValue))]
+		for step in range(0,len(simData)):
+			for element in range(0,len(avg)):
+				simData[step][element]=simData[step][element]+params.sigmaNetwork*random()
+		for step in range(len(simData)-10,len(simData)):
+			for element in range(0,len(avg)):
+				avg[element]=avg[element]+simData[step][element]
 		for element in range(0,len(avg)):
-			simData[step][element]=simData[step][element]+params.sigmaNetwork*random()
-	for step in range(len(simData)-10,len(simData)):
-		for element in range(0,len(avg)):
-			avg[element]=avg[element]+simData[step][element]
-	for element in range(0,len(avg)):
-		avg[element]=avg[element]/10
-	#for step in range(len(simData)-10,len(simData)):
-		#for element in range(0,len(avg)):
-			#stdev[element]=stdev[element]+(simData[step][element]-avg[element])^2
-	#return (avg, stdev)
-	return avg
+			avg[element]=avg[element]/10
+		#for step in range(len(simData)-10,len(simData)):
+			#for element in range(0,len(avg)):
+				#stdev[element]=stdev[element]+(simData[step][element]-avg[element])^2
+		#return (avg, stdev)
+		return avg
+	else:
+		return simData.pop()
 
 #run a simulation and average it over iters trials
 def averageResultModelSim(individual, params, model, simulator, initValues, iters):
