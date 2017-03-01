@@ -67,10 +67,18 @@ def evaluate(individual, params, model, simulator, sss):
 	for i in range(0,len(SSEs)):
 		summer+=SSEs[i]
 	summer=summer/len(SSEs)
+	likelihood=1-summer/len(model.andLenList)
+	for i in range(len(model.nodeList)):
+		if i==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[i+1]	 
+		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
+			likelihood=.001	
 	if params.IC==1:
-		return addnodeNums-math.log(1-summer/len(model.andLenList)),
+		return addnodeNums-math.log(likelihood),
 	elif params.IC==2:
-		return addnodeNums*math.log(len(sss))-2*math.log(1-summer/len(model.andLenList)),
+		return addnodeNums*math.log(len(sss))-2*math.log(likelihood),
 	else:
 		return summer,
 	
@@ -142,6 +150,55 @@ def GAautoSolver(model, sss, propSimulator):
 	# stats.register("max", numpy.max)
 	# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
 	return output, hof	
+
+def evalNode(individual, currentNode, params, model, simulator, sss):
+	SSEs=[]
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValue=model.initValueList[j]
+		SSE=0
+		value= sim.updateNode(currentNode,initValue,individual,  model,simulator)
+		SSE+=(value-ss[model.nodeList[model.evaluateNodes[currentNode]]])**2
+		SSEs.append(SSE)
+	summer=0
+	for i in range(0,len(SSEs)):
+		summer+=SSEs[i]
+	summer=summer/len(SSEs)
+	likelihood=1-summer
+	for i in range(len(model.nodeList)):
+		if i==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[i+1]	 
+		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
+			likelihood=.001	
+	totalNodes=0
+	for bit in range(len(individual)):
+		if individual[bit]==1:
+			totalNodes=totalNodes+len(model.andNodeInvertList[currentNode][bit])
+	if params.IC==1:
+		return totalNodes-math.log(likelihood),
+	elif params.IC==2:
+		return totalNodes*math.log(len(sss))-2*math.log(likelihood),
+	else:
+		return summer,
+def piecewiseGASolver(model, sss, propSimulator):
+	params=sim.paramClass()
+	# reset simSteps to 1 so we just see first step in Sim...
+	propSimulator.simSteps=1
+	bestList=[]
+	for i in range(len(model.nodeList)):
+		if model.andLenList[i]>1:
+			toolbox, stats=buildToolbox(model.andLenList[i],params.bitFlipProb)
+			toolbox.register("evaluate", evalNode,currentNode=i, params=params,model=model,simulator=propSimulator,sss=sss)
+			population=toolbox.population(n=params.popSize)
+			hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
+			output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+			bestList.append(hof[0])
+		else:
+			bestList.append([0])
+	return [item for sublist in bestList for item in sublist]
+
 
 #exhaustively search boolean networks for best option going node by node for rules
 def bruteForceSearchModel(model, sss1, simulator):
@@ -250,27 +307,43 @@ def simTester(model, probInitSeq, simClass):
 		truth=utils.writeModel(individual, model)
 		BF=utils.writeModel(bruteOut,model)
 		print(BF)
-	# 	if truth==BF:
-	# 		truthCounter=truthCounter+1
-	# 	else:
-	# 		truthlines=truth.split('\n')
-	# 		newlines=BF.split('\n')
-	# 		trueNodes=0
-	# 		for k in range(0,len(truthlines)):
-	# 			if truthlines[k]==newlines[k]:
-	# 				trueNodes=trueNodes+1
-	# 			else:
-	# 				print("incorrect pair: true then test")
-	# 				print(truthlines[k])
-	# 				print(newlines[k])
-	# 		trueNodeList.append(trueNodes)
-	# 	print(i)
-	# print(trueNodeList)
-	# print(truthCounter)
-		#print(avgs)
-
+		if truth==BF:
+			truthCounter=truthCounter+1
+		else:
+			truthlines=truth.split('\n')
+			newlines=BF.split('\n')
+			trueNodes=0
+			for k in range(0,len(truthlines)):
+				if truthlines[k]==newlines[k]:
+					trueNodes=trueNodes+1
+				else:
+					print("incorrect pair: true then test")
+					print(truthlines[k])
+					print(newlines[k])
+			trueNodeList.append(trueNodes)
+		print(i)
+		print(trueNodeList)
+		print(truthCounter)
+		trueNodeList=[]
+		truthCounter=0
 		output, hof=GAautoSolver(model,sss, propSimulator)
 		
+		
+		bruteOut=piecewiseGASolver(model, newSSS,propSimulator)
+		BF=utils.writeModel(bruteOut,model)
+		print(individual)
+		print(bruteOut)
+		truthlines=truth.split('\n')
+		newlines=BF.split('\n')
+		trueNodes=0
+		for k in range(0,len(truthlines)):
+			if truthlines[k]==newlines[k]:
+				trueNodes=trueNodes+1
+			else:
+				print("incorrect pair: true then test")
+				print(truthlines[k])
+				print(newlines[k])
+		trueNodeList.append(trueNodes)
 		for j in range(0,10):
 			bestRun=(utils.writeModel(hof[j], model))
 			if truth==bestRun:

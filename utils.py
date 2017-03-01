@@ -56,7 +56,7 @@ def writeModel(individual, model):
 def writeBruteNode(currentNode,individual,model):
 	padindividual=[0 for x in range(0,model.individualParse[currentNode][0])]
 	padindividual.extend(individual)
-	return(writeNode(currentNode, padindividual,model))
+	return (writeNode(currentNode, padindividual,model))
 
 def writeNode(currentNode,nodeIndividual, model):
 	#write out evaluation instructions in BooleanNet format. 
