@@ -108,8 +108,8 @@ class paramClass:
 		self.hofSize=10
 		self.cells=1000
 		self.samples=4
-		self.trials=5
-		self.IC=1 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
+		self.trials=10
+		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def fuzzyAnd(num1, num2):
 	return min(num1,num2)

@@ -180,6 +180,8 @@ def evalNode(individual, currentNode, params, model, simulator, sss):
 		return totalNodes-math.log(likelihood),
 	elif params.IC==2:
 		return totalNodes*math.log(len(sss))-2*math.log(likelihood),
+	elif params.IC==3:
+		return totalNodes-4*math.log(likelihood),
 	else:
 		return summer,
 def piecewiseGASolver(model, sss, propSimulator):
@@ -195,8 +197,10 @@ def piecewiseGASolver(model, sss, propSimulator):
 			hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
 			output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
 			bestList.append(hof[0])
+		elif  model.andLenList[i]==1:
+			bestList.append([1])
 		else:
-			bestList.append([0])
+			bestList.append([])
 	return [item for sublist in bestList for item in sublist]
 
 
@@ -219,7 +223,7 @@ def bruteForceSearchModel(model, sss1, simulator):
 	for i in range(0,len(model.nodeList)):
 		# print(model.nodeList[i])
 		# print(model.individualParse[i])
-		currentDev=10*len(sss1)
+		currentDev=10000*len(sss1)
 		best=[]
 		if model.andLenList[i]>0:
 			for j in range(1,2**(model.andLenList[i])):
@@ -262,13 +266,25 @@ def simTester(model, probInitSeq, simClass):
 	hofScores=[]
 	newSSS=[]
 	trueNodeList=[]
+	zeros=[]
+	ones=[]
+	negones=[]
 	truthCounter=0
+	sumindividual=[]
 	
 	# loop over number of times we want to generate fake data and perform sequence of events
 	for i in range(0,trials):
 
 		#generate random set of logic rules to start with
 		individual=utils.genRandBits(model.size)
+		for node in range(0,len(model.nodeList)):
+			if node==len(model.nodeList)-1:
+				end=len(model.nodeList)
+			else:
+				end=model.individualParse[node+1]
+			if sum(individual[model.individualParse[node]:end])==0:
+				individual[model.individualParse[node]]=1
+
 		# doublecheck that all nodes that have no upstream contributors are part of probInitSeq
 		initSeq=updateInitSeq(individual, model, probInitSeq)
 		# generate Boolean model for this trial
@@ -304,9 +320,13 @@ def simTester(model, probInitSeq, simClass):
 		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
 		print(individual)
 		print(bruteOut)
+		sumindividual.append(sum(individual))
+		newindividual=[a_i - b_i for a_i, b_i in zip(individual, bruteOut)]
+		ones.append(newindividual.count(1))
+		zeros.append(newindividual.count(0))
+		negones.append(newindividual.count(-1))
 		truth=utils.writeModel(individual, model)
 		BF=utils.writeModel(bruteOut,model)
-		print(BF)
 		if truth==BF:
 			truthCounter=truthCounter+1
 		else:
@@ -323,77 +343,86 @@ def simTester(model, probInitSeq, simClass):
 			trueNodeList.append(trueNodes)
 		print(i)
 		print(trueNodeList)
-		print(truthCounter)
-		trueNodeList=[]
-		truthCounter=0
-		output, hof=GAautoSolver(model,sss, propSimulator)
+
+
+
+
+		# trueNodeList=[]
+		# truthCounter=0
+		# output, hof=GAautoSolver(model,sss, propSimulator)
 		
 		
-		bruteOut=piecewiseGASolver(model, newSSS,propSimulator)
-		BF=utils.writeModel(bruteOut,model)
-		print(individual)
-		print(bruteOut)
-		truthlines=truth.split('\n')
-		newlines=BF.split('\n')
-		trueNodes=0
-		for k in range(0,len(truthlines)):
-			if truthlines[k]==newlines[k]:
-				trueNodes=trueNodes+1
-			else:
-				print("incorrect pair: true then test")
-				print(truthlines[k])
-				print(newlines[k])
-		trueNodeList.append(trueNodes)
-		for j in range(0,10):
-			bestRun=(utils.writeModel(hof[j], model))
-			if truth==bestRun:
-				truthCounter[j]+=1
-				break
-			elif j==0:
-				truthlines=truth.split('\n')
-				newlines=bestRun.split('\n')
-				trueNodes=0
-				for k in range(0,len(truthlines)):
-					if truthlines[k]==newlines[k]:
-						trueNodes=trueNodes+1
-					else:
-						print("incorrect pair: true then test")
-						print(truthlines[k])
-						print(newlines[k])
-				trueNodeList.append(trueNodes)
-		print(trueNodeList)
-		#print(avgs)
-		hofs.append(hof)
-		temp=[]
-		for hofind in range(0,len(hof)):
-			tempVal=0
-			for bit in range(0,len(hof[hofind])):
-				if not hof[hofind][bit]==individual[bit]:
-					tempVal=tempVal+1
-			temp.append(tempVal)
-		hofScores.append(temp)
-		truthIndividuals.append(individual)
-	# f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
-	# g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
-	# h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
-	# f.write(str(hofScores))
-	# f.write('\n')
-	# for hofy in range(0,len(hofs)):
-	# 	g.write(str(hofs[hofy]))
-	# 	g.write('\n')
-	# h.write(str(truthIndividuals))
-	# h.write('\n')
-	# f.close()
-	# g.close()
-	# h.close()
+	# 	bruteOut=piecewiseGASolver(model, newSSS,propSimulator)
+	# 	BF=utils.writeModel(bruteOut,model)
+	# 	print(individual)
+	# 	print(bruteOut)
+	# 	truthlines=truth.split('\n')
+	# 	newlines=BF.split('\n')
+	# 	trueNodes=0
+	# 	for k in range(0,len(truthlines)):
+	# 		if truthlines[k]==newlines[k]:
+	# 			trueNodes=trueNodes+1
+	# 		else:
+	# 			print("incorrect pair: true then test")
+	# 			print(truthlines[k])
+	# 			print(newlines[k])
+	# 	trueNodeList.append(trueNodes)
+	# 	for j in range(0,10):
+	# 		bestRun=(utils.writeModel(hof[j], model))
+	# 		if truth==bestRun:
+	# 			truthCounter[j]+=1
+	# 			break
+	# 		elif j==0:
+	# 			truthlines=truth.split('\n')
+	# 			newlines=bestRun.split('\n')
+	# 			trueNodes=0
+	# 			for k in range(0,len(truthlines)):
+	# 				if truthlines[k]==newlines[k]:
+	# 					trueNodes=trueNodes+1
+	# 				else:
+	# 					print("incorrect pair: true then test")
+	# 					print(truthlines[k])
+	# 					print(newlines[k])
+	# 			trueNodeList.append(trueNodes)
+	# 	print(trueNodeList)
+	# 	#print(avgs)
+	# 	hofs.append(hof)
+	# 	temp=[]
+	# 	for hofind in range(0,len(hof)):
+	# 		tempVal=0
+	# 		for bit in range(0,len(hof[hofind])):
+	# 			if not hof[hofind][bit]==individual[bit]:
+	# 				tempVal=tempVal+1
+	# 		temp.append(tempVal)
+	# 	hofScores.append(temp)
+	# 	truthIndividuals.append(individual)
+	# # f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
+	# # g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	# # h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	# # f.write(str(hofScores))
+	# # f.write('\n')
+	# # for hofy in range(0,len(hofs)):
+	# # 	g.write(str(hofs[hofy]))
+	# # 	g.write('\n')
+	# # h.write(str(truthIndividuals))
+	# # h.write('\n')
+	# # f.close()
+	# # g.close()
+	# # h.close()
 	print('# true of # trials')
 	print(truthCounter)
 	print(trials)
 	print("for the incorrects, by node")
 	print(trueNodeList)
 	print(len(truthlines))
-	
+	print(zeros)
+	print(ones)
+	print(negones)
 
+	temp=[(1.*sumindividual[i]-ones[i])/(sumindividual[i]-ones[i]+negones[i]) for i in range(0,len(ones))]
+	print(sum(temp)/len(temp))
+	temp=[(1.*len(individual)-sumindividual[i]-ones[i])/(len(individual)-sumindividual[i]) for i in range(0,len(ones))]
+	print(sum(temp)/len(temp))
 
 
 
