@@ -1,4 +1,30 @@
 import networkx as nx
+import GA as GA
+
+def liu1probInitSeqBuilder(model):
+	probInitSeq=GA.probInitSeqClass()
+	probInitSeq.startNodes.append(model.nodeDict['j'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['a'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['b'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['c'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['h'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['d'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['f'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['g'])
+	probInitSeq.startProbs.append(.5)
+	probInitSeq.startNodes.append(model.nodeDict['k'])
+	probInitSeq.startProbs.append(.5)
+	return probInitSeq
+
+
+
 def LiuNetwork1Builder():
 	graph = nx.DiGraph()
 	graph.add_edge('g','k', signal='a')	

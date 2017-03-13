@@ -1,0 +1,47 @@
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key attr.name="signal" attr.type="string" for="edge" id="d0" />
+  <graph edgedefault="directed">
+    <node id="a" />
+    <node id="c" />
+    <node id="b" />
+    <node id="d" />
+    <node id="g" />
+    <node id="f" />
+    <node id="h" />
+    <node id="k" />
+    <node id="j" />
+    <edge source="a" target="c">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="a" target="f">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="c" target="h">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="c" target="f">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="b" target="d">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="d" target="g">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="d" target="f">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="g" target="k">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="f" target="k">
+      <data key="d0">i</data>
+    </edge>
+    <edge source="h" target="j">
+      <data key="d0">a</data>
+    </edge>
+    <edge source="j" target="c">
+      <data key="d0">i</data>
+    </edge>
+  </graph>
+</graphml>

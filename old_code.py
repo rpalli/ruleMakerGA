@@ -4,7 +4,9 @@
 #import pyximport; pyximport.install()
 #import evaluator
 #import cPickle as pickle
-
+import copy as copy
+import gc as gc
+import re as re
 
 from random import random
 import networkx as nx
@@ -2639,3 +2641,561 @@ def autoSimulator(trials, toolbox, stats,  sss,params, model, simulator):
 	print("for the incorrects, by node")
 	print(trueNodeList)
 	print(len(truthlines))
+
+
+class Node:
+    def __init__(self, operator):
+        self.operator = operator
+    def addLchild(child):
+    	self.Lchild=child
+	def addRchild(child):
+		self.Rchild=child
+    def value(simulator):
+    	if (operator==0):
+    		simulator.And(self.Lchild.value(),self.Rchild.value())
+
+
+
+#model class before addition of shadow and nodes
+class modelClass:
+     def __init__(self,graph, sss):         
+		repeat=True
+		while(repeat):
+			repeat=False
+			for node in graph.nodes():
+				if node in graph.successors(node):
+					graph.remove_edge(node,node)
+					repeat=True
+		
+		evaluateNodes=[] #list of nodes that need to be compared to the steady state values (sss)
+		individualParse=[] #list of triples that contain the start and end of the noder order value and operator flag list for each node
+		inputOrderList=[] #list of lists of possible node orders for each node
+		inputOrderInvertList=[] # keeps track of which incoming nodes for each node need to be inverted
+		possibilityNumList=[] # keeps track of length of above inputOrderList for each node
+		earlyEvalNodes=[] # nodes that don't have initial value and need to be re-evaluated early on in the simulation
+		
+
+
+		nodeList=graph.nodes()#define the node list simply as the nodes in the graph. 
+		nodeDict={} #identifies names of nodes with their index in the node list
+		for i in range(0,len(nodeList)):
+			nodeDict[nodeList[i]]=i #constructs the node dict so we can easily look up nodes
+		
+		counter=int(0) #keeps track of where we are in the generic individual
+		initValueList=[] #starting states for nodes
+		for j in range(0,len(sss)): #construct empty lists to stick values in later for intiial value list
+				initValueList.append([])
+		
+
+		for i in range(0,len(nodeList)):
+			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
+			if len(preds)>15: #handle case where there are too many predecessors by truncation
+				preds=preds[1:15]
+			for j in range(0,len(preds)):
+				preds[j]=nodeDict[preds[j]]
+			
+			# the followign section constructs a list of possible node orders
+			withNones = zip(preds, itertool.repeat('empty'))
+			possibilities=list(itertool.product(*withNones))
+			for j in range(0,len(possibilities)):
+				possibilities[j]=list(possibilities[j])
+				while 'empty' in possibilities[j]:
+					possibilities[j].remove('empty')
+				while [] in possibilities[j]:
+					possibilities[j].remove([])
+			while [] in possibilities:
+				possibilities.remove([])
+			
+			#store activities of nodes in correspondence with node order. 
+			activities=[] #list to store activities of nodes (a vs i)
+			for sequence in possibilities:
+				activity=[]
+				for node in sequence:
+					if graph.edge[nodeList[node]][nodeList[i]]['signal']=='a':
+						activity.append(False)
+					else:
+						activity.append(True)
+				activities.append(activity)
+			inputOrderList.append(possibilities)
+			inputOrderInvertList.append(activities)
+			possibilityNumList.append(len(possibilities))
+			#deal with nodes with no incoming or only one incoming first
+			if len(possibilities)==0:
+				individualParse.append([counter,counter,counter])
+			elif len(possibilities)==1:
+				individualParse.append([counter,counter,counter])
+				counter=int(counter+1)
+			else:
+				logNum=ceil(log(len(possibilities))/log(2))#determine number of bits necessary to store information of which node order is the one for that individual
+				individualParse.append([int(counter),int(counter+logNum),int(counter+logNum+len(preds)-1)]) #set up limits: lognum-1 for list then len(preds)-1 for the activity flags
+				counter=int(counter+logNum+len(preds)-1) #uptick the counter so we know where to start on the next node
+			#set up lists of initial values and values that need to be evaluated early
+			for j in range(0,len(sss)):
+				ss=sss[j]
+				if  nodeList[i] in sss[0].keys():
+					initValueList[j].append(ss[nodeList[i]])
+					evaluateNodes.append(i)
+				else:
+					initValueList[j].append(0.5)
+					earlyEvalNodes.append(i)
+		self.size=counter
+		self.evaluateNodes=evaluateNodes #list of nodes that need to be compared to the steady state values (sss)
+		self.individualParse=individualParse #list of triples that contain the start and end of the noder order value and operator flag list for each node
+		self.inputOrderList=inputOrderList #list of lists of possible node orders for each node
+		self.inputOrderInvertList=inputOrderInvertList # keeps track of which incoming nodes for each node need to be inverted
+		self.possibilityNumList=possibilityNumList # keeps track of length of above inputOrderList for each node
+		self.earlyEvalNodes=earlyEvalNodes
+		self.nodeList=nodeList#define the node list simply as the nodes in the graph. 
+		self.nodeDict=nodeDict
+		self.initValueList=initValueList
+def propOrE1(num1, num2, index1, index2,corrMat):
+	if num1==1 or num2==1:
+		return 1
+	else:
+		return max(0,min(1,(num1+num2-(num1*corrMat[index2][index1]+num2*corrMat[index1][index2])/2)))
+def propAndE1(num1,num2,index1,index2,corrMat):
+	return max(0,min(1,((num1*corrMat[index2][index1])/2+(num2*corrMat[index1][index2])/2)))
+
+def propOrE2(A,B,AgivenB, BgivenA):
+	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
+
+def propAndE2(A,B,AgivenB, BgivenA):
+	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
+
+def updateNode(currentNode,oldValue,individual, model,simulator):
+	
+	oldTriple=model.individualParse[currentNode]
+	triple=[]
+	triple.append(0)
+	triple.append(oldTriple[1]-oldTriple[0])
+	triple.append(oldTriple[2]-oldTriple[0])
+	retinue = updateNet(currentNode,oldValue,individual, triple,model,simulator)
+	return retinue
+					
+
+def updateNetOLD(currentNode,oldValue,individual, triple, model,simulator):
+	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+	if model.possibilityNumList[currentNode]>0:
+		logicOperatorFlags=list(individual[triple[1]:triple[2]]) # find demarcations on individual for bits we need
+		inputOrder=list(inputOrder[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]) # determine what order of inputs is
+		inputOrderInvert=inputOrderInvert[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+		if len(inputOrder)==0:
+			value=oldValue[currentNode] #if no inputs, maintain value
+			return value
+		elif len(inputOrder)==1:
+			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
+			value=Inv(oldValue[inputOrder[0]],inputOrderInvert[0])
+			return value
+		else:
+			#update nodes with more than one input
+			# update and then or
+			upstreamVals=[]
+			for upstream in range(0,len(inputOrder)):
+				upstreamVals.append(Inv(oldValue[inputOrder[upstream]],inputOrderInvert[upstream]))
+			counter =0
+			# print(upstreamVals)
+			# print(logicOperatorFlags)
+			while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
+				if logicOperatorFlags[counter]==0:
+					tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],inputOrder[counter], inputOrder[counter+1],simulator.corrMat)
+					inputOrder.pop(counter)
+					inputOrder.pop(counter)
+					logicOperatorFlags.pop(counter)
+					upstreamVals.pop(counter)
+					upstreamVals.pop(counter)
+					upstreamVals.insert(counter,tempVal)
+				else:
+					counter=counter+1
+				# print(upstreamVals)
+
+			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
+			while len(upstreamVals)>1:
+				tempVal=simulator.Or(upstreamVals.pop(0),upstreamVals.pop(0),inputOrder.pop(0),inputOrder.pop(0),simulator.corrMat)
+				upstreamVals.insert(0,tempVal)
+				# print(upstreamVals)
+			return upstreamVals[0]
+	else:
+		#returns savme value if now inputs
+		return oldValue[currentNode]						
+
+def bit2int(bitlist): #converts bitstring to integer
+	out = 0
+	for bit in bitlist:
+		out = (out << 1) | bit
+	return out
+
+
+#exhaustively searcj noolean networks for best option while simultaneously solving all the rules over all values to continuously update table
+def bruteForceSolveSearch(model, simulator,graph,sss1):
+	params=sim.paramClass()
+	bestList=[]
+	initValueList=[]
+	for j in range(0,len(sss1)):
+		initValueList.append([])
+	for i in range(0,len(model.nodeList)):
+		for j in range(0,len(sss1)):
+			ss=sss1[j]
+			if  model.nodeList[i] in sss1[0].keys():
+				initValueList[j].append(ss[model.nodeList[i]])
+			else:
+				initValueList[j].append(0.5)
+	# print(model.initValueList)
+
+	for i in range(0,len(model.nodeList)):
+		# print(model.nodeList[i])
+		# print(model.individualParse[i])
+		currentDev=10*len(sss1)
+		best=[]
+		if model.possibilityNumList[i]>0:
+			for j in range(0,int(2**int(model.individualParse[i][2]-model.individualParse[i][0]))):
+				bits=[]
+				bits=utils.bitList(j)
+				while len(bits)<(model.individualParse[i][2]-model.individualParse[i][0]):
+					bits.insert(0,0)
+				deviation=0
+				deviation=calcDeviation(i,model,bits,simulator,sss1)
+				# print(utils.writeBruteNode(i,bits,model))
+				# print(bits)
+				# print(deviation)
+				if(deviation<currentDev):
+					# print("best")
+					# print(deviation)
+					# print(utils.writeBruteNode(i,bits,model))
+					best=bits
+					currentDev=deviation	
+		bestList.append(best)
+		#print(model.nodeList[i])
+		#print(currentDev)
+	return [item for sublist in bestList for item in sublist]
+
+def runProbabilityBooleanSimsUnbiased(individual, model, probInitSeq, sampleNum, cells):
+	samples=[]
+	simulator=sim.simulatorClass('fuzzy')
+	params=sim.paramClass()
+	for i in range(0,sampleNum):
+		cellArray=[]
+		randomStarts=[]
+		for j in range(0,len(model.nodeList)):
+			randomStarts.append(random())
+		for j in range(0,cells):
+			initValues=genRandomInitValues(individual, model, randomStarts)
+			cellArray.append(sim.runModel(individual, params, model, simulator, initValues, False))
+		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
+	return samples
+
+def simTester(trials, model, graph, samples, probInitSeq, simClass, unbiased):
+	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
+	#trials is the number of different individuals to try
+	#samples is the number of different initial conditions to provide per trial
+	#graph specifies the network we are testing. 
+	#probInitSeq gives the order in which the network should be built
+
+	params=sim.paramClass()
+
+	avgSSEs=[]
+	hofs=[]
+	truthIndividuals=[]
+	truthAvgs=[]
+	hofScores=[]
+	newSSS=[]
+	#truthCounter=[0 for number in xrange(params.hofSize)]
+	trueNodeList=[]
+	truthCounter=0
+	
+	# toolbox, stats=buildToolbox( model.size, params.bitFlipProb)
+	# print(model.inputOrderList)
+	# print(model.individualParse)
+	# print(model.possibilityNumList)
+	# print(model.size)
+	# print(model.possibilityNumList[0:2])
+	for i in range(0,trials):
+		individual=utils.genRandBits(model.size)
+		initSeq=updateInitSeq(individual, model, probInitSeq)
+		output=testPropInference(model, sss, params.cells, samples, initSeq, individual,unbiased)
+		newSSS=[]
+		for k in range(0,samples):
+			newSS=copy.deepcopy(sss[k])
+			for j in range(0,len(model.nodeList)):
+				newSS[model.nodeList[j]]=output[k][j]
+			newSSS.append(newSS)
+		newInitValueList=[]
+		for j in range(0,len(sss)):
+			newInitValueList.append([])
+		for j in range(0,len(model.nodeList)):
+			for k in range(0,len(sss)):
+				ss=newSSS[k]
+				if  model.nodeList[j] in sss[0].keys():
+					newInitValueList[k].append(ss[model.nodeList[j]])
+				else:
+					newInitValueList[k].append(0.5)
+		model.initValueList=newInitValueList
+
+		#set up prop simulator and corr list
+		# matt=[]
+		# for j in range(0,len(model.nodeList)):
+		# 	templist=[]
+		# 	jarray=[output[q][j] for q in range(0,samples)]
+		# 	for k in range(0,len(model.nodeList)):
+		# 		karray=[output[q][k] for q in range(0,samples)]
+		# 		slope, intercept, r_value, p_value, std_err = regress.linregress(jarray,karray)
+		# 		plt.scatter(jarray,karray)
+		# 		plt.show()
+		# 		# print(jarray)
+		# 		# print(karray)
+		# 		# print(slope)
+		# 		# print(intercept)
+		# 		# print(slope-intercept)
+		# 		if((slope+intercept)>0):
+		# 			if (slope+intercept)>1:
+		# 				templist.append(1)
+		# 			else:
+		# 				templist.append(slope+intercept)
+		# 		else:
+		# 			templist.append(0)
+		# 	matt.append(templist)
+		propSimulator=sim.simulatorClass(simClass)
+		# propSimulator.corrMat=matt
+		
+		# boolValues=evaluate(individual, params, model, propSimulator, newSSS)
+
+		# print('\n'.join([''.join(['{:10}'.format(item) for item in row]) for row in matt]))
+		
+		outs=bruteForceSolveSearch(model, propSimulator,graph,newSSS)
+		truth=utils.writeModel(individual, model)
+		# print("truth")
+		# print(truth)
+		BF=utils.writeModel(outs,model)
+		# print(BF)
+
+
+
+
+
+		# stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+		# stats.register("avg", numpy.mean)
+		# stats.register("std", numpy.std)
+		# stats.register("min", numpy.min)
+		# stats.register("max", numpy.max)
+		# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
+		if truth==BF:
+			truthCounter=truthCounter+1
+		else:
+			truthlines=truth.split('\n')
+			newlines=BF.split('\n')
+			trueNodes=0
+			for k in range(0,len(truthlines)):
+				if truthlines[k]==newlines[k]:
+					trueNodes=trueNodes+1
+				else:
+					print("incorrect pair: true then test")
+					print(truthlines[k])
+					print(newlines[k])
+			trueNodeList.append(trueNodes)
+		print(i)
+	print(trueNodeList)
+	print(truthCounter)
+		#print(avgs)
+
+	# 	output, hof=GAsolver(model,params, sss,simClass, toolbox, propSimulator, stats)
+		
+	# 	for j in range(0,10):
+	# 		bestRun=(utils.writeModel(hof[j], model))
+	# 		if truth==bestRun:
+	# 			truthCounter[j]+=1
+	# 			break
+	# 		elif j==0:
+	# 			truthlines=truth.split('\n')
+	# 			newlines=bestRun.split('\n')
+	# 			trueNodes=0
+	# 			for k in range(0,len(truthlines)):
+	# 				if truthlines[k]==newlines[k]:
+	# 					trueNodes=trueNodes+1
+	# 				else:
+	# 					print("incorrect pair: true then test")
+	# 					print(truthlines[k])
+	# 					print(newlines[k])
+	# 			trueNodeList.append(trueNodes)
+	# 	print(trueNodeList)
+	# 	avgs=[output[1][k]['min'] for k in range(0,len(output[1]))]
+	# 	#print(avgs)
+	# 	hofs.append(hof)
+	# 	temp=[]
+	# 	for hofind in range(0,len(hof)):
+	# 		tempVal=0
+	# 		for bit in range(0,len(hof[hofind])):
+	# 			if not hof[hofind][bit]==individual[bit]:
+	# 				tempVal=tempVal+1
+	# 		temp.append(tempVal)
+	# 	hofScores.append(temp)
+	# 	truthIndividuals.append(individual)
+	# 	truthAvgs.append(boolValues)
+	# f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
+	# g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	# h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
+	# f.write(str(hofScores))
+	# f.write('\n')
+	# for hofy in range(0,len(hofs)):
+	# 	g.write(str(hofs[hofy]))
+	# 	g.write('\n')
+	# h.write(str(truthIndividuals))
+	# h.write('\n')
+	# f.close()
+	# g.close()
+	# h.close()
+	# print('# true of # trials')
+	# for k in range(0,len(truthCounter)):
+	# 	print(truthCounter[k])
+	# print(trials)
+	# print("for the incorrects, by node")
+	# print(trueNodeList)
+	# print(len(truthlines))
+	
+
+def calcDeviation(currentNode,model,individual,simulator,sss1):
+	oldTriple=model.individualParse[currentNode]
+	triple=[]
+	triple.append(0)
+	triple.append(oldTriple[1]-oldTriple[0])
+	triple.append(oldTriple[2]-oldTriple[0])
+	value=[]
+	inputOrder=model.inputOrderList[currentNode] # find the list of possible input combinations for the node we are on 
+	inputOrderInvert=model.inputOrderInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+	if model.possibilityNumList[currentNode]>0:
+		logicOperatorFlags=list(individual[triple[1]:triple[2]]) # find demarcations on individual for bits we need
+		inputOrder=list(inputOrder[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]) # determine what order of inputs is
+		inputOrderInvert=inputOrderInvert[utils.bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]] # lookup which inputs need to be inverted ('not')
+		if len(inputOrder)==0:
+			for oldValue in model.initValueList:
+				value.append(oldValue[currentNode]) #if no inputs, maintain value
+		elif len(inputOrder)==1:
+			#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
+			for oldValue in model.initValueList:
+				value.append(sim.Inv(oldValue[inputOrder[0]],inputOrderInvert[0]))
+		else:
+			#update nodes with more than one input
+			# update and then or
+			upstreamValueHolder=[]
+			for oldValue in model.initValueList:
+				upstreamVals=[]
+				for upstream in range(0,len(inputOrder)):
+					upstreamVals.append(sim.Inv(oldValue[inputOrder[upstream]],inputOrderInvert[upstream]))
+				upstreamValueHolder.append(upstreamVals)
+			counter =0
+			
+			# print(upstreamVals)
+			# print(logicOperatorFlags)
+			while counter < len(logicOperatorFlags) and counter+1<len(inputOrder):
+				if logicOperatorFlags[counter]==0:
+
+					node1=[]
+					node2=[]
+					for upstreamVals in upstreamValueHolder:
+						node1.append(upstreamVals[counter])
+						node2.append(upstreamVals[counter+1])
+					slope1, intercept1, r_value, p_value, std_err = regress.linregress(node2,node1)
+					slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,node2)
+					for upstreamVals in upstreamValueHolder:
+						tempVal=simulator.And(upstreamVals[counter],upstreamVals[counter+1],slope1*upstreamVals[counter+1]+intercept1,slope2*upstreamVals[counter]+intercept2)
+						upstreamVals.pop(counter)
+						upstreamVals.pop(counter)
+						upstreamVals.insert(counter,tempVal)
+					inputOrder.pop(counter)
+					inputOrder.pop(counter)
+					logicOperatorFlags.pop(counter)
+
+				else:
+					counter=counter+1
+				# print(upstreamVals)
+
+			#first one uses the initial logic operator flag to decide and vs or then combines the first two inputs
+			while len(upstreamValueHolder[0])>1:
+				node1=[]
+				node2=[]
+				for upstreamVals in upstreamValueHolder:
+					node1.append(upstreamVals[0])
+					node2.append(upstreamVals[1])
+				slope1, intercept1, r_value, p_value, std_err = regress.linregress(node2,node1)
+				slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,node2)
+				for upstreamVals in upstreamValueHolder:
+					tempVal=simulator.Or(upstreamVals[0],upstreamVals[1],slope1*upstreamVals[1]+intercept1,slope2*upstreamVals[0]+intercept2)
+					upstreamVals.pop(0)
+					upstreamVals.pop(0)
+					upstreamVals.insert(0,tempVal)
+			for upstreamVals in upstreamValueHolder:
+				value.append(upstreamVals[0])
+	else:
+		#returns savme value if now inputs
+		for oldValue in model.initValueList:
+			value.append(oldValue[currentNode]) #if no inputs, maintain value
+	deviation=0
+	for steadyStateNum in range(0,len(model.initValueList)):
+		deviation=deviation+(value[steadyStateNum]-sss1[steadyStateNum][model.nodeList[currentNode]])**2
+	return deviation
+def evaluate(individual, params, model, simulator, sss):
+	SSEs=[]
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValues=model.initValueList[j]
+		SSE=0
+		if params.async:
+			boolValues=sim.iterateModel(individual, params, model, simulator, model.initValueList[j], False)	
+		else:
+			boolValues=sim.runModel(individual, params, model,simulator, model.initValueList[j], False)	
+		for i in range(0, len(model.evaluateNodes)):
+			SSE=SSE+(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+		SSEs.append(SSE)
+	edgeDegree=0
+	if params.complexPenalty:
+		for i in range(0,len(model.nodeList)):
+			if model.possibilityNumList[i]>0:
+				edgeDegree=edgeDegree+len(model.inputOrderList[i][bit2int(individual[model.individualParse[i][0]:model.individualParse[i][1]])%model.possibilityNumList[i]])
+	SSEs.append(edgeDegree/1.)
+	summer=0.
+	for i in range(0,len(SSEs)):
+		summer+=SSEs[i]
+	return summer,
+
+
+
+def writeNode(currentNode,individual, model):
+	#write out evaluation instructions in BooleanNet format. This follows the exact same code as fuzzyUpdate, but writes a string instead of actually updating the values of the nodes
+	triple=model.individualParse[currentNode]
+	inputOrder=model.inputOrderList[currentNode]
+	inputOrderInvert=model.inputOrderInvertList[currentNode]
+	writenode=''+model.nodeList[currentNode]+'='
+	# print(individual[triple[0]:triple[1]])
+	# print(triple)
+	if model.possibilityNumList[currentNode]>0:
+		logicOperatorFlags=individual[triple[1]:triple[2]]
+		inputOrder=inputOrder[bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]
+		inputOrderInvert=inputOrderInvert[bit2int(individual[triple[0]:triple[1]])%model.possibilityNumList[currentNode]]
+		if len(inputOrder)==1:
+				if inputOrderInvert[0]:
+					writenode=writenode+' not '
+				writenode=writenode+model.nodeList[inputOrder[0]]+' '
+		else:
+			counter =0
+			if inputOrderInvert[0]:
+				writenode=writenode+' not '
+			writenode=writenode+model.nodeList[inputOrder[0]]+' '
+			if logicOperatorFlags[0]==0:
+				writenode=writenode+' and '
+			else:
+				writenode=writenode+' or '
+			if inputOrderInvert[1]:
+				writenode=writenode+' not '
+			writenode=writenode+model.nodeList[inputOrder[1]]+' '
+			for i in range(2,len(inputOrder)):
+				if logicOperatorFlags[i-1]==0:
+					writenode=writenode+' and '
+				else:
+					writenode=writenode+' or '
+				if inputOrderInvert[i]:
+					writenode=writenode+' not '
+				writenode=writenode+model.nodeList[inputOrder[i]]+' '
+	else:
+		writenode=writenode+' '+ model.nodeList[currentNode]
+	return writenode					
+
+	
