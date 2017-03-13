@@ -376,3 +376,40 @@ def averageResultModelSim(individual, params, model, simulator, initValues, iter
 	for i in range(0,len(sum)):
 		avgs[i]=sum[i]/float(iters)
 	return avgs
+
+#calculate average induced change by node
+def calcImportance(individual,params,model,simulator, sss):
+	importanceScores=[]
+	for node in range(len(model.nodeList)):
+		tempImp=0
+		SSEs=[]
+		for j in range(0,len(sss)):
+			ss=sss[j]
+			initValues=model.initValueList[j]
+			if initValues[node]>.1:
+				initValues[node]=initValues[node]-.1
+			else:
+				initValues[node]=initValues[node]+.1
+			SSE1=0
+			boolValues, addnodeNums=runModel(individual, model,simulator, model.initValueList[j])
+			for i in range(0, len(model.evaluateNodes)):
+				SSE1+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+						initValues=model.initValueList[j]
+			if initValues[node]>.9:
+				SSE2=SSE1
+			else:
+				initValues[node]=initValues[node]+.1
+				SSE2=0
+				boolValues, addnodeNums=runModel(individual, model,simulator, model.initValueList[j])
+				for i in range(0, len(model.evaluateNodes)):
+					SSE2+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+							initValues=model.initValueList[j]
+			SSEs.append(SSE1+SSE2)
+		importanceScores.append(sum(SSEs))
+	return importanceScores
+
+
+
+
+
+

@@ -6,9 +6,9 @@ from deap import tools
 from deap import algorithms as algo
 from random import random
 import utils as utils
-import liu_networks as liu
 import simulation as sim
 import networkx as nx
+import networkConstructor as nc
 import numpy as numpy
 import copy as copy
 import operator
@@ -203,7 +203,6 @@ def piecewiseGASolver(model, sss, propSimulator):
 			bestList.append([])
 	return [item for sublist in bestList for item in sublist]
 
-
 #exhaustively search boolean networks for best option going node by node for rules
 def bruteForceSearchModel(model, sss1, simulator):
 	params=sim.paramClass()
@@ -246,7 +245,7 @@ def bruteForceSearchModel(model, sss1, simulator):
 
 	return [item for sublist in bestList for item in sublist]
 
-def simTester(model, probInitSeq, simClass):
+def simTester(model, sss, probInitSeq, simClass):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
 	#samples is the number of different initial conditions to provide per trial
@@ -419,19 +418,41 @@ def simTester(model, probInitSeq, simClass):
 	print(ones)
 	print(negones)
 
-	temp=[(1.*sumindividual[i]-ones[i])/(sumindividual[i]-ones[i]+negones[i]) for i in range(0,len(ones))]
-	print(sum(temp)/len(temp))
-	temp=[(1.*len(individual)-sumindividual[i]-ones[i])/(len(individual)-sumindividual[i]) for i in range(0,len(ones))]
-	print(sum(temp)/len(temp))
+	temp=[(zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
+	sensitivity=(sum(temp)/len(temp))
+	temp=[(1.*len(individual)-sumindividual[i]-negones[i])/(len(individual)-sumindividual[i]) for i in range(0,len(ones))]
+	specificity=(sum(temp)/len(temp))
+	return sensitivity,specificity
 
-
-
-if __name__ == '__main__':
-	params=sim.paramClass()
+def variantHumanSimTestRSV():
+	aliasDict={}
+	dict1={}
+	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
+	dict2={}
+	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
+	graph=nx.DiGraph()
+	LaurenList=['hsa04640','hsa04140','hsa03060','hsa04062','hsa04060','hsa03022','hsa04120','hsa03040','hsa03040','hsa04650','hsa00010','hsa04660']
+	nc.uploadKEGGcodes_hsa(LaurenList,graph,dict1,dict2)
+	nx.write_graphml(graph,'LaurenGraph.graphml')
 	graph=liu.LiuNetwork1Builder()
-	graph.add_edge('a','f', signal='a')
+	sensitivities=[]
+	specificities=[]
+	for i in range(3):
+		tempsens,tempspec=rewireSimTest(graph)
+		sensitivities.append(tempsens)
+		specificities.append(tempspec)
+	sensitivity=sum(sensitivities)/(1.*len(sensitivities))
+	specificity=sum(specificities)/(1.*len(specificities))
+	print(sensitivity)
+	print(specificity)
+
+def rewireSimTest(graph):
+	graph2=nc.rewireNetwork(graph)
+	params=sim.paramClass()
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)
 	probInitSeq=liu.liu1probInitSeqBuilder(model)
-	simTester(model, probInitSeq,'prop')
-	nx.write_graphml(graph,'Liu1.graphml')
+	return simTester(model, sss, probInitSeq,'prop')
+
+if __name__ == '__main__':
+	variantHumanSimTestRSV()
