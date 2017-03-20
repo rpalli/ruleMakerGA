@@ -81,7 +81,7 @@ class modelClass:
 		individualParse.append(counter)
 		self.evaluateNodes=evaluateNodes #list of nodes that need to be compared to the steady state values (sss)
 		self.individualParse=individualParse #index of start value of current node on the individual
-		self.andNodeList=andNodeList # shadow add node inputs
+		self.andNodeList=andNodeList # shadow and node inputs
 		self.andNodeInvertList=andNodeInvertList # keeps track of which incoming nodes for each node need to be inverted
 		self.andLenList=andLenList # keeps track of length of above inputOrderList for each node
 		self.earlyEvalNodes=earlyEvalNodes
@@ -108,7 +108,7 @@ class paramClass:
 		self.hofSize=10
 		self.cells=1000
 		self.samples=4
-		self.trials=10
+		self.trials=5
 		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def fuzzyAnd(num1, num2):
@@ -394,7 +394,7 @@ def calcImportance(individual,params,model,simulator, sss):
 			boolValues, addnodeNums=runModel(individual, model,simulator, model.initValueList[j])
 			for i in range(0, len(model.evaluateNodes)):
 				SSE1+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
-						initValues=model.initValueList[j]
+				initValues=model.initValueList[j]
 			if initValues[node]>.9:
 				SSE2=SSE1
 			else:
@@ -403,7 +403,7 @@ def calcImportance(individual,params,model,simulator, sss):
 				boolValues, addnodeNums=runModel(individual, model,simulator, model.initValueList[j])
 				for i in range(0, len(model.evaluateNodes)):
 					SSE2+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
-							initValues=model.initValueList[j]
+					initValues=model.initValueList[j]
 			SSEs.append(SSE1+SSE2)
 		importanceScores.append(sum(SSEs))
 	return importanceScores

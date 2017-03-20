@@ -85,36 +85,32 @@ def evaluate(individual, params, model, simulator, sss):
 
 # generates a random set of samples made up of cells by using parameteris from probInit seq
 # to set up then iterating using strict Boolean modeling. 
-def runProbabilityBooleanSims(individual, model, probInitSeq, sampleNum, cells):
+def runProbabilityBooleanSims(individual, model, sampleNum, cells):
 	samples=[]
 	simulator=sim.simulatorClass('fuzzy')
 	params=sim.paramClass()
 	for i in range(0,sampleNum):
 		cellArray=[]
-		for j in range(0,len(probInitSeq.startProbs)):
-			probInitSeq.startProbs[j]=random()
+		sampleProbs=[]
+		for j in range(0,len(model.nodeList)):
+			sampleProbs.append(random())
 		for j in range(0,cells):
 			# shuffle nodes to be initially called.... 
 			#simulations that are truly random starting states should have all nodes added to this list
-			startnodes= probInitSeq.startNodes
-			shuffle(startnodes)
 			#get initial values for all nodes
-			initValues=genPBNInitValues(individual, model, probInitSeq)
+			initValues=genPBNInitValues(individual, model,sampleProbs)
 			# run Boolean simulation with initial values and append
 			vals, nums=sim.runModel(individual, model, simulator, initValues)
 			cellArray.append(vals)
 		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
 	return samples
 
-def genPBNInitValues(individual, model, probInitSeq):
+def genPBNInitValues(individual, model,sampleProbs):
 	simulator=sim.simulatorClass('fuzzy')
 	initValues=[0 for x in range(0,len(model.nodeList))]
-	for node in range(0,len(probInitSeq.startNodes)):
-		if random()<probInitSeq.startProbs[node]:
-			initValues[probInitSeq.startNodes[node]]=1 
-	for node in range(0,len(probInitSeq.nodeOrder)):
-		if(sim.updateNet(probInitSeq.nodeOrder[node],initValues,individual, model.individualParse[probInitSeq.nodeOrder[node]],model, simulator)==1):
-			initValues[probInitSeq.nodeOrder[node]]=1
+	for node in range(0,len(sampleProbs)):
+		if random()<sampleProbs[node]:
+			initValues[node]=1 
 	return initValues
 
 def updateInitSeq(individual, model, probInitSeq):
@@ -225,7 +221,11 @@ def bruteForceSearchModel(model, sss1, simulator):
 		currentDev=10000*len(sss1)
 		best=[]
 		if model.andLenList[i]>0:
-			for j in range(1,2**(model.andLenList[i])):
+			if model.andLenList[i]<10:
+				checkRange=2**(model.andLenList[i])
+			else:
+				checkRange=3*(model.andLenList[i])
+			for j in range(1,checkRange):
 				bits=[]
 				bits=utils.bitList(j,model.andLenList[i] )
 				deviation=0
@@ -245,7 +245,7 @@ def bruteForceSearchModel(model, sss1, simulator):
 
 	return [item for sublist in bestList for item in sublist]
 
-def simTester(model, sss, probInitSeq, simClass):
+def simTester(model, sss, simClass):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
 	#samples is the number of different initial conditions to provide per trial
@@ -277,17 +277,16 @@ def simTester(model, sss, probInitSeq, simClass):
 		#generate random set of logic rules to start with
 		individual=utils.genRandBits(model.size)
 		for node in range(0,len(model.nodeList)):
-			if node==len(model.nodeList)-1:
-				end=len(model.nodeList)
-			else:
-				end=model.individualParse[node+1]
-			if sum(individual[model.individualParse[node]:end])==0:
-				individual[model.individualParse[node]]=1
+			if model.andLenList[node]>0:
+				if node==len(model.nodeList)-1:
+					end=len(model.nodeList)
+				else:
+					end=model.individualParse[node+1]
+				if sum(individual[model.individualParse[node]:end])==0:
+					individual[model.individualParse[node]]=1
 
-		# doublecheck that all nodes that have no upstream contributors are part of probInitSeq
-		initSeq=updateInitSeq(individual, model, probInitSeq)
 		# generate Boolean model for this trial
-		output=runProbabilityBooleanSims(individual, model, probInitSeq, samples, cells)
+		output=runProbabilityBooleanSims(individual, model, samples, cells)
 		# copy new output into newSSS and initial values
 		newSSS=[]
 		for k in range(0,samples):
@@ -317,8 +316,8 @@ def simTester(model, sss, probInitSeq, simClass):
 		propSimulator.train(model)
 		#perform brute force search
 		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
-		print(individual)
-		print(bruteOut)
+		# print(individual)
+		# print(bruteOut)
 		sumindividual.append(sum(individual))
 		newindividual=[a_i - b_i for a_i, b_i in zip(individual, bruteOut)]
 		ones.append(newindividual.count(1))
@@ -335,88 +334,23 @@ def simTester(model, sss, probInitSeq, simClass):
 			for k in range(0,len(truthlines)):
 				if truthlines[k]==newlines[k]:
 					trueNodes=trueNodes+1
-				else:
-					print("incorrect pair: true then test")
-					print(truthlines[k])
-					print(newlines[k])
+				#else:
+					# print("incorrect pair: true then test")
+					# print(truthlines[k])
+					# print(newlines[k])
 			trueNodeList.append(trueNodes)
-		print(i)
-		print(trueNodeList)
+		# print(i)
+		# print(trueNodeList)
 
-
-
-
-		# trueNodeList=[]
-		# truthCounter=0
-		# output, hof=GAautoSolver(model,sss, propSimulator)
-		
-		
-	# 	bruteOut=piecewiseGASolver(model, newSSS,propSimulator)
-	# 	BF=utils.writeModel(bruteOut,model)
-	# 	print(individual)
-	# 	print(bruteOut)
-	# 	truthlines=truth.split('\n')
-	# 	newlines=BF.split('\n')
-	# 	trueNodes=0
-	# 	for k in range(0,len(truthlines)):
-	# 		if truthlines[k]==newlines[k]:
-	# 			trueNodes=trueNodes+1
-	# 		else:
-	# 			print("incorrect pair: true then test")
-	# 			print(truthlines[k])
-	# 			print(newlines[k])
-	# 	trueNodeList.append(trueNodes)
-	# 	for j in range(0,10):
-	# 		bestRun=(utils.writeModel(hof[j], model))
-	# 		if truth==bestRun:
-	# 			truthCounter[j]+=1
-	# 			break
-	# 		elif j==0:
-	# 			truthlines=truth.split('\n')
-	# 			newlines=bestRun.split('\n')
-	# 			trueNodes=0
-	# 			for k in range(0,len(truthlines)):
-	# 				if truthlines[k]==newlines[k]:
-	# 					trueNodes=trueNodes+1
-	# 				else:
-	# 					print("incorrect pair: true then test")
-	# 					print(truthlines[k])
-	# 					print(newlines[k])
-	# 			trueNodeList.append(trueNodes)
-	# 	print(trueNodeList)
-	# 	#print(avgs)
-	# 	hofs.append(hof)
-	# 	temp=[]
-	# 	for hofind in range(0,len(hof)):
-	# 		tempVal=0
-	# 		for bit in range(0,len(hof[hofind])):
-	# 			if not hof[hofind][bit]==individual[bit]:
-	# 				tempVal=tempVal+1
-	# 		temp.append(tempVal)
-	# 	hofScores.append(temp)
-	# 	truthIndividuals.append(individual)
-	# # f = open('hof_differences_'+str(nodeNoise)+str(networkNoise)+'.txt', 'w')
-	# # g = open('hof_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
-	# # h = open('truth_individuals'+str(nodeNoise)+str(networkNoise)+'.txt',  'w')
-	# # f.write(str(hofScores))
-	# # f.write('\n')
-	# # for hofy in range(0,len(hofs)):
-	# # 	g.write(str(hofs[hofy]))
-	# # 	g.write('\n')
-	# # h.write(str(truthIndividuals))
-	# # h.write('\n')
-	# # f.close()
-	# # g.close()
-	# # h.close()
-	print('# true of # trials')
-	print(truthCounter)
-	print(trials)
-	print("for the incorrects, by node")
-	print(trueNodeList)
-	print(len(truthlines))
-	print(zeros)
-	print(ones)
-	print(negones)
+	# print('# true of # trials')
+	# print(truthCounter)
+	# print(trials)
+	# print("for the incorrects, by node")
+	# print(trueNodeList)
+	# print(len(truthlines))
+	# print(zeros)
+	# print(ones)
+	# print(negones)
 
 	temp=[(zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
 	sensitivity=(sum(temp)/len(temp))
@@ -424,20 +358,33 @@ def simTester(model, sss, probInitSeq, simClass):
 	specificity=(sum(temp)/len(temp))
 	return sensitivity,specificity
 
-def variantHumanSimTestRSV():
+def uploadIFNGstimData(filename):
+	inputfile = open(filename, 'r')
+	lines = inputfile.readlines()
+	filename.split()
+
+
+def ifngStimTest(bioReplicates):
 	aliasDict={}
 	dict1={}
 	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
 	dict2={}
 	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
 	graph=nx.DiGraph()
-	LaurenList=['hsa04640','hsa04140','hsa03060','hsa04062','hsa04060','hsa03022','hsa04120','hsa03040','hsa03040','hsa04650','hsa00010','hsa04660']
-	nc.uploadKEGGcodes_hsa(LaurenList,graph,dict1,dict2)
-	nx.write_graphml(graph,'LaurenGraph.graphml')
-	graph=liu.LiuNetwork1Builder()
+
+	# read in list of codes then load them into network
+	inputfile = open('IFNG_hsa_pathways.txt', 'r')
+	lines = inputfile.readlines()
+	uploadList=[line[:-1] for line in lines]
+	nc.uploadKEGGcodes_hsa(uploadList,graph,dict1,dict2)
+	nx.write_graphml(graph,'IFNG.graphml')
+	
+	data=dict(utils.loadFpkms('Hela-C-1.count'))
+	graph=nc.simplifyNetwork(graph, data)
+	nx.write_graphml(graph,'IFNG_simplified.graphml')
 	sensitivities=[]
 	specificities=[]
-	for i in range(3):
+	for i in range(bioReplicates):
 		tempsens,tempspec=rewireSimTest(graph)
 		sensitivities.append(tempsens)
 		specificities.append(tempspec)
@@ -451,8 +398,10 @@ def rewireSimTest(graph):
 	params=sim.paramClass()
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)
-	probInitSeq=liu.liu1probInitSeqBuilder(model)
-	return simTester(model, sss, probInitSeq,'prop')
+	print(model.nodeList)
+	print(model.size)
+	print(model.individualParse)
+	return simTester(model, sss,'prop')
 
 if __name__ == '__main__':
-	variantHumanSimTestRSV()
+	ifngStimTest(10)
