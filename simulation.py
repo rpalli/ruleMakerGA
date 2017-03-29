@@ -9,9 +9,8 @@ import itertools as itertool
 import scipy.stats as regress
 
 class modelClass:
-     def __init__(self,graph, sss): 
-
-     	#remove self loops from the graph
+	def __init__(self,graph, sss): 
+		#remove self loops from the graph
 		for node in graph.nodes():
 			repeat=True
 			while(repeat):
@@ -19,7 +18,6 @@ class modelClass:
 				if node in graph.successors(node):
 					graph.remove_edge(node,node)
 					repeat=True
-		
 		#set up empty lists and dicts for later
 		evaluateNodes=[] #list of nodes that need to be compared to the steady state values (sss)
 		individualParse=[] # list of the number of shadow and nodes that contribute to each node, in order by index num
@@ -39,8 +37,8 @@ class modelClass:
 		#find all possible combinations of upstream contributors for each node. These become the shadow And nodes
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
-			if len(preds)>15: #handle case where there are too many predecessors by truncation
-				preds=preds[1:15]
+			if len(preds)>5: #handle case where there are too many predecessors by truncation
+				preds=preds[1:3]
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -55,7 +53,7 @@ class modelClass:
 					possibilities[j].remove([])
 			while [] in possibilities:
 				possibilities.remove([])
-			
+
 			# create a list of the activities of each node and store alongside the contributors to each and node for easy reference later
 			activities=[] #list to store activities of nodes (a vs i)
 			for sequence in possibilities:
@@ -108,7 +106,7 @@ class paramClass:
 		self.hofSize=10
 		self.cells=1000
 		self.samples=4
-		self.trials=5
+		self.trials=2
 		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def fuzzyAnd(num1, num2):

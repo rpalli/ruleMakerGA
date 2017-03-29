@@ -64,7 +64,7 @@ def simplifyNetwork(graph, ss):
 			flag=True
 		graph=graph.subgraph(newNodes)
 		
-		print(len(graph.nodes()))
+		#print(len(graph.nodes()))
 			
 	#  collapse straight lines
 	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1))]
@@ -86,44 +86,46 @@ def simplifyNetwork(graph, ss):
 	flag=True
 
 	#rewire nodes that have only one upstream node
-	print(len(graph.nodes()))
+	#print(len(graph.nodes()))
 	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1) ]
 	for rm in removeNodeList:
-		for after in graph.successors(rm):
-			before=graph.predecessors(rm)[0]
-			edge1=graph.get_edge_data(before,rm)['signal']
-			edge2=graph.get_edge_data(rm,after)['signal']
-			inhCount=0
-			if edge1=='i':
-				inhCount=inhCount+1
-			if edge2=='i':
-				inhCount=inhCount+1
-			if inhCount==1:
-				graph.add_edge(before,after,signal='i')
-			else:
-				graph.add_edge(before,after,signal='a')
-		graph.remove_node(rm)
+		if len(graph.predecessors(rm))==1:
+			for after in graph.successors(rm):
+				before=graph.predecessors(rm)[0]
+				edge1=graph.get_edge_data(before,rm)['signal']
+				edge2=graph.get_edge_data(rm,after)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(before,after,signal='i')
+				else:
+					graph.add_edge(before,after,signal='a')
+			graph.remove_node(rm)
 	flag=True
 
 	#rewire nodes that have only one downstream node
-	print(len(graph.nodes()))
+	#print(len(graph.nodes()))
 	removeNodeList= [x for x in graph.nodes() if (len(graph.successors(x))==1) ]
 	for rm in removeNodeList:
-		for start in graph.predecessors(rm):
-			finish=graph.successors(rm)[0]
-			edge1=graph.get_edge_data(start,rm)['signal']
-			edge2=graph.get_edge_data(rm,finish)['signal']
-			inhCount=0
-			if edge1=='i':
-				inhCount=inhCount+1
-			if edge2=='i':
-				inhCount=inhCount+1
-			if inhCount==1:
-				graph.add_edge(start,finish,signal='i')
-			else:
-				graph.add_edge(start,finish,signal='a')
-		graph.remove_node(rm)
-	print(graph.nodes())
+		if len(graph.successors(x))==1:
+			for start in graph.predecessors(rm):
+				finish=graph.successors(rm)[0]
+				edge1=graph.get_edge_data(start,rm)['signal']
+				edge2=graph.get_edge_data(rm,finish)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(start,finish,signal='i')
+				else:
+					graph.add_edge(start,finish,signal='a')
+			graph.remove_node(rm)
+	#print(graph.nodes())
 	flag=True
 	return graph
 
@@ -134,7 +136,7 @@ def uploadKEGGcodes_hsa(codelist, graph, hsaDict, KEGGdict):
 		url=urllib2.urlopen('http://rest.kegg.jp/get/'+code+'/kgml')
 		text=url.readlines()
 		readKEGGhsa(text, graph, hsaDict, KEGGdict)
-		print(code)
+		#print(code)
 		#print(graph.nodes())
 
 def readKEGGhsa(lines, graph, hsaDict, KEGGdict):
@@ -569,7 +571,7 @@ def read_biopax(lines, graph):
 
 			#
 			if biopax_class in ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction']:
-				print "ambiguous direction relationship found"
+				print("ambiguous direction relationship found")
 				participants = biopax_object.find_all('participant')
 				for p1 in participants:
 					resource = p1.get('rdf:resource')
@@ -773,7 +775,7 @@ def read_biopax_dev(lines, graph):
 
 			#
 			if biopax_class in ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction']:
-				print "ambiguous direction relationship found"
+				print("ambiguous direction relationship found")
 				participants = biopax_object.find_all('participant')
 				for p1 in participants:
 					resource = p1.get('rdf:resource')
@@ -873,7 +875,7 @@ def uploadKEGGcodes(codelist, graph, KEGGdict):
 		url=urllib2.urlopen('http://rest.kegg.jp/get/'+code+'/kgml')
 		text=url.readlines()
 		readKEGG(text, graph, KEGGdict)
-		print(code)
+		#print(code)
 		#print(graph.nodes())
 
 # PC = Pathway Commons

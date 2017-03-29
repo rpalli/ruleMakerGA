@@ -1,4 +1,4 @@
-
+import pickle
 from deap import base
 from deap import creator
 from deap import gp
@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import liu_networks as liu
 from random import shuffle
 import math as math
+from sets import Set
 class probInitSeqClass:
 	def __init__(self):
 		self.startNodes=[]
@@ -104,6 +105,10 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells):
 			cellArray.append(vals)
 		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
 	return samples
+
+def sampler(individual, model, sampleNum, cells)
+
+
 
 def genPBNInitValues(individual, model,sampleProbs):
 	simulator=sim.simulatorClass('fuzzy')
@@ -242,24 +247,82 @@ def bruteForceSearchModel(model, sss1, simulator):
 		bestList.append(best)
 		# print(model.nodeList[i])
 		# print(currentDev)
-
+		#print("completed node")
+		#print(i)
 	return [item for sublist in bestList for item in sublist]
+
+def compareIndividualsNodeWise(truthList, testList, model):
+	nodesensitivity=[]
+	nodespecificity=[]
+	netOnes=[]
+	netZeros=[]
+	netNegOnes=[]
+	for node in range(len(model.nodeList)):
+		ones=[]
+		zeros=[]
+		negones=[]
+		# get indices to extract individual for this node
+		if node==len(model.nodeList)-1:
+			end=len(model.nodeList)
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		sumindividual=[]
+		#loop over individuals provided and calculate relevant values
+		for i in range(len(truthList)):
+			truth= truthList[i][start:end]
+			test= testList[i][start:end]
+			sumindividual.append(sum(truth))
+			newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
+			ones.append(newindividual.count(1))
+			zeros.append(newindividual.count(0))
+			negones.append(newindividual.count(-1))
+		# append node-wise breakdowns to list of breakdowns for the model as a whole
+		netOnes.append(sum(ones))
+		netZeros.append(sum(zeros))
+		netNegOnes.append(sum(negones))
+		
+		# calculate sensitivity and specificity for the node
+		temp=[0 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
+		sensitivity=(sum(temp)/len(temp))
+		temp=[0 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+		specificity=(sum(temp)/len(temp))
+
+
+		# add to list of sensitivity and specificity by node
+		nodesensitivity.append(sensitivity)
+		nodespecificity.append(specificity)
+	#calculate sensitivity and specificity on the network as a whole
+	ones=[]
+	zeros=[]
+	negones=[]
+	for i in range(len(truthList)):
+		truth= truthList[i]
+		test= testList[i]
+		sumindividual.append(sum(truth))
+		newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
+		ones.append(newindividual.count(1))
+		zeros.append(newindividual.count(0))
+		negones.append(newindividual.count(-1))
+	temp=[0 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
+	sensitivity=(sum(temp)/len(temp))
+	temp=[0 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+	specificity=(sum(temp)/len(temp))
+
+	return sensitivity, specificity, nodesensitivity, nodespecificity
+
 
 def simTester(model, sss, simClass):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
 	#samples is the number of different initial conditions to provide per trial
 	#graph specifies the network we are testing. 
-	#probInitSeq gives the order in which the network should be built... 
-	# probInitSeq should contain all nodes for a totally random setup. 
 
 	# set up empty lists and call parameters
 	params=sim.paramClass()
 	samples=params.samples
 	trials=params.trials
 	cells=params.cells
-	avgSSEs=[]
-	hofs=[]
 	truthIndividuals=[]
 	truthAvgs=[]
 	hofScores=[]
@@ -270,7 +333,8 @@ def simTester(model, sss, simClass):
 	negones=[]
 	truthCounter=0
 	sumindividual=[]
-	
+	truthList= [] 
+	testList =[]
 	# loop over number of times we want to generate fake data and perform sequence of events
 	for i in range(0,trials):
 
@@ -316,53 +380,90 @@ def simTester(model, sss, simClass):
 		propSimulator.train(model)
 		#perform brute force search
 		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
-		# print(individual)
-		# print(bruteOut)
-		sumindividual.append(sum(individual))
-		newindividual=[a_i - b_i for a_i, b_i in zip(individual, bruteOut)]
-		ones.append(newindividual.count(1))
-		zeros.append(newindividual.count(0))
-		negones.append(newindividual.count(-1))
-		truth=utils.writeModel(individual, model)
-		BF=utils.writeModel(bruteOut,model)
-		if truth==BF:
-			truthCounter=truthCounter+1
+		truthList.append(individual)
+		testList.append(bruteOut)
+		print(individual)
+		print(bruteOut)
+	tuple1=compareIndividualsNodeWise(truthList, testList, model)
+	
+	sensitivities=[]
+	specificities=[]
+	inEdgeNums=[]
+	# run correction that simplifies truth rules
+	TPsum=0
+	TNsum=0
+	FNsum=0
+	FPsum=0
+	newtruths=[]
+	for k in range(len(truthList)):
+		newtruths.append([])
+	for node in range(0,len(model.nodeList)):
+		print(node)
+		FP=0
+		TP=0
+		TN=0
+		FN=0
+		if node==(len(model.nodeList)-1):
+			end=len(truthList[0])-1
 		else:
-			truthlines=truth.split('\n')
-			newlines=BF.split('\n')
-			trueNodes=0
-			for k in range(0,len(truthlines)):
-				if truthlines[k]==newlines[k]:
-					trueNodes=trueNodes+1
-				#else:
-					# print("incorrect pair: true then test")
-					# print(truthlines[k])
-					# print(newlines[k])
-			trueNodeList.append(trueNodes)
-		# print(i)
-		# print(trueNodeList)
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		andNodeList=model.andNodeList[node]
+		inEdges=[]
+		for lister in andNodeList:
+			inEdges.append(set(lister))
+		for k in range(len(truthList)):
+			truth=truthList[k][start:end]
+			test= testList[k][start:end]
+			for i in range(len(truth)):
+				if truth[i]==1:
+					for j in range(len(truth)):
+						if truth[j]==1:
+							if inEdges[i].issubset(inEdges[j]):
+								truth[j]=0
+			newtruths[k].extend(truth)
+			truthSet=Set([])
+			testSet=Set([])
+			baseSet=Set([])
+			for i in range(len(truth)):
+				if truth[i]==1:
+					truthSet=truthSet.union(inEdges[i])
+				if test[i]==1:
+					testSet=testSet.union(inEdges[i])	
+				baseSet=baseSet.union(inEdges[i])
+			FP+=1.*len(testSet.difference(truthSet))
+			TP+=1.*len(testSet.intersection(truthSet))
+			TN+=1.*(len(baseSet)-len(truthSet))
+			FN+=1.*len(truthSet.difference(testSet))
+		if len(truthSet)>0:
+			sensitivity=TP/(len(truthSet))
+		else:
+			sensitivity=0
+		if TN+FP>0:
+			specificity=TN/(TN+FP)
+		else:
+			specificity=0
+		sensitivities.append(sensitivity)
+		specificities.append(specificity)
+		TPsum+=TP
+		TNsum+=TN
+		FNsum+=FN
+		FPsum+=FP
+		inEdgeNums.append(len(baseSet))
 
-	# print('# true of # trials')
-	# print(truthCounter)
-	# print(trials)
-	# print("for the incorrects, by node")
-	# print(trueNodeList)
-	# print(len(truthlines))
-	# print(zeros)
-	# print(ones)
-	# print(negones)
+	tuple2=compareIndividualsNodeWise(truthList, testList, model)
+	if (TPsum+FNsum)>0:
+		sensitivity=TPsum/(TPsum+FNsum)
+	else:
+		sensitivity=0
+	if (FPsum+TNsum)>0:
+		specificity= TNsum/(FPsum+TNsum)
+	else:
+		specificity=0
+	tuple3= (sensitivity, specificity, sensitivities, specificities)
 
-	temp=[(zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
-	sensitivity=(sum(temp)/len(temp))
-	temp=[(1.*len(individual)-sumindividual[i]-negones[i])/(len(individual)-sumindividual[i]) for i in range(0,len(ones))]
-	specificity=(sum(temp)/len(temp))
-	return sensitivity,specificity
 
-def uploadIFNGstimData(filename):
-	inputfile = open(filename, 'r')
-	lines = inputfile.readlines()
-	filename.split()
-
+	return tuple1, tuple2, tuple3, inEdgeNums,  [testList, truthList,  newtruths]
 
 def ifngStimTest(bioReplicates):
 	aliasDict={}
@@ -370,38 +471,96 @@ def ifngStimTest(bioReplicates):
 	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
 	dict2={}
 	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
-	graph=nx.DiGraph()
+	
 
 	# read in list of codes then load them into network
-	inputfile = open('IFNG_hsa_pathways.txt', 'r')
+	inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
 	lines = inputfile.readlines()
-	uploadList=[line[:-1] for line in lines]
-	nc.uploadKEGGcodes_hsa(uploadList,graph,dict1,dict2)
-	nx.write_graphml(graph,'IFNG.graphml')
-	
 	data=dict(utils.loadFpkms('Hela-C-1.count'))
-	graph=nc.simplifyNetwork(graph, data)
-	nx.write_graphml(graph,'IFNG_simplified.graphml')
 	sensitivities=[]
 	specificities=[]
-	for i in range(bioReplicates):
-		tempsens,tempspec=rewireSimTest(graph)
-		sensitivities.append(tempsens)
-		specificities.append(tempspec)
-	sensitivity=sum(sensitivities)/(1.*len(sensitivities))
-	specificity=sum(specificities)/(1.*len(specificities))
-	print(sensitivity)
-	print(specificity)
+	lines.pop(0)
+	nodesensitivities=[[],[],[]]
+	nodespecificities=[[],[],[]]
+	truthholder=[]
+	edgeDegree=[]
+	lines.pop(0)
+	for code in lines:
+		graph=nx.DiGraph()
+		coder=str('ko'+code[:-1])
+		nc.uploadKEGGcodes([coder], graph, dict2)
+		coder=str('hsa'+code[:-1])
+		# nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+		if(len(graph.edges())>1):
+			graph=nc.simplifyNetwork(graph, data)
+		
+		if(len(graph.edges())>1):
+			print(coder)
+			print(len(graph.edges()))
+			
+			nx.write_graphml(graph,coder+'.graphml')
+			tempsensitivities=[[],[],[]]
+			tempspecificities=[[],[],[]]
+			truthlists=[[],[],[]]
+			for i in range(bioReplicates):
+				tuple1, tuple2, tuple3, inEdgeNums, truthlisttemp=rewireSimTest(graph)
+				sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
+				sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
+				sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
+				tempsensitivities[0].append(sensitivity1)
+				tempsensitivities[1].append(sensitivity2)
+				tempsensitivities[2].append(sensitivity3)
+				tempspecificities[0].append(specificity1)
+				tempspecificities[1].append(specificity2)
+				tempspecificities[2].append(specificity3)
+				nodesensitivities[0].extend(nodesensitivity1)
+				nodesensitivities[1].extend(nodesensitivity2)
+				nodesensitivities[2].extend(nodesensitivity3)
+				nodespecificities[0].extend(nodespecificity1)
+				nodespecificities[1].extend(nodespecificity2)
+				nodespecificities[2].extend(nodespecificity3)
+				edgeDegree.extend(inEdgeNums)
+				truthlists[0].extend(truthlisttemp[0])
+				truthlists[1].extend(truthlisttemp[1])
+				truthlists[2].extend(truthlisttemp[2])
+			sensitivity=[sum(tempsensitivities[0])/len(tempsensitivities[0]),sum(tempsensitivities[1])/len(tempsensitivities[1]),sum(tempsensitivities[2])/len(tempsensitivities[2])]
+			specificity=[sum(tempspecificities[0])/len(tempspecificities[0]),sum(tempspecificities[1])/len(tempspecificities[1]),sum(tempspecificities[2])/len(tempspecificities[2])]
+			truthholder.append(truthlists)
+			specificities.append(specificity)
+			sensitivities.append(sensitivity)
+			print(sensitivity)
+			print(specificity)
+			print(nodesensitivities)
+			print(nodespecificities)
+	nodeLookup={}
+	for number in edgeDegree:
+		nodeLookup[number]=[[],[],[],[],[],[]]
+	for i in range(len(edgeDegree)):
+		nodeLookup[edgeDegree[i]][0]=nodesensitivities[0][i]
+		nodeLookup[edgeDegree[i]][1]=nodesensitivities[1][i]
+		nodeLookup[edgeDegree[i]][2]=nodesensitivities[2][i]
+		nodeLookup[edgeDegree[i]][3]=nodespecificities[0][i]
+		nodeLookup[edgeDegree[i]][4]=nodespecificities[1][i]
+		nodeLookup[edgeDegree[i]][5]=nodespecificities[2][i]
+	finalNodeData=[]
+	for key in nodeLookup.keys():
+		finalNodeData.append([key].extend([sum(lister)/len(lister) for lister in nodeLookup[key]]))
+	for line in finalNodeData:
+		print(line)
+	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
+	pickle.dump( [sensitivities,specificities], open( "node_by_node_data.pickle", "wb" ) )
+	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
+
 
 def rewireSimTest(graph):
 	graph2=nc.rewireNetwork(graph)
 	params=sim.paramClass()
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)
-	print(model.nodeList)
-	print(model.size)
-	print(model.individualParse)
+	#print(model.nodeList)
+	#print(model.size)
+	#print(model.individualParse)
 	return simTester(model, sss,'prop')
 
 if __name__ == '__main__':
-	ifngStimTest(10)
+	ifngStimTest(1)
