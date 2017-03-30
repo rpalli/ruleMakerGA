@@ -5,6 +5,7 @@ from deap import gp
 from deap import tools
 from deap import algorithms as algo
 from random import random
+from random import seed
 import utils as utils
 import simulation as sim
 import networkx as nx
@@ -17,6 +18,7 @@ import liu_networks as liu
 from random import shuffle
 import math as math
 from sets import Set
+from joblib import Parallel, delayed
 class probInitSeqClass:
 	def __init__(self):
 		self.startNodes=[]
@@ -88,34 +90,38 @@ def evaluate(individual, params, model, simulator, sss):
 # to set up then iterating using strict Boolean modeling. 
 def runProbabilityBooleanSims(individual, model, sampleNum, cells):
 	samples=[]
-	simulator=sim.simulatorClass('fuzzy')
-	params=sim.paramClass()
+	seeds=[]
 	for i in range(0,sampleNum):
-		cellArray=[]
-		sampleProbs=[]
-		for j in range(0,len(model.nodeList)):
-			sampleProbs.append(random())
-		for j in range(0,cells):
-			# shuffle nodes to be initially called.... 
-			#simulations that are truly random starting states should have all nodes added to this list
-			#get initial values for all nodes
-			initValues=genPBNInitValues(individual, model,sampleProbs)
-			# run Boolean simulation with initial values and append
-			vals, nums=sim.runModel(individual, model, simulator, initValues)
-			cellArray.append(vals)
-		samples.append([sum(col) / float(cells) for col in zip(*cellArray)])
+		seeds.append(random)
+	samples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
+	print(samples)
 	return samples
+	
 
-def sampler(individual, model, sampleNum, cells)
-
-
-
+def sampler(individual, model, cells, seeder):
+	seed(seeder)
+	cellArray=[]
+	sampleProbs=[]
+	simulator=sim.simulatorClass('bool')
+	params=sim.paramClass()
+	for j in range(0,len(model.nodeList)):
+		sampleProbs.append(random())
+	#samples= Parallel(n_jobs=8)(delayed(sampler)(individual, model, cells, randos[i]) for i in range(sampleNum))
+	for j in range(0,cells):
+		# shuffle nodes to be initially called.... 
+		#simulations that are truly random starting states should have all nodes added to this list
+		#get initial values for all nodes
+		initValues=genPBNInitValues(individual, model,sampleProbs)
+		# run Boolean simulation with initial values and append
+		vals, nums=sim.runModel(individual, model, simulator, initValues)
+		cellArray.append(vals)
+	return [sum(col) / float(cells) for col in zip(*cellArray)]
 def genPBNInitValues(individual, model,sampleProbs):
-	simulator=sim.simulatorClass('fuzzy')
-	initValues=[0 for x in range(0,len(model.nodeList))]
+	initValues=[False for x in range(0,len(model.nodeList))]
 	for node in range(0,len(sampleProbs)):
-		if random()<sampleProbs[node]:
-			initValues[node]=1 
+		randNum=random()
+		if randNum<sampleProbs[node]:
+			initValues[node]=True
 	return initValues
 
 def updateInitSeq(individual, model, probInitSeq):
@@ -206,7 +212,6 @@ def piecewiseGASolver(model, sss, propSimulator):
 
 #exhaustively search boolean networks for best option going node by node for rules
 def bruteForceSearchModel(model, sss1, simulator):
-	params=sim.paramClass()
 	bestList=[]
 	initValueList=[]
 	for j in range(0,len(sss1)):
@@ -220,36 +225,33 @@ def bruteForceSearchModel(model, sss1, simulator):
 				initValueList[j].append(0.5)
 	#print(model.initValueList)
 	model.initValueList=initValueList
-	for i in range(0,len(model.nodeList)):
-		# print(model.nodeList[i])
-		# print(model.individualParse[i])
-		currentDev=10000*len(sss1)
-		best=[]
-		if model.andLenList[i]>0:
-			if model.andLenList[i]<10:
-				checkRange=2**(model.andLenList[i])
-			else:
-				checkRange=3*(model.andLenList[i])
-			for j in range(1,checkRange):
-				bits=[]
-				bits=utils.bitList(j,model.andLenList[i] )
-				deviation=0
-				for steadyStateNum in range(0,len(model.initValueList)):
-					derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
-					deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
-				# print(utils.writeBruteNode(i,bits,model))
-				# print(bits)
-				# print(deviation)
-				if(deviation<currentDev):
-					# print("best")
-					best=bits
-					currentDev=deviation	
-		bestList.append(best)
-		# print(model.nodeList[i])
-		# print(currentDev)
-		#print("completed node")
-		#print(i)
+	bestlist=Parallel(n_jobs=7)(delayed(singleNodeBF)(model, sss1, simulator, i) for i in range(len(model.nodeList)))
 	return [item for sublist in bestList for item in sublist]
+
+def singleNodeBF(model, sss1, simulator, i):
+	currentDev=10000*len(sss1)
+	best=[]
+	if model.andLenList[i]>0:
+		if model.andLenList[i]<17:
+			checkRange=2**(model.andLenList[i])
+		else:
+			checkRange=2**17
+		for j in range(1,checkRange):
+			bits=[]
+			bits=utils.bitList(j,model.andLenList[i] )
+			deviation=0
+			for steadyStateNum in range(0,len(model.initValueList)):
+				derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
+				deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
+			# print(utils.writeBruteNode(i,bits,model))
+			# print(bits)
+			# print(deviation)
+			if(deviation<currentDev):
+				# print("best")
+				best=bits
+				currentDev=deviation	
+	return best
+
 
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
@@ -312,6 +314,34 @@ def compareIndividualsNodeWise(truthList, testList, model):
 	return sensitivity, specificity, nodesensitivity, nodespecificity
 
 
+
+def genBits(model):
+	startInd=utils.genRandBits(model.size)
+	for node in range(0,len(model.nodeList)):
+		if node==(len(model.nodeList)-1):
+			end=len(startInd)-1
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		truth=startInd[start:end]
+		if len(truth)>1:
+			for i in range(len(truth)):
+				if random()<(1./len(truth)):
+					truth[i]=1
+				else:
+					truth[i]=0
+			counter=0
+			while sum(truth)>5 and counter < 100000:
+				indices = [i for i in range(len(truth)) if truth[i] == 1]
+				chosen=math.floor(random()*len(indices))
+				truth[indices[int(chosen)]]=0
+				counter+=1
+			startInd[start:end]=truth
+		elif len(truth)==1:
+			truth[0]=1
+			startInd[start:end]=truth
+	return startInd
+		
 def simTester(model, sss, simClass):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
@@ -339,7 +369,7 @@ def simTester(model, sss, simClass):
 	for i in range(0,trials):
 
 		#generate random set of logic rules to start with
-		individual=utils.genRandBits(model.size)
+		individual=genBits(model)
 		for node in range(0,len(model.nodeList)):
 			if model.andLenList[node]>0:
 				if node==len(model.nodeList)-1:
@@ -382,8 +412,6 @@ def simTester(model, sss, simClass):
 		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
 		truthList.append(individual)
 		testList.append(bruteOut)
-		print(individual)
-		print(bruteOut)
 	tuple1=compareIndividualsNodeWise(truthList, testList, model)
 	
 	sensitivities=[]
@@ -490,7 +518,7 @@ def ifngStimTest(bioReplicates):
 		coder=str('ko'+code[:-1])
 		nc.uploadKEGGcodes([coder], graph, dict2)
 		coder=str('hsa'+code[:-1])
-		# nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+		nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
 		if(len(graph.edges())>1):
 			graph=nc.simplifyNetwork(graph, data)
 		
@@ -536,17 +564,18 @@ def ifngStimTest(bioReplicates):
 	for number in edgeDegree:
 		nodeLookup[number]=[[],[],[],[],[],[]]
 	for i in range(len(edgeDegree)):
-		nodeLookup[edgeDegree[i]][0]=nodesensitivities[0][i]
-		nodeLookup[edgeDegree[i]][1]=nodesensitivities[1][i]
-		nodeLookup[edgeDegree[i]][2]=nodesensitivities[2][i]
-		nodeLookup[edgeDegree[i]][3]=nodespecificities[0][i]
-		nodeLookup[edgeDegree[i]][4]=nodespecificities[1][i]
-		nodeLookup[edgeDegree[i]][5]=nodespecificities[2][i]
+		nodeLookup[edgeDegree[i]][0].append(nodesensitivities[0][i])
+		nodeLookup[edgeDegree[i]][1].append(nodesensitivities[1][i])
+		nodeLookup[edgeDegree[i]][2].append(nodesensitivities[2][i])
+		nodeLookup[edgeDegree[i]][3].append(nodespecificities[0][i])
+		nodeLookup[edgeDegree[i]][4].append(nodespecificities[1][i])
+		nodeLookup[edgeDegree[i]][5].append(nodespecificities[2][i])
 	finalNodeData=[]
-	for key in nodeLookup.keys():
-		finalNodeData.append([key].extend([sum(lister)/len(lister) for lister in nodeLookup[key]]))
 	for line in finalNodeData:
 		print(line)
+	for key in nodeLookup.keys():
+		finalNodeData.append([key].extend([sum(lister)/len(lister) for lister in nodeLookup[key]]))
+
 	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
 	pickle.dump( [sensitivities,specificities], open( "node_by_node_data.pickle", "wb" ) )
 	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )

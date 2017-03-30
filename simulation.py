@@ -38,7 +38,7 @@ class modelClass:
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
 			if len(preds)>5: #handle case where there are too many predecessors by truncation
-				preds=preds[1:3]
+				preds=preds[1:5]
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -86,7 +86,6 @@ class modelClass:
 		self.nodeList=nodeList #define the node list simply as the nodes in the graph. 
 		self.nodeDict=nodeDict #identifies names of nodes with their index in the node list.. provide name, get index
 		self.initValueList=initValueList #puts an empty and correctly structured initValueList together for later population. 
-
 		
 class paramClass:
 	def __init__(self):     
@@ -105,10 +104,19 @@ class paramClass:
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
-		self.samples=4
-		self.trials=2
+		self.samples=3
+		self.trials=1
 		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
+def boolAnd(num1, num2):
+	return num1 and num2
+def boolOr(num1, num2):
+	return num1 or num2
+def boolInv(x, inverter): #inverts if necessary for Boolean values
+	if inverter:
+		return not x
+	else:
+		return x
 def fuzzyAnd(num1, num2):
 	return min(num1,num2)
 def fuzzyOr(num1, num2):
@@ -136,12 +144,22 @@ class simulatorClass:
 		if simTyping=='prop':
 			self.And=propAnd
 			self.Or=propOr
+			self.Inv=Inv
 			self.corrMat={}
 			self.switch=1			
 			self.simSteps=1
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
+			self.Inv=Inv
 			self.Or=fuzzyOr
+			self.corrMat=0
+			self.switch=0
+			params=paramClass()
+			self.simSteps= params.simSteps
+		if simTyping=='bool':
+			self.And=boolAnd
+			self.Or=boolOr
+			self.Inv=boolInv
 			self.corrMat=0
 			self.switch=0
 			params=paramClass()
@@ -149,6 +167,7 @@ class simulatorClass:
 		if simTyping=='propNaive':
 			self.And=naiveAnd
 			self.Or=naiveOr
+			self.Inv=Inv
 			self.corrMat=0
 			self.switch=0
 			params=paramClass()
@@ -212,7 +231,7 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 		#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
 		if nodeIndividual[0]==1:
 			#if only one input, then set to that number
-			value=Inv(oldValue[andNodes[0][0]],andNodeInvertList[0][0])
+			value=simulator.Inv(oldValue[andNodes[0][0]],andNodeInvertList[0][0])
 		else:
 			value=oldValue[currentNode] #if no inputs, maintain value
 		return value
@@ -230,7 +249,7 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 					# calculate value of first then use and to append rest in list of predecessors
 					newval=Inv(oldValue[andNodes[andindex][0]],andNodeInvertList[andindex][0])
 					for addnode in range(1,len(andNodes[andindex])):
-						newval=simulator.And(newval,Inv(andNodes[andindex][addnode],andNodeInvertList[andindex][addnode]))
+						newval=simulator.And(newval,simulator.Inv(oldValue[andNodes[andindex][addnode]],andNodeInvertList[andindex][addnode]))
 					orset.append(newval)
 			#combine the shadow and nodes with or operations
 			newval=orset.pop()
@@ -323,6 +342,7 @@ def runModel(individual, model, simulator, initValues):
 	#iterate over number of steps necessary
 	for step in range(0,simulator.simSteps):
 		oldValue=list(newValue)
+
 		if params.async: #shuffle if async
 			shuffle(seq)
 		for i in range(0,len(model.nodeList)):
