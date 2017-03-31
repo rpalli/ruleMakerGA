@@ -94,7 +94,12 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells):
 	for i in range(0,sampleNum):
 		seeds.append(random)
 	samples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
-	print(samples)
+	# counter=0
+	# for sample in range(len(samples)):
+	# 	if sum(samples(sample))==0:
+	# 		temp=samples.pop(sample) 
+	# newSamples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
+	# print(samples)
 	return samples
 	
 
@@ -116,6 +121,7 @@ def sampler(individual, model, cells, seeder):
 		vals, nums=sim.runModel(individual, model, simulator, initValues)
 		cellArray.append(vals)
 	return [sum(col) / float(cells) for col in zip(*cellArray)]
+
 def genPBNInitValues(individual, model,sampleProbs):
 	initValues=[False for x in range(0,len(model.nodeList))]
 	for node in range(0,len(sampleProbs)):
@@ -426,7 +432,6 @@ def simTester(model, sss, simClass):
 	for k in range(len(truthList)):
 		newtruths.append([])
 	for node in range(0,len(model.nodeList)):
-		print(node)
 		FP=0
 		TP=0
 		TN=0
@@ -592,4 +597,4 @@ def rewireSimTest(graph):
 	return simTester(model, sss,'prop')
 
 if __name__ == '__main__':
-	ifngStimTest(1)
+	ifngStimTest(10)

@@ -37,8 +37,8 @@ class modelClass:
 		#find all possible combinations of upstream contributors for each node. These become the shadow And nodes
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
-			if len(preds)>5: #handle case where there are too many predecessors by truncation
-				preds=preds[1:5]
+			if len(preds)>15: #handle case where there are too many predecessors by truncation
+				preds=preds[1:15]
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -104,8 +104,8 @@ class paramClass:
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
-		self.samples=3
-		self.trials=1
+		self.samples=5
+		self.trials=10
 		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def boolAnd(num1, num2):
