@@ -241,10 +241,10 @@ def singleNodeBF(model, sss1, simulator, i):
 	if model.andLenList[i]>0:
 		currentDev=10000*len(sss1)
 		best=utils.bitList(0,model.andLenList[i])
-		if model.andLenList[i]<11:
+		if model.andLenList[i]<12:
 			checkRange=2**(model.andLenList[i])
 		else:
-			checkRange=2**(11)
+			checkRange=2**(12)
 		for j in range(1,checkRange):
 			bits=[]
 			bits=utils.bitList(j,model.andLenList[i] )
@@ -531,6 +531,8 @@ def ifngStimTest(bioReplicates):
 	data=dict(utils.loadFpkms('Hela-C-1.count'))
 	sensitivities=[]
 	specificities=[]
+	specificityStds=[]
+	sensitivityStds=[]
 	lines.pop(0)
 	nodesensitivities=[[],[],[]]
 	nodespecificities=[[],[],[]]
@@ -584,12 +586,19 @@ def ifngStimTest(bioReplicates):
 				if len(tempspecificities[i])==0:
 					tempspecificities[i].append(0.)
 			sensitivity=[sum(tempsensitivities[0])/len(tempsensitivities[0]),sum(tempsensitivities[1])/len(tempsensitivities[1]),sum(tempsensitivities[2])/len(tempsensitivities[2])]
+			sensitivityStd=[numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),numpy.std(tempsensitivities[2])/len(tempsensitivities[2])]
 			specificity=[sum(tempspecificities[0])/len(tempspecificities[0]),sum(tempspecificities[1])/len(tempspecificities[1]),sum(tempspecificities[2])/len(tempspecificities[2])]
+			specificityStd=[numpy.std(tempspecificities[0])/len(tempspecificities[0]),numpy.std(tempspecificities[1])/len(tempspecificities[1]),numpy.std(tempspecificities[2])/len(tempspecificities[2])]
+
 			truthholder.append(truthlists)
 			specificities.append(specificity)
 			sensitivities.append(sensitivity)
+			specificityStds.append(specificityStd)
+			sensitivityStds.append(sensitivityStd)
 			print(sensitivity)
+			print(sensitivityStd)
 			print(specificity)
+			print(specificityStd)
 			print(nodesensitivities)
 			print(nodespecificities)
 	nodeLookup={}
@@ -603,19 +612,25 @@ def ifngStimTest(bioReplicates):
 		nodeLookup[edgeDegree[i]][4].append(nodespecificities[1][i])
 		nodeLookup[edgeDegree[i]][5].append(nodespecificities[2][i])
 	finalNodeData=[]
+	finalExtendData=[]
 	for key in nodeLookup.keys():
 		templisting=[]
+		tempExtended=[]
 		for lister in nodeLookup[key]:
 			newlist=filter(lambda a: a != 100, lister)
+			tempExtended.append(newlist)
 			if len(newlist)==0:
 				templisting.append(0.)
 			else:
 				templisting.append(sum(newlist)/len(newlist))
 		finalNodeData.append(templisting)
+		finalExtendData.append(tempExtended)
 	print(nodeLookup.keys())
 	print(finalNodeData)
+	print(finalExtendData)
 	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
-	pickle.dump( [sensitivities,specificities], open( "network_by_network_data.pickle", "wb" ) )
+	pickle.dump( finalExtendData, open( "extended_node_by_node_data.pickle", "wb" ) )
+	pickle.dump( [sensitivities,sensitivityStds,specificities, specificityStds], open( "network_by_network_data.pickle", "wb" ) )
 	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
 	print(sensitivities)
 	print(specificities)
@@ -633,5 +648,5 @@ def rewireSimTest(graph):
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(10)
+	ifngStimTest(5)
 	print("--- %s seconds ---" % (time.time() - start_time))
