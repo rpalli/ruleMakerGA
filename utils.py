@@ -10,7 +10,7 @@ def genRandBits(individualLength): #makes a random bitstring
 def bitList(n, x):
 	templist=[1 if digit=='1' else 0 for digit in bin(n)[2:]]
 	while len(templist)<x:
-		templist.insert(0,0)
+		templist.append(0)
 	return templist
 
 def loadFpkms(filename): #loads data from fpkms tab delimited csv file

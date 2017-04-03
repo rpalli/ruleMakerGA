@@ -19,6 +19,8 @@ from random import shuffle
 import math as math
 from sets import Set
 from joblib import Parallel, delayed
+
+
 class probInitSeqClass:
 	def __init__(self):
 		self.startNodes=[]
@@ -93,7 +95,7 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells):
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random)
-	samples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
+	samples=Parallel(n_jobs=min(6,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
 	# counter=0
 	# for sample in range(len(samples)):
 	# 	if sum(samples(sample))==0:
@@ -197,6 +199,7 @@ def evalNode(individual, currentNode, params, model, simulator, sss):
 		return totalNodes-4*math.log(likelihood),
 	else:
 		return summer,
+
 def piecewiseGASolver(model, sss, propSimulator):
 	params=sim.paramClass()
 	# reset simSteps to 1 so we just see first step in Sim...
@@ -218,7 +221,6 @@ def piecewiseGASolver(model, sss, propSimulator):
 
 #exhaustively search boolean networks for best option going node by node for rules
 def bruteForceSearchModel(model, sss1, simulator):
-	bestList=[]
 	initValueList=[]
 	for j in range(0,len(sss1)):
 		initValueList.append([])
@@ -231,17 +233,18 @@ def bruteForceSearchModel(model, sss1, simulator):
 				initValueList[j].append(0.5)
 	#print(model.initValueList)
 	model.initValueList=initValueList
-	bestlist=Parallel(n_jobs=7)(delayed(singleNodeBF)(model, sss1, simulator, i) for i in range(len(model.nodeList)))
-	return [item for sublist in bestList for item in sublist]
+	bestlist=Parallel(n_jobs=6)(delayed(singleNodeBF)(model, sss1, simulator, i) for i in range(len(model.nodeList)))
+	return [item for sublist in bestlist for item in sublist]
 
 def singleNodeBF(model, sss1, simulator, i):
-	currentDev=10000*len(sss1)
 	best=[]
 	if model.andLenList[i]>0:
-		if model.andLenList[i]<17:
+		currentDev=10000*len(sss1)
+		best=utils.bitList(0,model.andLenList[i])
+		if model.andLenList[i]<11:
 			checkRange=2**(model.andLenList[i])
 		else:
-			checkRange=2**17
+			checkRange=2**(11)
 		for j in range(1,checkRange):
 			bits=[]
 			bits=utils.bitList(j,model.andLenList[i] )
@@ -249,13 +252,9 @@ def singleNodeBF(model, sss1, simulator, i):
 			for steadyStateNum in range(0,len(model.initValueList)):
 				derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
 				deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
-			# print(utils.writeBruteNode(i,bits,model))
-			# print(bits)
-			# print(deviation)
 			if(deviation<currentDev):
-				# print("best")
 				best=bits
-				currentDev=deviation	
+				currentDev=deviation
 	return best
 
 
@@ -291,10 +290,18 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		netNegOnes.append(sum(negones))
 		
 		# calculate sensitivity and specificity for the node
-		temp=[0 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
-		sensitivity=(sum(temp)/len(temp))
-		temp=[0 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
-		specificity=(sum(temp)/len(temp))
+		temp=[100 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
+		temp=filter(lambda a: a != 100, temp)
+		if len(temp)==0:
+			sensitivity=100
+		else:
+			sensitivity=(sum(temp)/len(temp))
+		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+		temp=filter(lambda a: a != 100, temp)
+		if len(temp)==0:
+			specificity=100
+		else:
+			specificity=(sum(temp)/len(temp))
 
 
 		# add to list of sensitivity and specificity by node
@@ -312,11 +319,18 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		ones.append(newindividual.count(1))
 		zeros.append(newindividual.count(0))
 		negones.append(newindividual.count(-1))
-	temp=[0 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
-	sensitivity=(sum(temp)/len(temp))
-	temp=[0 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
-	specificity=(sum(temp)/len(temp))
-
+	temp=[100 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
+	temp=filter(lambda a: a != 100, temp)
+	if len(temp)==0:
+		sensitivity=100
+	else:
+		sensitivity=(sum(temp)/len(temp))
+	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+	temp=filter(lambda a: a != 100, temp)
+	if len(temp)==0:
+		specificity=100
+	else:
+		specificity=(sum(temp)/len(temp))
 	return sensitivity, specificity, nodesensitivity, nodespecificity
 
 
@@ -419,7 +433,6 @@ def simTester(model, sss, simClass):
 		truthList.append(individual)
 		testList.append(bruteOut)
 	tuple1=compareIndividualsNodeWise(truthList, testList, model)
-	
 	sensitivities=[]
 	specificities=[]
 	inEdgeNums=[]
@@ -455,15 +468,22 @@ def simTester(model, sss, simClass):
 							if inEdges[i].issubset(inEdges[j]):
 								truth[j]=0
 			newtruths[k].extend(truth)
+		for k in range(len(truthList)):
+			truth=newtruths[k][start:end]
+			test= testList[k][start:end]
 			truthSet=Set([])
 			testSet=Set([])
 			baseSet=Set([])
-			for i in range(len(truth)):
+			for i in range(0,len(truth)):
 				if truth[i]==1:
-					truthSet=truthSet.union(inEdges[i])
+					for nodeToAdd in andNodeList[i]:
+						truthSet.add(nodeToAdd)
+			for i in range(0,len(test)):
 				if test[i]==1:
-					testSet=testSet.union(inEdges[i])	
-				baseSet=baseSet.union(inEdges[i])
+					for nodeToAdd in andNodeList[i]:
+						testSet.add(nodeToAdd)
+				for nodeToAdd in andNodeList[i]:
+					baseSet.add(nodeToAdd)
 			FP+=1.*len(testSet.difference(truthSet))
 			TP+=1.*len(testSet.intersection(truthSet))
 			TN+=1.*(len(baseSet)-len(truthSet))
@@ -471,11 +491,11 @@ def simTester(model, sss, simClass):
 		if len(truthSet)>0:
 			sensitivity=TP/(len(truthSet))
 		else:
-			sensitivity=0
+			sensitivity=100
 		if TN+FP>0:
 			specificity=TN/(TN+FP)
 		else:
-			specificity=0
+			specificity=100
 		sensitivities.append(sensitivity)
 		specificities.append(specificity)
 		TPsum+=TP
@@ -483,16 +503,15 @@ def simTester(model, sss, simClass):
 		FNsum+=FN
 		FPsum+=FP
 		inEdgeNums.append(len(baseSet))
-
-	tuple2=compareIndividualsNodeWise(truthList, testList, model)
+	tuple2=compareIndividualsNodeWise(newtruths, testList, model)
 	if (TPsum+FNsum)>0:
 		sensitivity=TPsum/(TPsum+FNsum)
 	else:
-		sensitivity=0
+		sensitivity=100
 	if (FPsum+TNsum)>0:
 		specificity= TNsum/(FPsum+TNsum)
 	else:
-		specificity=0
+		specificity=100
 	tuple3= (sensitivity, specificity, sensitivities, specificities)
 
 
@@ -556,6 +575,14 @@ def ifngStimTest(bioReplicates):
 				truthlists[0].extend(truthlisttemp[0])
 				truthlists[1].extend(truthlisttemp[1])
 				truthlists[2].extend(truthlisttemp[2])
+			for i in range(len(tempsensitivities)):
+				tempsensitivities[i]=filter(lambda a: a != 100, tempsensitivities[i])
+				if len(tempsensitivities[i])==0:
+					tempsensitivities[i].append(0.)
+			for tempholder in tempspecificities:
+				tempspecificities[i]=filter(lambda a: a != 100, tempspecificities[i])
+				if len(tempspecificities[i])==0:
+					tempspecificities[i].append(0.)
 			sensitivity=[sum(tempsensitivities[0])/len(tempsensitivities[0]),sum(tempsensitivities[1])/len(tempsensitivities[1]),sum(tempsensitivities[2])/len(tempsensitivities[2])]
 			specificity=[sum(tempspecificities[0])/len(tempspecificities[0]),sum(tempspecificities[1])/len(tempspecificities[1]),sum(tempspecificities[2])/len(tempspecificities[2])]
 			truthholder.append(truthlists)
@@ -576,16 +603,23 @@ def ifngStimTest(bioReplicates):
 		nodeLookup[edgeDegree[i]][4].append(nodespecificities[1][i])
 		nodeLookup[edgeDegree[i]][5].append(nodespecificities[2][i])
 	finalNodeData=[]
-	for line in finalNodeData:
-		print(line)
 	for key in nodeLookup.keys():
-		finalNodeData.append([key].extend([sum(lister)/len(lister) for lister in nodeLookup[key]]))
-
+		templisting=[]
+		for lister in nodeLookup[key]:
+			newlist=filter(lambda a: a != 100, lister)
+			if len(newlist)==0:
+				templisting.append(0.)
+			else:
+				templisting.append(sum(newlist)/len(newlist))
+		finalNodeData.append(templisting)
+	print(nodeLookup.keys())
+	print(finalNodeData)
 	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
-	pickle.dump( [sensitivities,specificities], open( "node_by_node_data.pickle", "wb" ) )
+	pickle.dump( [sensitivities,specificities], open( "network_by_network_data.pickle", "wb" ) )
 	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
-
-
+	print(sensitivities)
+	print(specificities)
+	print(finalNodeData)
 def rewireSimTest(graph):
 	graph2=nc.rewireNetwork(graph)
 	params=sim.paramClass()
@@ -597,4 +631,7 @@ def rewireSimTest(graph):
 	return simTester(model, sss,'prop')
 
 if __name__ == '__main__':
+	import time
+	start_time = time.time()
 	ifngStimTest(10)
+	print("--- %s seconds ---" % (time.time() - start_time))
