@@ -19,7 +19,7 @@ from random import shuffle
 import math as math
 from sets import Set
 from joblib import Parallel, delayed
-
+import liu_networks as Liu
 
 class probInitSeqClass:
 	def __init__(self):
@@ -107,6 +107,27 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells):
 
 def sampler(individual, model, cells, seeder):
 	seed(seeder)
+	cellArray=[]
+	sampleProbs=[]
+	simulator=sim.simulatorClass('bool')
+	params=sim.paramClass()
+	for j in range(0,len(model.nodeList)):
+		sampleProbs.append(random())
+	#samples= Parallel(n_jobs=8)(delayed(sampler)(individual, model, cells, randos[i]) for i in range(sampleNum))
+	for j in range(0,cells):
+		# shuffle nodes to be initially called.... 
+		#simulations that are truly random starting states should have all nodes added to this list
+		#get initial values for all nodes
+		initValues=genPBNInitValues(individual, model,sampleProbs)
+		# run Boolean simulation with initial values and append
+		vals, nums=sim.runModel(individual, model, simulator, initValues)
+		cellArray.append(vals)
+	return [sum(col) / float(cells) for col in zip(*cellArray)]
+
+
+
+
+def iterateBooleanModel(individual, model, cells, initProbs):
 	cellArray=[]
 	sampleProbs=[]
 	simulator=sim.simulatorClass('bool')
@@ -238,13 +259,15 @@ def bruteForceSearchModel(model, sss1, simulator):
 
 def singleNodeBF(model, sss1, simulator, i):
 	best=[]
+	# counter=0
+
 	if model.andLenList[i]>0:
 		currentDev=10000*len(sss1)
 		best=utils.bitList(0,model.andLenList[i])
-		if model.andLenList[i]<12:
+		if model.andLenList[i]<10:
 			checkRange=2**(model.andLenList[i])
 		else:
-			checkRange=2**(12)
+			checkRange=2**(10)
 		for j in range(1,checkRange):
 			bits=[]
 			bits=utils.bitList(j,model.andLenList[i] )
@@ -255,6 +278,9 @@ def singleNodeBF(model, sss1, simulator, i):
 			if(deviation<currentDev):
 				best=bits
 				currentDev=deviation
+			# if(deviation==currentDev):
+			# 	counter=counter+1
+		print(currentDev)
 	return best
 
 
@@ -345,11 +371,11 @@ def genBits(model):
 		start=model.individualParse[node]
 		truth=startInd[start:end]
 		if len(truth)>1:
-			for i in range(len(truth)):
-				if random()<(1./len(truth)):
-					truth[i]=1
-				else:
-					truth[i]=0
+			# for i in range(len(truth)):
+			# 	if random()<(1./len(truth)):
+			# 		truth[i]=1
+			# 	else:
+			# 		truth[i]=0
 			counter=0
 			while sum(truth)>5 and counter < 100000:
 				indices = [i for i in range(len(truth)) if truth[i] == 1]
@@ -357,6 +383,9 @@ def genBits(model):
 				truth[indices[int(chosen)]]=0
 				counter+=1
 			startInd[start:end]=truth
+			if sum(truth)==0:
+				chosen=math.floor(random()*len(truth))
+				truth[int(chosen)]=1
 		elif len(truth)==1:
 			truth[0]=1
 			startInd[start:end]=truth
@@ -385,6 +414,7 @@ def simTester(model, sss, simClass):
 	sumindividual=[]
 	truthList= [] 
 	testList =[]
+	devList=[]
 	# loop over number of times we want to generate fake data and perform sequence of events
 	for i in range(0,trials):
 
@@ -432,10 +462,19 @@ def simTester(model, sss, simClass):
 		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
 		truthList.append(individual)
 		testList.append(bruteOut)
+		#devList.append(dev)
+		# print("truth, found")
+		# print(utils.writeModel(individual, model))
+		# print(utils.writeModel(bruteOut, model))
+
+
+
+
 	tuple1=compareIndividualsNodeWise(truthList, testList, model)
 	sensitivities=[]
 	specificities=[]
 	inEdgeNums=[]
+	overlaps=[]
 	# run correction that simplifies truth rules
 	TPsum=0
 	TNsum=0
@@ -503,6 +542,29 @@ def simTester(model, sss, simClass):
 		FNsum+=FN
 		FPsum+=FP
 		inEdgeNums.append(len(baseSet))
+		overlaper=-1
+		if len(baseSet)==2:
+			overlapSet=Set([])
+			lappersets=[]
+			inneredge=[]
+			for upstream in baseSet:
+				lapperset=Set([])
+				if upstream==(len(model.nodeList)-1):
+					end=len(truthList[0])-1
+				else:
+					end=model.individualParse[upstream+1]
+				start=model.individualParse[upstream]
+				andNodeList=model.andNodeList[upstream]
+				for lister in andNodeList:
+					lapperset.add(Set(lister))
+				lappersets.append(lapperset)
+			overlaper=len(lappersets[0].intersection(lappersets[1]))
+			if overlaper==0:
+				for upstream in baseSet:
+					if upstream in lappersets[0] or upstream in lappersets[1]:
+						print("feed-forward")
+						overlaper=1
+		overlaps.append(overlaper)
 	tuple2=compareIndividualsNodeWise(newtruths, testList, model)
 	if (TPsum+FNsum)>0:
 		sensitivity=TPsum/(TPsum+FNsum)
@@ -514,8 +576,21 @@ def simTester(model, sss, simClass):
 		specificity=100
 	tuple3= (sensitivity, specificity, sensitivities, specificities)
 
+	return tuple1, tuple2, tuple3, inEdgeNums, overlaps, [testList, truthList,  newtruths]
 
-	return tuple1, tuple2, tuple3, inEdgeNums,  [testList, truthList,  newtruths]
+def simpleNetBuild():
+	graph = nx.DiGraph()
+	# graph.add_edge('a1','a', signal='a')	
+	# graph.add_edge('a2','a', signal='a')
+	# graph.add_edge('a3','a', signal='a')
+	# graph.add_edge('a4','a', signal='a')
+	# graph.add_edge('b1','b', signal='a')
+	# graph.add_edge('b2','b', signal='a')
+	# graph.add_edge('b3','b', signal='a')
+	graph.add_edge('a','d', signal='a')	
+	graph.add_edge('b','d', signal='a')
+	# graph.add_edge('d','e', signal='a')
+	return graph
 
 def ifngStimTest(bioReplicates):
 	aliasDict={}
@@ -538,16 +613,21 @@ def ifngStimTest(bioReplicates):
 	nodespecificities=[[],[],[]]
 	truthholder=[]
 	edgeDegree=[]
+	overlapNodes=[]
 	lines.pop(0)
+	lines=[0]
+	lines=[lines[0]]
 	for code in lines:
-		graph=nx.DiGraph()
-		coder=str('ko'+code[:-1])
-		nc.uploadKEGGcodes([coder], graph, dict2)
-		coder=str('hsa'+code[:-1])
-		nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
-		if(len(graph.edges())>1):
-			graph=nc.simplifyNetwork(graph, data)
-		
+		# graph=nx.DiGraph()
+		# coder=str('ko'+code[:-1])
+		# nc.uploadKEGGcodes([coder], graph, dict2)
+		# coder=str('hsa'+code[:-1])
+		# nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+
+		# if(len(graph.edges())>1):
+		# 	graph=nc.simplifyNetwork(graph, data)
+		graph = simpleNetBuild()
+		coder='LiuGraph'
 		if(len(graph.edges())>1):
 			print(coder)
 			print(len(graph.edges()))
@@ -557,7 +637,7 @@ def ifngStimTest(bioReplicates):
 			tempspecificities=[[],[],[]]
 			truthlists=[[],[],[]]
 			for i in range(bioReplicates):
-				tuple1, tuple2, tuple3, inEdgeNums, truthlisttemp=rewireSimTest(graph)
+				tuple1, tuple2, tuple3, inEdgeNums, overlaps, truthlisttemp=rewireSimTest(graph)
 				sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
 				sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
 				sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
@@ -573,6 +653,7 @@ def ifngStimTest(bioReplicates):
 				nodespecificities[0].extend(nodespecificity1)
 				nodespecificities[1].extend(nodespecificity2)
 				nodespecificities[2].extend(nodespecificity3)
+				overlapNodes.extend(overlaps)
 				edgeDegree.extend(inEdgeNums)
 				truthlists[0].extend(truthlisttemp[0])
 				truthlists[1].extend(truthlisttemp[1])
@@ -611,6 +692,16 @@ def ifngStimTest(bioReplicates):
 		nodeLookup[edgeDegree[i]][3].append(nodespecificities[0][i])
 		nodeLookup[edgeDegree[i]][4].append(nodespecificities[1][i])
 		nodeLookup[edgeDegree[i]][5].append(nodespecificities[2][i])
+	overlapLookup={}
+	for overlap in overlapNodes:
+		overlapLookup[overlap]=[[],[],[],[],[],[]]
+	for i in range(len(overlapNodes)):
+		overlapLookup[overlapNodes[i]][0].append(nodesensitivities[0][i])
+		overlapLookup[overlapNodes[i]][1].append(nodesensitivities[1][i])
+		overlapLookup[overlapNodes[i]][2].append(nodesensitivities[2][i])
+		overlapLookup[overlapNodes[i]][3].append(nodespecificities[0][i])
+		overlapLookup[overlapNodes[i]][4].append(nodespecificities[1][i])
+		overlapLookup[overlapNodes[i]][5].append(nodespecificities[2][i])
 	finalNodeData=[]
 	finalExtendData=[]
 	for key in nodeLookup.keys():
@@ -619,24 +710,38 @@ def ifngStimTest(bioReplicates):
 		for lister in nodeLookup[key]:
 			newlist=filter(lambda a: a != 100, lister)
 			tempExtended.append(newlist)
+			print("number of nodes by key")
+			print(len(newlist))
 			if len(newlist)==0:
 				templisting.append(0.)
 			else:
 				templisting.append(sum(newlist)/len(newlist))
 		finalNodeData.append(templisting)
 		finalExtendData.append(tempExtended)
+	finalOverlapExtendData=[]
+	for key in overlapLookup.keys():
+		templisting=[]
+		tempOverlap=[]
+		for lister in overlapLookup[key]:
+			newlist=filter(lambda a: a != 100, lister)
+			tempOverlap.append(newlist)
+			print("number of overlaps by key")
+			print(len(newlist))
+		finalOverlapExtendData.append(tempOverlap)
 	print(nodeLookup.keys())
+	print(overlapLookup.keys())
 	print(finalNodeData)
 	print(finalExtendData)
 	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
 	pickle.dump( finalExtendData, open( "extended_node_by_node_data.pickle", "wb" ) )
+	pickle.dump( finalOverlapExtendData, open( "extended_overlap_data.pickle", "wb" ) )
 	pickle.dump( [sensitivities,sensitivityStds,specificities, specificityStds], open( "network_by_network_data.pickle", "wb" ) )
 	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
 	print(sensitivities)
 	print(specificities)
 	print(finalNodeData)
 def rewireSimTest(graph):
-	graph2=nc.rewireNetwork(graph)
+	#graph=nc.rewireNetwork(graph)
 	params=sim.paramClass()
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)
@@ -644,9 +749,77 @@ def rewireSimTest(graph):
 	#print(model.size)
 	#print(model.individualParse)
 	return simTester(model, sss,'prop')
+def PBNsimTest(trials):
+
+	graph=simpleNetBuild()
+	params=sim.paramClass()
+	sss=utils.synthesizeInputs(graph,params.samples)
+	model=sim.modelClass(graph,sss)
+
+	for i in range(0,trials):
+
+		#generate random set of logic rules to start with
+		individual=genBits(model)
+		for node in range(0,len(model.nodeList)):
+			if model.andLenList[node]>0:
+				if node==len(model.nodeList)-1:
+					end=len(model.nodeList)
+				else:
+					end=model.individualParse[node+1]
+				if sum(individual[model.individualParse[node]:end])==0:
+					individual[model.individualParse[node]]=1
+
+		# generate Boolean model for this trial
+		output=runProbabilityBooleanSims(individual, model, params.samples, params.cells)
+		# copy new output into newSSS and initial values
+		newSSS=[]
+		for k in range(0,params.samples):
+			newSS=copy.deepcopy(sss[k])
+			for j in range(0,len(model.nodeList)):
+				newSS[model.nodeList[j]]=output[k][j]
+			newSSS.append(newSS)
+		newInitValueList=[]
+		for j in range(0,len(sss)):
+			newInitValueList.append([])
+		# print(len(newSSS))
+		# print(samples)
+		# print(len(sss))
+		for j in range(0,len(model.nodeList)):
+			for k in range(0,len(sss)):
+				ss=newSSS[k]
+				if  model.nodeList[j] in sss[0].keys():
+					newInitValueList[k].append(ss[model.nodeList[j]])
+				else:
+					newInitValueList[k].append(0.5)
+		model.initValueList=newInitValueList
+
+
+		# set up PBN-based simulator
+		propSimulator=sim.simulatorClass('propNaive')
+		propSimulator.simSteps=10
+		propSimulator.trainingData=model.initValueList
+		#propSimulator.train(model)
+		#print(propSimulator.andTrainer)
+
+		nodeWiseError=[]
+		for j in range(0,len(model.nodeList)):
+			nodeWiseError.append([])
+		for k in range(0,len(sss)):
+			ss=newSSS[k]
+			initValues=newInitValueList[k]
+			newVals, nums=sim.runModel(individual, model, propSimulator, initValues)
+			for entry in range(len(ss)):
+				nodeWiseError[entry].append((initValues[entry]-newVals[entry])**2)
+		print(utils.writeModel(individual, model))
+		for entry in range(len(nodeWiseError)):
+			print(model.nodeList[entry])
+			print(nodeWiseError[entry])
 
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(5)
+	#ifngStimTest(25)
+	PBNsimTest(20)
+
+
 	print("--- %s seconds ---" % (time.time() - start_time))

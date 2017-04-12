@@ -104,7 +104,7 @@ class paramClass:
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
-		self.samples=5
+		self.samples=10
 		self.trials=5
 		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
@@ -212,10 +212,13 @@ class simulatorClass:
 										node1.append(sample[node1index])
 									slope1, intercept1, r_value, p_value, std_err = regress.linregress(tempdata,node1)
 									slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,tempdata)
+									# if(p_value<.1):
+									# 	print(model.nodeList[currentNode])
+									# 	print(model.nodeList[node1index])
 									#store relevant linreg results
 									temp.append([slope1,intercept1, slope2, intercept2])
 									for sample in range(len(self.trainingData)):
-										tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],slope1*tempdata[sample]+intercept1,slope2*self.trainingData[sample][node1index]+intercept2)
+										tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],slope1+intercept1,slope2+intercept2)
 						# append the tempdata to do or calculations....
 						temp.append(tempdata)
 					tempTrainer.append(temp)
@@ -295,7 +298,7 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 								intercept1=simulator.andTrainer[currentNode][andindex][nodeIn][1]
 								slope2=simulator.andTrainer[currentNode][andindex][nodeIn][2]
 								intercept2=simulator.andTrainer[currentNode][andindex][nodeIn][3]
-								tempVal=simulator.And(oldValue[node1index],tempVal,slope1*tempVal+intercept1,slope2*oldValue[node1index]+intercept2)
+								tempVal=simulator.And(oldValue[node1index],tempVal,slope1+intercept1,slope2+intercept2)
 							# append calculated values of training and test 
 							ortraininglist.append(simulator.andTrainer[currentNode][andindex][-1])
 							orset.append(tempVal)
@@ -319,9 +322,9 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 						slope1, intercept1, r_value, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
 						slope2, intercept2, r_value, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
 						for j in range(len(ortraininglist[i])):
-							currentrain[j]=simulator.Or(currentrain[j],ortraininglist[i][j],slope1*ortraininglist[i][j]+intercept1,slope2*currentrain[j]+intercept2)
+							currentrain[j]=simulator.Or(ortraininglist[i][j],currentrain[j],slope1+intercept1,slope2+intercept2)
 						orDict[tuple(incNodes[0:i])]=[slope1,intercept1,slope2, intercept2,currentrain]
-					currentval=simulator.Or(currentval,orset[i],slope1*orset[i]+intercept1,slope2*currentval+intercept2)
+					currentval=simulator.Or(orset[i],currentval,slope1+intercept1,slope2+intercept2)
 			return currentval
 
 #run a simulation given a starting state

@@ -3198,4 +3198,155 @@ def writeNode(currentNode,individual, model):
 		writenode=writenode+' '+ model.nodeList[currentNode]
 	return writenode					
 
+def updateInitSeq(individual, model, probInitSeq):
+	#looks through list of nodes and adds to list of initial updated nodes if there are no specified inputs
+	initSeq=probInitSeqClass()
+	initSeq.startNodes=list(probInitSeq.startNodes)
+	initSeq.startProbs=list(probInitSeq.startProbs)
+	initSeq.nodeOrder=list(probInitSeq.nodeOrder)
+	for i in range(0,len(model.nodeList)):
+		parser=model.individualParse[i]
+		andList=model.andNodeList[i] # find the list of possible input combinations for the node we are on 
+		
+		if (model.andLenList[i]==0 or (len(andList)<2 and individual[0]==0)) and i not in initSeq.startNodes:
+			# if there are no inputs or the rule excludes a single input then add to initial node list if not already there
+			initSeq.startNodes.append(i)
+			initSeq.nodeOrder.pop(i)
+			initSeq.startProbs.append(1)		
+	return initSeq
+
+def GAautoSolver(model, sss, propSimulator):
+	params=sim.paramClass()
+	toolbox, stats=buildToolbox(model.size,params.bitFlipProb)
+	# reset simSteps to 1 so we just see first step in Sim...
+	propSimulator.simSteps=1
+	toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=sss)
+	population=toolbox.population(n=params.popSize)
+	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
+	output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+	# stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	# stats.register("avg", numpy.mean)
+	# stats.register("std", numpy.std)
+	# stats.register("min", numpy.min)
+	# stats.register("max", numpy.max)
+	# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
+	return output, hof	
+
+def evalNode(individual, currentNode, params, model, simulator, sss):
+	SSEs=[]
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValue=model.initValueList[j]
+		SSE=0
+		value= sim.updateNode(currentNode,initValue,individual,  model,simulator)
+		SSE+=(value-ss[model.nodeList[model.evaluateNodes[currentNode]]])**2
+		SSEs.append(SSE)
+	summer=0
+	for i in range(0,len(SSEs)):
+		summer+=SSEs[i]
+	summer=summer/len(SSEs)
+	likelihood=1-summer
+	for i in range(len(model.nodeList)):
+		if i==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[i+1]	 
+		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
+			likelihood=.001	
+	totalNodes=0
+	for bit in range(len(individual)):
+		if individual[bit]==1:
+			totalNodes=totalNodes+len(model.andNodeInvertList[currentNode][bit])
+	if params.IC==1:
+		return totalNodes-math.log(likelihood),
+	elif params.IC==2:
+		return totalNodes*math.log(len(sss))-2*math.log(likelihood),
+	elif params.IC==3:
+		return totalNodes-4*math.log(likelihood),
+	else:
+		return summer,
+
+def piecewiseGASolver(model, sss, propSimulator):
+	params=sim.paramClass()
+	# reset simSteps to 1 so we just see first step in Sim...
+	propSimulator.simSteps=1
+	bestList=[]
+	for i in range(len(model.nodeList)):
+		if model.andLenList[i]>1:
+			toolbox, stats=buildToolbox(model.andLenList[i],params.bitFlipProb)
+			toolbox.register("evaluate", evalNode,currentNode=i, params=params,model=model,simulator=propSimulator,sss=sss)
+			population=toolbox.population(n=params.popSize)
+			hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
+			output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+			bestList.append(hof[0])
+		elif  model.andLenList[i]==1:
+			bestList.append([1])
+		else:
+			bestList.append([])
+	return [item for sublist in bestList for item in sublist]
+class probInitSeqClass:
+	def __init__(self):
+		self.startNodes=[]
+		self.startProbs=[]
+		self.nodeOrder=[]
+
+def buildToolbox( individualLength, bitFlipProb):
+	# # #setup toolbox
+	toolbox = base.Toolbox()
+	pset = gp.PrimitiveSet("MAIN", arity=1)
+	pset.addPrimitive(operator.add, 2)
+	pset.addPrimitive(operator.sub, 2)
+	pset.addPrimitive(operator.mul, 2)
+	weightTup=(-1.0,)
+	creator.create("FitnessMin", base.Fitness, weights=weightTup) # make a fitness minimization function
+	creator.create("Individual", list, fitness=creator.FitnessMin)	# create a class of individuals that are lists
+
+	#register our bitsring generator and how to create an individual, population
+	toolbox.register("genRandomBitString", utils.genRandBits, individualLength=individualLength)
+	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
+	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
+	
+	#create statistics toolbox and give it functions
+	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	stats.register("avg", numpy.mean)
+	stats.register("std", numpy.std)
+	stats.register("min", numpy.min)
+	stats.register("max", numpy.max)
+	
+	# finish registering the toolbox functions
+	toolbox.register("mate", tools.cxTwoPoint)
+	toolbox.register("mutate", tools.mutFlipBit, indpb=bitFlipProb)
+	toolbox.register("select", tools.selNSGA2)
+	toolbox.register("similar", numpy.array_equal)
+	
+	return toolbox, stats
+			
+def evaluate(individual, params, model, simulator, sss):
+	SSEs=[]
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValues=model.initValueList[j]
+		SSE=0
+		boolValues, addnodeNums=sim.runModel(individual, model,simulator, model.initValueList[j])	
+		for i in range(0, len(model.evaluateNodes)):
+			SSE+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+		SSEs.append(SSE)
+	summer=0
+	for i in range(0,len(SSEs)):
+		summer+=SSEs[i]
+	summer=summer/len(SSEs)
+	likelihood=1-summer/len(model.andLenList)
+	for i in range(len(model.nodeList)):
+		if i==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[i+1]	 
+		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
+			likelihood=.001	
+	if params.IC==1:
+		return addnodeNums-math.log(likelihood),
+	elif params.IC==2:
+		return addnodeNums*math.log(len(sss))-2*math.log(likelihood),
+	else:
+		return summer,
 	
