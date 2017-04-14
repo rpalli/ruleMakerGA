@@ -7,6 +7,7 @@ import operator
 import networkx as nx
 import itertools as itertool
 import scipy.stats as regress
+import numpy as np
 
 class modelClass:
 	def __init__(self,graph, sss): 
@@ -91,22 +92,22 @@ class paramClass:
 	def __init__(self):    
 		self.adaptive=True
 		self.rewire=False
+		self.async=False # run in asynchronous mode
 		self.simSteps=100 # number of steps each individual is run when evaluating
-		self.generations=10 # generations to run
+		self.generations=5 # generations to run
 		self.popSize=10 #size of population
-		self.mu= 3#individuals selected
+		self.mu= 10 #individuals selected
 		self.lambd= 10#children produced
 		self.bitFlipProb=.1 # prob of flipping bits inside mutation
 		self.crossoverProb=.3 # prob of crossing over a particular parent
 		self.mutationProb=.7 # prob of mutating a particular parent
-		self.async=True # run in asynchronous mode
 		self.iters=10 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
-		self.samples=10
+		self.samples=5
 		self.trials=2
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
@@ -330,14 +331,31 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 			return currentval
 
 #run a simulation given a starting state
-def runModel(individual, model, simulator, initValues):
+def runModel(individual, model, simulator, initValues, params):
+	if params.async:
+		return averageResultModelSim(individual, model, simulator, initValues, params)
+	else:
+		return iterateModel(individual, model, simulator, initValues, params)
+
+#run a simulation and average it over iters trials
+def averageResultModelSim(individual, model, simulator, initValues, params):
+	sum=[0 for x in range(0,len(initValues))]
+	for i in range(0,params.iters):
+		avg=iterateModel(individual, model, simulator, initValues, params)
+		for j in range(0,len(sum)):
+			sum[j]=sum[j]+avg[j]
+	avgs=list(sum)
+	for i in range(0,len(sum)):
+		avgs[i]=sum[i]/float(params.iters)
+	return avgs
+
+def iterateModel(individual, model, simulator, initValues, params):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
-	params=paramClass()
 	# set up data storage for simulation, add step 0
 	newValue=list(initValues)
 	simData=[]
 	simData.append(list(newValue))
-	totalNodes=0
+	# totalNodes=0... turn this on for information criterion
 
 	# set up the sequence of nodes to be updated
 	seq=range(0,len(model.nodeList))
@@ -356,11 +374,11 @@ def runModel(individual, model, simulator, initValues):
 				end= model.size
 			else:
 				end=model.individualParse[seq[i]+1]	 
-			#sum up number of nodes in rule
-			if i==0:
-				for bit in range(model.individualParse[seq[i]],end):
-					if individual[bit]==1:
-						totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
+			#sum up number of nodes in rule... useful if you want an information criterion
+			# if i==0:
+			# 	for bit in range(model.individualParse[seq[i]],end):
+			# 		if individual[bit]==1:
+			# 			totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
 			#update based on sync or async assumptions
 			if params.async:
 				temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
@@ -369,36 +387,25 @@ def runModel(individual, model, simulator, initValues):
 			newValue[seq[i]]=temp
 
 		simData.append(list(newValue))
-	if simulator.switch==0:
-		avg= [0 for x in range(0,len(newValue))]
-		stdev= [0 for x in range(0,len(newValue))]
-		for step in range(0,len(simData)):
-			for element in range(0,len(avg)):
-				simData[step][element]=simData[step][element]+params.sigmaNetwork*random()
-		for step in range(len(simData)-10,len(simData)):
-			for element in range(0,len(avg)):
-				avg[element]=avg[element]+simData[step][element]
-		for element in range(0,len(avg)):
-			avg[element]=avg[element]/10
+	if not params.async:
+		avgs= [[] for x in range(0,len(newValue))]
+		#stdev= [0 for x in range(0,len(newValue))]
+		# for step in range(0,len(simData)):
+		# 	for element in range(0,len(avg)):
+		# 		simData[step][element]=simData[step][element]+params.sigmaNetwork*random()
+		for element in range(0,len(avgs)):
+			avgs[element]=[simData[step][element] for step in range(len(simData)-10,len(simData)) ]
+		# for step in range(len(simData)-10,len(simData)):
+		# 	for element in range(0,len(avg)):
+		# 		avg[element]=avg[element]+simData[step][element]
+		avg= [1.*np.sum(element)/len(element) for element in avgs]
 		#for step in range(len(simData)-10,len(simData)):
 			#for element in range(0,len(avg)):
 				#stdev[element]=stdev[element]+(simData[step][element]-avg[element])^2
 		#return (avg, stdev)
-		return avg, totalNodes
+		return avg
 	else:
-		return simData.pop(), totalNodes
-
-#run a simulation and average it over iters trials
-def averageResultModelSim(individual, params, model, simulator, initValues, iters):
-	sum=[0 for x in range(0,len(initValues))]
-	for i in range(0,iters):
-		avg=runModel( individual, params, model, simulator, initValues,False)
-		for j in range(0,len(sum)):
-			sum[j]=sum[j]+avg[j]
-	avgs=list(sum)
-	for i in range(0,len(sum)):
-		avgs[i]=sum[i]/float(iters)
-	return avgs
+		return simData.pop()
 
 #calculate average induced change by node
 def calcImportance(individual,params,model,simulator, sss):
@@ -430,9 +437,3 @@ def calcImportance(individual,params,model,simulator, sss):
 			SSEs.append(SSE1+SSE2)
 		importanceScores.append(sum(SSEs))
 	return importanceScores
-
-
-
-
-
-
