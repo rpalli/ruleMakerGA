@@ -20,347 +20,7 @@ import math as math
 from sets import Set
 from joblib import Parallel, delayed
 import liu_networks as Liu
-
-class probInitSeqClass:
-	def __init__(self):
-		self.startNodes=[]
-		self.startProbs=[]
-		self.nodeOrder=[]
-
-def buildToolbox( individualLength, bitFlipProb):
-	# # #setup toolbox
-	toolbox = base.Toolbox()
-	pset = gp.PrimitiveSet("MAIN", arity=1)
-	pset.addPrimitive(operator.add, 2)
-	pset.addPrimitive(operator.sub, 2)
-	pset.addPrimitive(operator.mul, 2)
-	weightTup=(-1.0,)
-	creator.create("FitnessMin", base.Fitness, weights=weightTup) # make a fitness minimization function
-	creator.create("Individual", list, fitness=creator.FitnessMin)	# create a class of individuals that are lists
-
-	#register our bitsring generator and how to create an individual, population
-	toolbox.register("genRandomBitString", utils.genRandBits, individualLength=individualLength)
-	toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
-	toolbox.register("population", tools.initRepeat, list , toolbox.individual)
-	
-	#create statistics toolbox and give it functions
-	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-	stats.register("avg", numpy.mean)
-	stats.register("std", numpy.std)
-	stats.register("min", numpy.min)
-	stats.register("max", numpy.max)
-	
-	# finish registering the toolbox functions
-	toolbox.register("mate", tools.cxTwoPoint)
-	toolbox.register("mutate", tools.mutFlipBit, indpb=bitFlipProb)
-	toolbox.register("select", tools.selNSGA2)
-	toolbox.register("similar", numpy.array_equal)
-	
-	return toolbox, stats
-			
-def evaluate(individual, params, model, simulator, sss):
-	SSEs=[]
-	for j in range(0,len(sss)):
-		ss=sss[j]
-		initValues=model.initValueList[j]
-		SSE=0
-		boolValues, addnodeNums=sim.runModel(individual, model,simulator, model.initValueList[j])	
-		for i in range(0, len(model.evaluateNodes)):
-			SSE+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
-		SSEs.append(SSE)
-	summer=0
-	for i in range(0,len(SSEs)):
-		summer+=SSEs[i]
-	summer=summer/len(SSEs)
-	likelihood=1-summer/len(model.andLenList)
-	for i in range(len(model.nodeList)):
-		if i==len(model.nodeList)-1:
-			end= model.size
-		else:
-			end=model.individualParse[i+1]	 
-		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
-			likelihood=.001	
-	if params.IC==1:
-		return addnodeNums-math.log(likelihood),
-	elif params.IC==2:
-		return addnodeNums*math.log(len(sss))-2*math.log(likelihood),
-	else:
-		return summer,
-	
-
-# generates a random set of samples made up of cells by using parameteris from probInit seq
-# to set up then iterating using strict Boolean modeling. 
-def runProbabilityBooleanSims(individual, model, sampleNum, cells):
-	samples=[]
-	seeds=[]
-	for i in range(0,sampleNum):
-		seeds.append(random)
-	samples=Parallel(n_jobs=min(6,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
-	# counter=0
-	# for sample in range(len(samples)):
-	# 	if sum(samples(sample))==0:
-	# 		temp=samples.pop(sample) 
-	# newSamples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
-	# print(samples)
-	return samples
-	
-
-def sampler(individual, model, cells, seeder):
-	seed(seeder)
-	cellArray=[]
-	sampleProbs=[]
-	simulator=sim.simulatorClass('bool')
-	params=sim.paramClass()
-	for j in range(0,len(model.nodeList)):
-		sampleProbs.append(random())
-	#samples= Parallel(n_jobs=8)(delayed(sampler)(individual, model, cells, randos[i]) for i in range(sampleNum))
-	for j in range(0,cells):
-		# shuffle nodes to be initially called.... 
-		#simulations that are truly random starting states should have all nodes added to this list
-		#get initial values for all nodes
-		initValues=genPBNInitValues(individual, model,sampleProbs)
-		# run Boolean simulation with initial values and append
-		vals, nums=sim.runModel(individual, model, simulator, initValues)
-		cellArray.append(vals)
-	return [sum(col) / float(cells) for col in zip(*cellArray)]
-
-
-
-
-def iterateBooleanModel(individual, model, cells, initProbs):
-	cellArray=[]
-	sampleProbs=[]
-	simulator=sim.simulatorClass('bool')
-	params=sim.paramClass()
-	for j in range(0,len(model.nodeList)):
-		sampleProbs.append(random())
-	#samples= Parallel(n_jobs=8)(delayed(sampler)(individual, model, cells, randos[i]) for i in range(sampleNum))
-	for j in range(0,cells):
-		# shuffle nodes to be initially called.... 
-		#simulations that are truly random starting states should have all nodes added to this list
-		#get initial values for all nodes
-		initValues=genPBNInitValues(individual, model,sampleProbs)
-		# run Boolean simulation with initial values and append
-		vals, nums=sim.runModel(individual, model, simulator, initValues)
-		cellArray.append(vals)
-	return [sum(col) / float(cells) for col in zip(*cellArray)]
-
-def genPBNInitValues(individual, model,sampleProbs):
-	initValues=[False for x in range(0,len(model.nodeList))]
-	for node in range(0,len(sampleProbs)):
-		randNum=random()
-		if randNum<sampleProbs[node]:
-			initValues[node]=True
-	return initValues
-
-def updateInitSeq(individual, model, probInitSeq):
-	#looks through list of nodes and adds to list of initial updated nodes if there are no specified inputs
-	initSeq=probInitSeqClass()
-	initSeq.startNodes=list(probInitSeq.startNodes)
-	initSeq.startProbs=list(probInitSeq.startProbs)
-	initSeq.nodeOrder=list(probInitSeq.nodeOrder)
-	for i in range(0,len(model.nodeList)):
-		parser=model.individualParse[i]
-		andList=model.andNodeList[i] # find the list of possible input combinations for the node we are on 
-		
-		if (model.andLenList[i]==0 or (len(andList)<2 and individual[0]==0)) and i not in initSeq.startNodes:
-			# if there are no inputs or the rule excludes a single input then add to initial node list if not already there
-			initSeq.startNodes.append(i)
-			initSeq.nodeOrder.pop(i)
-			initSeq.startProbs.append(1)		
-	return initSeq
-
-def GAautoSolver(model, sss, propSimulator):
-	params=sim.paramClass()
-	toolbox, stats=buildToolbox(model.size,params.bitFlipProb)
-	# reset simSteps to 1 so we just see first step in Sim...
-	propSimulator.simSteps=1
-	toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=sss)
-	population=toolbox.population(n=params.popSize)
-	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
-	output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
-	# stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-	# stats.register("avg", numpy.mean)
-	# stats.register("std", numpy.std)
-	# stats.register("min", numpy.min)
-	# stats.register("max", numpy.max)
-	# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
-	return output, hof	
-
-def evalNode(individual, currentNode, params, model, simulator, sss):
-	SSEs=[]
-	for j in range(0,len(sss)):
-		ss=sss[j]
-		initValue=model.initValueList[j]
-		SSE=0
-		value= sim.updateNode(currentNode,initValue,individual,  model,simulator)
-		SSE+=(value-ss[model.nodeList[model.evaluateNodes[currentNode]]])**2
-		SSEs.append(SSE)
-	summer=0
-	for i in range(0,len(SSEs)):
-		summer+=SSEs[i]
-	summer=summer/len(SSEs)
-	likelihood=1-summer
-	for i in range(len(model.nodeList)):
-		if i==len(model.nodeList)-1:
-			end= model.size
-		else:
-			end=model.individualParse[i+1]	 
-		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
-			likelihood=.001	
-	totalNodes=0
-	for bit in range(len(individual)):
-		if individual[bit]==1:
-			totalNodes=totalNodes+len(model.andNodeInvertList[currentNode][bit])
-	if params.IC==1:
-		return totalNodes-math.log(likelihood),
-	elif params.IC==2:
-		return totalNodes*math.log(len(sss))-2*math.log(likelihood),
-	elif params.IC==3:
-		return totalNodes-4*math.log(likelihood),
-	else:
-		return summer,
-
-def piecewiseGASolver(model, sss, propSimulator):
-	params=sim.paramClass()
-	# reset simSteps to 1 so we just see first step in Sim...
-	propSimulator.simSteps=1
-	bestList=[]
-	for i in range(len(model.nodeList)):
-		if model.andLenList[i]>1:
-			toolbox, stats=buildToolbox(model.andLenList[i],params.bitFlipProb)
-			toolbox.register("evaluate", evalNode,currentNode=i, params=params,model=model,simulator=propSimulator,sss=sss)
-			population=toolbox.population(n=params.popSize)
-			hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
-			output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
-			bestList.append(hof[0])
-		elif  model.andLenList[i]==1:
-			bestList.append([1])
-		else:
-			bestList.append([])
-	return [item for sublist in bestList for item in sublist]
-
-#exhaustively search boolean networks for best option going node by node for rules
-def bruteForceSearchModel(model, sss1, simulator):
-	initValueList=[]
-	for j in range(0,len(sss1)):
-		initValueList.append([])
-	for i in range(0,len(model.nodeList)):
-		for j in range(0,len(sss1)):
-			ss=sss1[j]
-			if  model.nodeList[i] in sss1[0].keys():
-				initValueList[j].append(ss[model.nodeList[i]])
-			else:
-				initValueList[j].append(0.5)
-	#print(model.initValueList)
-	model.initValueList=initValueList
-	bestlist=Parallel(n_jobs=6)(delayed(singleNodeBF)(model, sss1, simulator, i) for i in range(len(model.nodeList)))
-	return [item for sublist in bestlist for item in sublist]
-
-def singleNodeBF(model, sss1, simulator, i):
-	best=[]
-	# counter=0
-
-	if model.andLenList[i]>0:
-		currentDev=10000*len(sss1)
-		best=utils.bitList(0,model.andLenList[i])
-		if model.andLenList[i]<10:
-			checkRange=2**(model.andLenList[i])
-		else:
-			checkRange=2**(10)
-		for j in range(1,checkRange):
-			bits=[]
-			bits=utils.bitList(j,model.andLenList[i] )
-			deviation=0
-			for steadyStateNum in range(0,len(model.initValueList)):
-				derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
-				deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
-			if(deviation<currentDev):
-				best=bits
-				currentDev=deviation
-			# if(deviation==currentDev):
-			# 	counter=counter+1
-		print(currentDev)
-	return best
-
-
-def compareIndividualsNodeWise(truthList, testList, model):
-	nodesensitivity=[]
-	nodespecificity=[]
-	netOnes=[]
-	netZeros=[]
-	netNegOnes=[]
-	for node in range(len(model.nodeList)):
-		ones=[]
-		zeros=[]
-		negones=[]
-		# get indices to extract individual for this node
-		if node==len(model.nodeList)-1:
-			end=len(model.nodeList)
-		else:
-			end=model.individualParse[node+1]
-		start=model.individualParse[node]
-		sumindividual=[]
-		#loop over individuals provided and calculate relevant values
-		for i in range(len(truthList)):
-			truth= truthList[i][start:end]
-			test= testList[i][start:end]
-			sumindividual.append(sum(truth))
-			newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
-			ones.append(newindividual.count(1))
-			zeros.append(newindividual.count(0))
-			negones.append(newindividual.count(-1))
-		# append node-wise breakdowns to list of breakdowns for the model as a whole
-		netOnes.append(sum(ones))
-		netZeros.append(sum(zeros))
-		netNegOnes.append(sum(negones))
-		
-		# calculate sensitivity and specificity for the node
-		temp=[100 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
-		temp=filter(lambda a: a != 100, temp)
-		if len(temp)==0:
-			sensitivity=100
-		else:
-			sensitivity=(sum(temp)/len(temp))
-		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
-		temp=filter(lambda a: a != 100, temp)
-		if len(temp)==0:
-			specificity=100
-		else:
-			specificity=(sum(temp)/len(temp))
-
-
-		# add to list of sensitivity and specificity by node
-		nodesensitivity.append(sensitivity)
-		nodespecificity.append(specificity)
-	#calculate sensitivity and specificity on the network as a whole
-	ones=[]
-	zeros=[]
-	negones=[]
-	for i in range(len(truthList)):
-		truth= truthList[i]
-		test= testList[i]
-		sumindividual.append(sum(truth))
-		newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
-		ones.append(newindividual.count(1))
-		zeros.append(newindividual.count(0))
-		negones.append(newindividual.count(-1))
-	temp=[100 if zeros[i]==0 else (1.*zeros[i])/(zeros[i]+ones[i]) for i in range(0,len(ones))]
-	temp=filter(lambda a: a != 100, temp)
-	if len(temp)==0:
-		sensitivity=100
-	else:
-		sensitivity=(sum(temp)/len(temp))
-	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
-	temp=filter(lambda a: a != 100, temp)
-	if len(temp)==0:
-		specificity=100
-	else:
-		specificity=(sum(temp)/len(temp))
-	return sensitivity, specificity, nodesensitivity, nodespecificity
-
-
-
+import random as rand
 def genBits(model):
 	startInd=utils.genRandBits(model.size)
 	for node in range(0,len(model.nodeList)):
@@ -383,13 +43,405 @@ def genBits(model):
 				truth[indices[int(chosen)]]=0
 				counter+=1
 			startInd[start:end]=truth
-			if sum(truth)==0:
+			if numpy.sum(truth)==0:
 				chosen=math.floor(random()*len(truth))
 				truth[int(chosen)]=1
 		elif len(truth)==1:
 			truth[0]=1
 			startInd[start:end]=truth
 	return startInd
+
+def buildToolbox( individualLength, bitFlipProb, model):
+	# # #setup toolbox
+	toolbox = base.Toolbox()
+	
+	pset = gp.PrimitiveSet("MAIN", arity=1)
+	pset.addPrimitive(operator.add, 2)
+	pset.addPrimitive(operator.sub, 2)
+	pset.addPrimitive(operator.mul, 2)
+	weightTup=(-1.0,)
+	params=sim.paramClass()
+	if params.adaptive:
+		for i in range(len(model.evaluateNodes)-1):
+			weightTup+=(-1.0,)
+	creator.create("FitnessMin", base.Fitness, weights=weightTup) # make a fitness minimization function
+	creator.create("Individual", list, fitness=creator.FitnessMin)	# create a class of individuals that are lists
+
+	#register our bitsring generator and how to create an individual, population
+	toolbox.register("genRandomBitString", genBits, model=model)
+	toolbox.register("Individual", tools.initIterate, creator.Individual, toolbox.genRandomBitString)
+	toolbox.register("population", tools.initRepeat, list , toolbox.Individual)
+	#create statistics toolbox and give it functions
+	stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	stats.register("avg", numpy.mean)
+	stats.register("std", numpy.std)
+	stats.register("min", numpy.min)
+	stats.register("max", numpy.max)
+	
+	# finish registering the toolbox functions
+	toolbox.register("mate", tools.cxTwoPoint)
+	toolbox.register("mutate", tools.mutFlipBit, indpb=bitFlipProb)
+	toolbox.register("select", tools.selNSGA2)
+	toolbox.register("similar", numpy.array_equal)
+	return toolbox, stats
+			
+def evaluate(individual, cells, model,  sss):
+	SSEs=[]
+
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValues=model.initValueList[j]
+		SSE=0
+		boolValues=iterateBooleanModel(individual, model, cells, initValues)
+		SSE=numpy.sum([(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2 for i in range(0, len(model.evaluateNodes))])
+		SSEs.append(SSE)
+	summer=1.*numpy.sum(SSEs)/len(SSEs)
+	for j in range(len(model.nodeList)):
+		if model.andLenList[j]>0:
+			if j==len(model.nodeList)-1:
+				end= model.size
+			else:
+				end=model.individualParse[j+1]
+			temptruther=individual[model.individualParse[j]:end]
+			if len(temptruther)==1:
+				individual[model.individualParse[j]:end]=[1]
+			elif len(temptruther)>1:
+				if numpy.sum(temptruther)==0:
+					summer+=1000
+	return summer,
+	
+def evaluateByNode(individual, cells, model,  sss):
+	SSEs=[]
+	boolValues=Parallel(n_jobs=min(6,len(sss)))(delayed(iterateBooleanModel)(list(individual), model, cells, model.initValueList[i]) for i in range(len(sss)))
+	for i in range(0, len(model.evaluateNodes)):
+		SSE= numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))])
+		SSEs.append(SSE)
+	# for i in range(len(model.evaluateNodes)):
+	# 	j=model.evaluateNodes[i]
+	# 	if model.andLenList[j]>0:
+	# 		if j==len(model.nodeList)-1:
+	# 			end= model.size
+	# 		else:
+	# 			end=model.individualParse[j+1]
+	# 		temptruther=individual[model.individualParse[j]:end]
+	# 		if len(temptruther)==1:
+	# 			individual[model.individualParse[j]:end]=[1]
+	# 		elif len(temptruther)>1:
+	# 			if sum(temptruther)==0:
+	# 				SSEs[j]+=1000
+	return tuple(SSEs)
+# generates a random set of samples made up of cells by using parameteris from probInit seq
+# to set up then iterating using strict Boolean modeling. 
+def runProbabilityBooleanSims(individual, model, sampleNum, cells):
+	samples=[]
+	seeds=[]
+	for i in range(0,sampleNum):
+		seeds.append(random())
+	samples=Parallel(n_jobs=min(6,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
+	# counter=0
+	# for sample in range(len(samples)):
+	# 	if sum(samples(sample))==0:
+	# 		temp=samples.pop(sample) 
+	# newSamples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
+	# print(samples)
+	return samples
+	
+def sampler(individual, model, cells, seeder):
+	seed(seeder)
+	cellArray=[]
+	sampleProbs=[]
+	simulator=sim.simulatorClass('bool')
+	params=sim.paramClass()
+	for j in range(0,len(model.nodeList)):
+		sampleProbs.append(random())
+	#samples= Parallel(n_jobs=8)(delayed(sampler)(individual, model, cells, randos[i]) for i in range(sampleNum))
+	for j in range(0,cells):
+		# shuffle nodes to be initially called.... 
+		#simulations that are truly random starting states should have all nodes added to this list
+		#get initial values for all nodes
+		initValues=genPBNInitValues(individual, model,sampleProbs)
+		# run Boolean simulation with initial values and append
+		vals, nums=sim.runModel(individual, model, simulator, initValues)
+		cellArray.append(vals)
+	return [sum(col) / float(cells) for col in zip(*cellArray)]
+
+def iterateBooleanModel(individual, model, cells, initProbs):
+	cellArray=[]
+	simulator=sim.simulatorClass('bool')
+	simulator.simSteps=3*len(model.nodeList)
+	for j in range(0,cells):
+		# shuffle nodes to be initially called.... 
+		#simulations that are truly random starting states should have all nodes added to this list
+		#get initial values for all nodes
+		initValues=genPBNInitValues(individual, model,initProbs)
+		# run Boolean simulation with initial values and append
+		vals, nums=sim.runModel(individual, model, simulator, initValues)
+		cellArray.append(vals)
+	return [sum(col) / float(cells) for col in zip(*cellArray)]
+
+def genPBNInitValues(individual, model,sampleProbs):
+	#return [True if (random()<sampleProbs[node]) else False for node in range(0,len(sampleProbs))]
+	initValues=[False for x in range(0,len(model.nodeList))]
+	for node in range(0,len(sampleProbs)):
+		if random()<sampleProbs[node]:
+			initValues[node]=True
+	return initValues
+
+def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb):
+    """Part of an evolutionary algorithm applying only the variation part
+    (crossover, mutation **or** reproduction). The modified individuals have
+    their fitness invalidated. The individuals are cloned so returned
+    population is independent of the input population.
+    
+    :param population: A list of individuals to vary.
+    :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                    operators.
+    :param lambda\_: The number of children to produce
+    :param cxpb: The probability of mating two individuals.
+    :param mutpb: The probability of mutating an individual.
+    :returns: A list of varied individuals that are independent of their
+              parents.
+    
+    The variation goes as follow. On each of the *lambda_* iteration, it
+    selects one of the three operations; crossover, mutation or reproduction.
+    In the case of a crossover, two individuals are selected at random from
+    the parental population :math:`P_\mathrm{p}`, those individuals are cloned
+    using the :meth:`toolbox.clone` method and then mated using the
+    :meth:`toolbox.mate` method. Only the first child is appended to the
+    offspring population :math:`P_\mathrm{o}`, the second child is discarded.
+    In the case of a mutation, one individual is selected at random from
+    :math:`P_\mathrm{p}`, it is cloned and then mutated using using the
+    :meth:`toolbox.mutate` method. The resulting mutant is appended to
+    :math:`P_\mathrm{o}`. In the case of a reproduction, one individual is
+    selected at random from :math:`P_\mathrm{p}`, cloned and appended to
+    :math:`P_\mathrm{o}`.
+    
+    This variation is named *Or* beceause an offspring will never result from
+    both operations crossover and mutation. The sum of both probabilities
+    shall be in :math:`[0, 1]`, the reproduction probability is
+    1 - *cxpb* - *mutpb*.
+    """
+    assert (cxpb + mutpb) <= 1.0, ("The sum of the crossover and mutation "
+        "probabilities must be smaller or equal to 1.0.")
+    
+    offspring = []
+
+    for _ in xrange(lambda_):
+        op_choice = random()
+        if op_choice < cxpb:            # Apply crossover
+            ind1, ind2 = map(toolbox.clone, rand.sample(population, 2))
+            ind1, ind2 = toolbox.mate(ind1, ind2)
+            del ind1.fitness.values
+            offspring.append(ind1)
+        elif op_choice < cxpb + mutpb:  # Apply mutation
+            ind = toolbox.clone(rand.choice(population))
+            ind, = mutFlipBitAdapt(ind,  .5, model)
+            del ind.fitness.values
+            offspring.append(ind)
+        else:                           # Apply reproduction
+            offspring.append(rand.choice(population))
+    return offspring
+
+def mutFlipBitAdapt(individual, indpb, model):
+    """Flip the value of the attributes of the input individual and return the
+    mutant. The *individual* is expected to be a :term:`sequence` and the values of the
+    attributes shall stay valid after the ``not`` operator is called on them.
+    The *indpb* argument is the probability of each attribute to be
+    flipped. This mutation is usually applied on boolean individuals.
+    
+    :param individual: Individual to be mutated.
+    :param indpb: Independent probability for each attribute to be flipped.
+    :returns: A tuple of one individual.
+    This function uses the :func:`~random.random` function from the python base
+    :mod:`random` module.
+    """
+    
+    errors=list(individual.fitness.values)
+    if numpy.sum(errors)<.1:
+    	for i in xrange(len(individual)):
+    		if random() < indpb:
+    			individual[i] = type(individual[i])(not individual[i])
+    else:
+    	for i in xrange(len(errors)):
+    		if model.andLenList[i]<2:
+    			errors[i]=0
+		normerrors=[error/numpy.sum(errors) for error in errors]
+		probs=numpy.cumsum(normerrors)
+		randy=random()
+		focusNode=next(i for i in xrange(len(probs)) if probs[i]>randy)
+		if model.andLenList[focusNode]>0:
+			start=model.individualParse[focusNode]
+			if focusNode==len(model.nodeList)-1:
+				end= model.size
+			else:
+				end=model.individualParse[focusNode+1]
+			for i in xrange(start,end):
+				if random() < indpb:
+					individual[i] = type(individual[i])(not individual[i])
+    return individual,
+
+
+def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb, ngen,
+                   stats=None, halloffame=None, verbose=__debug__):
+    """This is the :math:`(\mu + \lambda)` evolutionary algorithm.
+    :returns: The final population and a :class:`~deap.tools.Logbook`
+              with the statistics of the evolution.
+    
+	`varOr` method. It returns the optimized population and a
+    :class:`~deap.tools.Logbook` with the statistics of the evolution (if
+    any). The logbook will contain the generation number, the number of
+    evalutions for each generation and the statistics if a
+    :class:`~deap.tools.Statistics` if any. The *cxpb* and *mutpb* arguments
+    are passed to the :func:`varAnd` function. The pseudocode goes as follow
+    """
+    logbook = tools.Logbook()
+    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in population if not ind.fitness.valid]
+    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = fit
+
+    if halloffame is not None:
+        halloffame.update(population)
+
+    record = stats.compile(population) if stats is not None else {}
+    logbook.record(gen=0, nevals=len(invalid_ind), **record)
+    if verbose:
+        print logbook.stream
+
+    # Begin the generational process
+    for gen in range(1, ngen+1):
+        # Vary the population
+        errors=[ind.fitness.values for ind in population]
+        offspring = varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb)
+        
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        #fitnesses=Parallel(n_jobs=min(6,len(invalid_ind)))(delayed(toolbox.evaluate)(indy) for indy in invalid_ind)
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
+        
+        # Update the hall of fame with the generated individuals
+        if halloffame is not None:
+            halloffame.update(offspring)
+
+        # Select the next generation population
+        population[:] = toolbox.select(population + offspring, mu)
+
+        # Update the statistics with the new population
+        record = stats.compile(population) if stats is not None else {}
+        logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+        if verbose:
+            print logbook.stream
+
+    return population, logbook
+
+def GAautoSolver(model, sss):
+	params=sim.paramClass()
+	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model)
+	# reset simSteps to 1 so we just see first step in Sim...
+	if params.adaptive:
+		toolbox.register("evaluate", evaluateByNode, cells=params.cells,model=model,sss=sss)
+	else:
+		toolbox.register("evaluate", evaluate, cells=params.cells,model=model,sss=sss)
+	population=toolbox.population(n=params.popSize)
+	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
+	
+	if params.adaptive:
+		output=eaMuPlusLambdaAdaptive(population, toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+	else:
+		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+	# stats = tools.Statistics(key=lambda ind: ind.fitness.values)
+	# stats.register("avg", numpy.mean)
+	# stats.register("std", numpy.std)
+	# stats.register("min", numpy.min)
+	# stats.register("max", numpy.max)
+	# toolbox.register("evaluate", evaluate, params=params,model=model,simulator=propSimulator,sss=newSSS)
+	return output, hof
+
+def GAsearchModel(model, newSSS):
+	output, hof=GAautoSolver(model, newSSS)
+	genOut=output[1][-1]
+	return hof[0].fitness.values, hof[0]
+
+def compareIndividualsNodeWise(truthList, testList, model):
+	nodesensitivity=[]
+	nodespecificity=[]
+	netOnes=[]
+	netZeros=[]
+	netNegOnes=[]
+	for node in range(len(model.nodeList)):
+		ones=[]
+		zeros=[]
+		negones=[]
+		# get indices to extract individual for this node
+		if node==len(model.nodeList)-1:
+			end=len(model.nodeList)
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		sumindividual=[]
+		#loop over individuals provided and calculate relevant values
+		for i in range(len(truthList)):
+			truth= truthList[i][start:end]
+			test= testList[i][start:end]
+			sumindividual.append(numpy.sum(truth))
+			newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
+			ones.append(newindividual.count(1))
+			zeros.append(newindividual.count(0))
+			negones.append(newindividual.count(-1))
+		# append node-wise breakdowns to list of breakdowns for the model as a whole
+		netOnes.append(numpy.sum(ones))
+		netZeros.append(numpy.sum(zeros))
+		netNegOnes.append(numpy.sum(negones))
+		
+		# calculate sensitivity and specificity for the node
+		temp=[100 if (sumindividual[i]-negones[i]+ones[i])==0 else (sumindividual[i]-negones[i])/(sumindividual[i]-negones[i]+ones[i]) for i in range(0,len(ones))]
+		temp=filter(lambda a: a != 100, temp)
+		if len(temp)==0:
+			sensitivity=100
+		else:
+			sensitivity=(numpy.sum(temp)/len(temp))
+		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+		temp=filter(lambda a: a != 100, temp)
+		if len(temp)==0:
+			specificity=100
+		else:
+			specificity=(numpy.sum(temp)/len(temp))
+		# add to list of sensitivity and specificity by node
+		nodesensitivity.append(sensitivity)
+		nodespecificity.append(specificity)
+	#calculate sensitivity and specificity on the network as a whole
+	ones=[]
+	zeros=[]
+	negones=[]
+	sumindividual=[]
+
+	for i in range(len(truthList)):
+		truth= truthList[i]
+		test= testList[i]
+		sumindividual.append(numpy.sum(truth))
+		newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
+		ones.append(newindividual.count(1))
+		zeros.append(newindividual.count(0))
+		negones.append(newindividual.count(-1))
+	temp=[100 if (sumindividual[i]-negones[i]+ones[i])==0 else (sumindividual[i]-negones[i])/(sumindividual[i]-negones[i]+ones[i]) for i in range(0,len(ones))]
+	temp=filter(lambda a: a != 100, temp)
+	if len(temp)==0:
+		sensitivity=100
+	else:
+		sensitivity=(numpy.sum(temp)/len(temp))
+	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+	temp=filter(lambda a: a != 100, temp)
+	if len(temp)==0:
+		specificity=100
+	else:
+		specificity=(numpy.sum(temp)/len(temp))
+	return sensitivity, specificity, nodesensitivity, nodespecificity
+
 		
 def simTester(model, sss, simClass):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
@@ -426,7 +478,7 @@ def simTester(model, sss, simClass):
 					end=len(model.nodeList)
 				else:
 					end=model.individualParse[node+1]
-				if sum(individual[model.individualParse[node]:end])==0:
+				if numpy.sum(individual[model.individualParse[node]:end])==0:
 					individual[model.individualParse[node]]=1
 
 		# generate Boolean model for this trial
@@ -454,21 +506,23 @@ def simTester(model, sss, simClass):
 		model.initValueList=newInitValueList
 
 
-		# set up PBN-based simulator
-		propSimulator=sim.simulatorClass(simClass)
-		propSimulator.trainingData=model.initValueList
-		propSimulator.train(model)
-		#perform brute force search
-		bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
+		# # set up PBN-based simulator
+		# propSimulator=sim.simulatorClass(simClass)
+		# propSimulator.trainingData=model.initValueList
+		# propSimulator.train(model)
+		# #perform brute force search
+		# bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
+		
+
+		#perform GA run
+		dev, bruteOut=GAsearchModel(model, newSSS)
 		truthList.append(individual)
-		testList.append(bruteOut)
-		#devList.append(dev)
-		# print("truth, found")
-		# print(utils.writeModel(individual, model))
-		# print(utils.writeModel(bruteOut, model))
+		testList.append(list(bruteOut))
+		devList.append(dev)
 
 
-
+	print('devList')
+	print(devList)
 
 	tuple1=compareIndividualsNodeWise(truthList, testList, model)
 	sensitivities=[]
@@ -483,6 +537,9 @@ def simTester(model, sss, simClass):
 	newtruths=[]
 	for k in range(len(truthList)):
 		newtruths.append([])
+	newtests=[]
+	for k in range(len(testList)):
+		newtests.append([])
 	for node in range(0,len(model.nodeList)):
 		FP=0
 		TP=0
@@ -497,19 +554,32 @@ def simTester(model, sss, simClass):
 		inEdges=[]
 		for lister in andNodeList:
 			inEdges.append(set(lister))
+		print(inEdges)
 		for k in range(len(truthList)):
 			truth=truthList[k][start:end]
 			test= testList[k][start:end]
 			for i in range(len(truth)):
 				if truth[i]==1:
 					for j in range(len(truth)):
-						if truth[j]==1:
+						if truth[j]==1 and not i==j:
 							if inEdges[i].issubset(inEdges[j]):
+								print("subset time")
+								print(i)
+								print(j)
+								print(inEdges[i])
+								print(inEdges[j])
 								truth[j]=0
+			for i in range(len(test)):
+				if test[i]==1:
+					for j in range(len(test)):
+						if test[j]==1 and not i==j:
+							if inEdges[i].issubset(inEdges[j]):
+								test[j]=0
+			newtests[k].extend(test)
 			newtruths[k].extend(truth)
 		for k in range(len(truthList)):
 			truth=newtruths[k][start:end]
-			test= testList[k][start:end]
+			test= newtests[k][start:end]
 			truthSet=Set([])
 			testSet=Set([])
 			baseSet=Set([])
@@ -576,20 +646,26 @@ def simTester(model, sss, simClass):
 		specificity=100
 	tuple3= (sensitivity, specificity, sensitivities, specificities)
 
-	return tuple1, tuple2, tuple3, inEdgeNums, overlaps, [testList, truthList,  newtruths]
+	tuple4=compareIndividualsNodeWise(newtruths, newtests, model)
+	for i in range(len(newtruths)):
+		print("truth, found")
+		print(utils.writeModel(newtruths[i], model))
+		print(utils.writeModel(newtests[i], model))
+
+	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, [testList, truthList,  newtruths, newtests]
 
 def simpleNetBuild():
 	graph = nx.DiGraph()
-	# graph.add_edge('a1','a', signal='a')	
-	# graph.add_edge('a2','a', signal='a')
-	# graph.add_edge('a3','a', signal='a')
-	# graph.add_edge('a4','a', signal='a')
-	# graph.add_edge('b1','b', signal='a')
-	# graph.add_edge('b2','b', signal='a')
-	# graph.add_edge('b3','b', signal='a')
+	graph.add_edge('a1','a', signal='a')	
+	graph.add_edge('a2','a', signal='a')
+	graph.add_edge('a3','a', signal='a')
+	graph.add_edge('a4','a', signal='a')
+	graph.add_edge('b1','b', signal='a')
+	graph.add_edge('b2','b', signal='a')
+	graph.add_edge('b3','b', signal='a')
 	graph.add_edge('a','d', signal='a')	
 	graph.add_edge('b','d', signal='a')
-	# graph.add_edge('d','e', signal='a')
+	graph.add_edge('d','e', signal='a')
 	return graph
 
 def ifngStimTest(bioReplicates):
@@ -609,8 +685,8 @@ def ifngStimTest(bioReplicates):
 	specificityStds=[]
 	sensitivityStds=[]
 	lines.pop(0)
-	nodesensitivities=[[],[],[]]
-	nodespecificities=[[],[],[]]
+	nodesensitivities=[[],[],[],[]]
+	nodespecificities=[[],[],[],[]]
 	truthholder=[]
 	edgeDegree=[]
 	overlapNodes=[]
@@ -627,37 +703,46 @@ def ifngStimTest(bioReplicates):
 		# if(len(graph.edges())>1):
 		# 	graph=nc.simplifyNetwork(graph, data)
 		graph = simpleNetBuild()
-		coder='LiuGraph'
+		#graph=liu.LiuNetwork1Builder()
+		coder='unrolled'
 		if(len(graph.edges())>1):
 			print(coder)
 			print(len(graph.edges()))
 			
 			nx.write_graphml(graph,coder+'.graphml')
-			tempsensitivities=[[],[],[]]
-			tempspecificities=[[],[],[]]
-			truthlists=[[],[],[]]
+			tempsensitivities=[[],[],[],[]]
+			tempspecificities=[[],[],[],[]]
+			truthlists=[[],[],[],[]]
+			devLists=[]
 			for i in range(bioReplicates):
-				tuple1, tuple2, tuple3, inEdgeNums, overlaps, truthlisttemp=rewireSimTest(graph)
+				tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=rewireSimTest(graph)
 				sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
 				sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
 				sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
+				sensitivity4, specificity4, nodesensitivity4, nodespecificity4 = tuple3
 				tempsensitivities[0].append(sensitivity1)
 				tempsensitivities[1].append(sensitivity2)
 				tempsensitivities[2].append(sensitivity3)
+				tempsensitivities[3].append(sensitivity4)
 				tempspecificities[0].append(specificity1)
 				tempspecificities[1].append(specificity2)
 				tempspecificities[2].append(specificity3)
+				tempspecificities[3].append(specificity4)
 				nodesensitivities[0].extend(nodesensitivity1)
 				nodesensitivities[1].extend(nodesensitivity2)
 				nodesensitivities[2].extend(nodesensitivity3)
+				nodesensitivities[3].extend(nodesensitivity4)
 				nodespecificities[0].extend(nodespecificity1)
 				nodespecificities[1].extend(nodespecificity2)
 				nodespecificities[2].extend(nodespecificity3)
+				nodespecificities[3].extend(nodespecificity4)
+				devLists.append(devList)
 				overlapNodes.extend(overlaps)
 				edgeDegree.extend(inEdgeNums)
 				truthlists[0].extend(truthlisttemp[0])
 				truthlists[1].extend(truthlisttemp[1])
 				truthlists[2].extend(truthlisttemp[2])
+				truthlists[3].extend(truthlisttemp[3])
 			for i in range(len(tempsensitivities)):
 				tempsensitivities[i]=filter(lambda a: a != 100, tempsensitivities[i])
 				if len(tempsensitivities[i])==0:
@@ -666,11 +751,10 @@ def ifngStimTest(bioReplicates):
 				tempspecificities[i]=filter(lambda a: a != 100, tempspecificities[i])
 				if len(tempspecificities[i])==0:
 					tempspecificities[i].append(0.)
-			sensitivity=[sum(tempsensitivities[0])/len(tempsensitivities[0]),sum(tempsensitivities[1])/len(tempsensitivities[1]),sum(tempsensitivities[2])/len(tempsensitivities[2])]
-			sensitivityStd=[numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),numpy.std(tempsensitivities[2])/len(tempsensitivities[2])]
-			specificity=[sum(tempspecificities[0])/len(tempspecificities[0]),sum(tempspecificities[1])/len(tempspecificities[1]),sum(tempspecificities[2])/len(tempspecificities[2])]
-			specificityStd=[numpy.std(tempspecificities[0])/len(tempspecificities[0]),numpy.std(tempspecificities[1])/len(tempspecificities[1]),numpy.std(tempspecificities[2])/len(tempspecificities[2])]
-
+			sensitivity=[numpy.sum(tempsensitivities[0])/len(tempsensitivities[0]),numpy.sum(tempsensitivities[1])/len(tempsensitivities[1]),numpy.sum(tempsensitivities[2])/len(tempsensitivities[2]),numpy.sum(tempsensitivities[3])/len(tempsensitivities[3])]
+			sensitivityStd=[numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),numpy.std(tempsensitivities[2])/len(tempsensitivities[2]),numpy.std(tempsensitivities[3])/len(tempsensitivities[3])]
+			specificity=[numpy.sum(tempspecificities[0])/len(tempspecificities[0]),numpy.sum(tempspecificities[1])/len(tempspecificities[1]),numpy.sum(tempspecificities[2])/len(tempspecificities[2]),numpy.sum(tempspecificities[3])/len(tempspecificities[3])]
+			specificityStd=[numpy.std(tempspecificities[0])/len(tempspecificities[0]),numpy.std(tempspecificities[1])/len(tempspecificities[1]),numpy.std(tempspecificities[2])/len(tempspecificities[2]),numpy.std(tempspecificities[3])/len(tempspecificities[3])]
 			truthholder.append(truthlists)
 			specificities.append(specificity)
 			sensitivities.append(sensitivity)
@@ -682,26 +766,31 @@ def ifngStimTest(bioReplicates):
 			print(specificityStd)
 			print(nodesensitivities)
 			print(nodespecificities)
+			print(devLists)
 	nodeLookup={}
 	for number in edgeDegree:
-		nodeLookup[number]=[[],[],[],[],[],[]]
+		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
 	for i in range(len(edgeDegree)):
 		nodeLookup[edgeDegree[i]][0].append(nodesensitivities[0][i])
 		nodeLookup[edgeDegree[i]][1].append(nodesensitivities[1][i])
 		nodeLookup[edgeDegree[i]][2].append(nodesensitivities[2][i])
-		nodeLookup[edgeDegree[i]][3].append(nodespecificities[0][i])
-		nodeLookup[edgeDegree[i]][4].append(nodespecificities[1][i])
-		nodeLookup[edgeDegree[i]][5].append(nodespecificities[2][i])
+		nodeLookup[edgeDegree[i]][3].append(nodesensitivities[3][i])
+		nodeLookup[edgeDegree[i]][4].append(nodespecificities[0][i])
+		nodeLookup[edgeDegree[i]][5].append(nodespecificities[1][i])
+		nodeLookup[edgeDegree[i]][6].append(nodespecificities[2][i])
+		nodeLookup[edgeDegree[i]][7].append(nodespecificities[3][i])
 	overlapLookup={}
 	for overlap in overlapNodes:
-		overlapLookup[overlap]=[[],[],[],[],[],[]]
+		overlapLookup[overlap]=[[],[],[],[],[],[],[],[]]
 	for i in range(len(overlapNodes)):
 		overlapLookup[overlapNodes[i]][0].append(nodesensitivities[0][i])
 		overlapLookup[overlapNodes[i]][1].append(nodesensitivities[1][i])
 		overlapLookup[overlapNodes[i]][2].append(nodesensitivities[2][i])
-		overlapLookup[overlapNodes[i]][3].append(nodespecificities[0][i])
-		overlapLookup[overlapNodes[i]][4].append(nodespecificities[1][i])
-		overlapLookup[overlapNodes[i]][5].append(nodespecificities[2][i])
+		overlapLookup[overlapNodes[i]][3].append(nodesensitivities[3][i])
+		overlapLookup[overlapNodes[i]][4].append(nodespecificities[0][i])
+		overlapLookup[overlapNodes[i]][5].append(nodespecificities[1][i])
+		overlapLookup[overlapNodes[i]][6].append(nodespecificities[2][i])
+		overlapLookup[overlapNodes[i]][7].append(nodespecificities[3][i])
 	finalNodeData=[]
 	finalExtendData=[]
 	for key in nodeLookup.keys():
@@ -735,91 +824,28 @@ def ifngStimTest(bioReplicates):
 	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
 	pickle.dump( finalExtendData, open( "extended_node_by_node_data.pickle", "wb" ) )
 	pickle.dump( finalOverlapExtendData, open( "extended_overlap_data.pickle", "wb" ) )
+	
+	pickle.dump( devLists, open( "devLists.pickle", "wb" ) )
+
 	pickle.dump( [sensitivities,sensitivityStds,specificities, specificityStds], open( "network_by_network_data.pickle", "wb" ) )
-	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
 	print(sensitivities)
 	print(specificities)
 	print(finalNodeData)
+	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
 def rewireSimTest(graph):
-	#graph=nc.rewireNetwork(graph)
 	params=sim.paramClass()
+	if params.rewire:
+		graph=nc.rewireNetwork(graph)
+
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)
 	#print(model.nodeList)
 	#print(model.size)
 	#print(model.individualParse)
 	return simTester(model, sss,'prop')
-def PBNsimTest(trials):
-
-	graph=simpleNetBuild()
-	params=sim.paramClass()
-	sss=utils.synthesizeInputs(graph,params.samples)
-	model=sim.modelClass(graph,sss)
-
-	for i in range(0,trials):
-
-		#generate random set of logic rules to start with
-		individual=genBits(model)
-		for node in range(0,len(model.nodeList)):
-			if model.andLenList[node]>0:
-				if node==len(model.nodeList)-1:
-					end=len(model.nodeList)
-				else:
-					end=model.individualParse[node+1]
-				if sum(individual[model.individualParse[node]:end])==0:
-					individual[model.individualParse[node]]=1
-
-		# generate Boolean model for this trial
-		output=runProbabilityBooleanSims(individual, model, params.samples, params.cells)
-		# copy new output into newSSS and initial values
-		newSSS=[]
-		for k in range(0,params.samples):
-			newSS=copy.deepcopy(sss[k])
-			for j in range(0,len(model.nodeList)):
-				newSS[model.nodeList[j]]=output[k][j]
-			newSSS.append(newSS)
-		newInitValueList=[]
-		for j in range(0,len(sss)):
-			newInitValueList.append([])
-		# print(len(newSSS))
-		# print(samples)
-		# print(len(sss))
-		for j in range(0,len(model.nodeList)):
-			for k in range(0,len(sss)):
-				ss=newSSS[k]
-				if  model.nodeList[j] in sss[0].keys():
-					newInitValueList[k].append(ss[model.nodeList[j]])
-				else:
-					newInitValueList[k].append(0.5)
-		model.initValueList=newInitValueList
-
-
-		# set up PBN-based simulator
-		propSimulator=sim.simulatorClass('propNaive')
-		propSimulator.simSteps=10
-		propSimulator.trainingData=model.initValueList
-		#propSimulator.train(model)
-		#print(propSimulator.andTrainer)
-
-		nodeWiseError=[]
-		for j in range(0,len(model.nodeList)):
-			nodeWiseError.append([])
-		for k in range(0,len(sss)):
-			ss=newSSS[k]
-			initValues=newInitValueList[k]
-			newVals, nums=sim.runModel(individual, model, propSimulator, initValues)
-			for entry in range(len(ss)):
-				nodeWiseError[entry].append((initValues[entry]-newVals[entry])**2)
-		print(utils.writeModel(individual, model))
-		for entry in range(len(nodeWiseError)):
-			print(model.nodeList[entry])
-			print(nodeWiseError[entry])
 
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	#ifngStimTest(25)
-	PBNsimTest(20)
-
-
+	ifngStimTest(2)
 	print("--- %s seconds ---" % (time.time() - start_time))

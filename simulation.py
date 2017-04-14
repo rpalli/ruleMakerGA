@@ -88,25 +88,27 @@ class modelClass:
 		self.initValueList=initValueList #puts an empty and correctly structured initValueList together for later population. 
 		
 class paramClass:
-	def __init__(self):     
+	def __init__(self):    
+		self.adaptive=True
+		self.rewire=False
 		self.simSteps=100 # number of steps each individual is run when evaluating
-		self.generations=15 # generations to run
-		self.popSize=100 #size of population
-		self.mu= 100#individuals selected
-		self.lambd= 200#children produced
+		self.generations=10 # generations to run
+		self.popSize=10 #size of population
+		self.mu= 3#individuals selected
+		self.lambd= 10#children produced
 		self.bitFlipProb=.1 # prob of flipping bits inside mutation
-		self.crossoverProb=.2 # prob of crossing over a particular parent
-		self.mutationProb=.2 # prob of mutating a particular parent
-		self.async=False # run in asynchronous mode
-		self.iters=100 #number of simulations to try in asynchronous mode
+		self.crossoverProb=.3 # prob of crossing over a particular parent
+		self.mutationProb=.7 # prob of mutating a particular parent
+		self.async=True # run in asynchronous mode
+		self.iters=10 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
 		self.samples=10
-		self.trials=5
-		self.IC=3 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
+		self.trials=2
+		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def boolAnd(num1, num2):
 	return num1 and num2

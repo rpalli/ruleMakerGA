@@ -3350,3 +3350,214 @@ def evaluate(individual, params, model, simulator, sss):
 	else:
 		return summer,
 	
+def piecewiseGASolver(model, sss, propSimulator):
+	params=sim.paramClass()
+	# reset simSteps to 1 so we just see first step in Sim...
+	propSimulator.simSteps=1
+	bestList=[]
+	for i in range(len(model.nodeList)):
+		if model.andLenList[i]>1:
+			toolbox, stats=buildToolbox(model.andLenList[i],params.bitFlipProb)
+			toolbox.register("evaluate", evalNode,currentNode=i, params=params,model=model,simulator=propSimulator,sss=sss)
+			population=toolbox.population(n=params.popSize)
+			hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
+			output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+			bestList.append(hof[0])
+		elif  model.andLenList[i]==1:
+			bestList.append([1])
+		else:
+			bestList.append([])
+	return [item for sublist in bestList for item in sublist]
+
+#exhaustively search boolean networks for best option going node by node for rules
+def bruteForceSearchModel(model, sss1, simulator):
+	initValueList=[]
+	for j in range(0,len(sss1)):
+		initValueList.append([])
+	for i in range(0,len(model.nodeList)):
+		for j in range(0,len(sss1)):
+			ss=sss1[j]
+			if  model.nodeList[i] in sss1[0].keys():
+				initValueList[j].append(ss[model.nodeList[i]])
+			else:
+				initValueList[j].append(0.5)
+	#print(model.initValueList)
+	model.initValueList=initValueList
+	bestlist=Parallel(n_jobs=6)(delayed(singleNodeBF)(model, sss1, simulator, i) for i in range(len(model.nodeList)))
+	return [item for sublist in bestlist for item in sublist]
+
+def singleNodeBF(model, sss1, simulator, i):
+	best=[]
+	# counter=0
+
+	if model.andLenList[i]>0:
+		currentDev=10000*len(sss1)
+		best=utils.bitList(0,model.andLenList[i])
+		if model.andLenList[i]<10:
+			checkRange=2**(model.andLenList[i])
+		else:
+			checkRange=2**(10)
+		for j in range(1,checkRange):
+			bits=[]
+			bits=utils.bitList(j,model.andLenList[i] )
+			deviation=0
+			for steadyStateNum in range(0,len(model.initValueList)):
+				derivedVal=sim.updateNode(i,model.initValueList[steadyStateNum],bits, model, simulator)
+				deviation=deviation+(derivedVal-sss1[steadyStateNum][model.nodeList[i]])**2
+			if(deviation<currentDev):
+				best=bits
+				currentDev=deviation
+			# if(deviation==currentDev):
+			# 	counter=counter+1
+		print(currentDev)
+	return best
+
+def evalNode(individual, currentNode, params, model, simulator, sss):
+	SSEs=[]
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValue=model.initValueList[j]
+		SSE=0
+		value= sim.updateNode(currentNode,initValue,individual,  model,simulator)
+		SSE+=(value-ss[model.nodeList[model.evaluateNodes[currentNode]]])**2
+		SSEs.append(SSE)
+	summer=0
+	for i in range(0,len(SSEs)):
+		summer+=SSEs[i]
+	summer=summer/len(SSEs)
+	likelihood=1-summer
+	for i in range(len(model.nodeList)):
+		if i==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[i+1]	 
+		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
+			likelihood=.001	
+	totalNodes=0
+	for bit in range(len(individual)):
+		if individual[bit]==1:
+			totalNodes=totalNodes+len(model.andNodeInvertList[currentNode][bit])
+	if params.IC==1:
+		return totalNodes-math.log(likelihood),
+	elif params.IC==2:
+		return totalNodes*math.log(len(sss))-2*math.log(likelihood),
+	elif params.IC==3:
+		return totalNodes-4*math.log(likelihood),
+	else:
+		return summer,
+
+def PBNsimTest(trials):
+
+	graph=simpleNetBuild()
+	params=sim.paramClass()
+	sss=utils.synthesizeInputs(graph,params.samples)
+	model=sim.modelClass(graph,sss)
+
+	for i in range(0,trials):
+
+		#generate random set of logic rules to start with
+		individual=genBits(model)
+		for node in range(0,len(model.nodeList)):
+			if model.andLenList[node]>0:
+				if node==len(model.nodeList)-1:
+					end=len(model.nodeList)
+				else:
+					end=model.individualParse[node+1]
+				if sum(individual[model.individualParse[node]:end])==0:
+					individual[model.individualParse[node]]=1
+
+		# generate Boolean model for this trial
+		output=runProbabilityBooleanSims(individual, model, params.samples, params.cells)
+		# copy new output into newSSS and initial values
+		newSSS=[]
+		for k in range(0,params.samples):
+			newSS=copy.deepcopy(sss[k])
+			for j in range(0,len(model.nodeList)):
+				newSS[model.nodeList[j]]=output[k][j]
+			newSSS.append(newSS)
+		newInitValueList=[]
+		for j in range(0,len(sss)):
+			newInitValueList.append([])
+		# print(len(newSSS))
+		# print(samples)
+		# print(len(sss))
+		for j in range(0,len(model.nodeList)):
+			for k in range(0,len(sss)):
+				ss=newSSS[k]
+				if  model.nodeList[j] in sss[0].keys():
+					newInitValueList[k].append(ss[model.nodeList[j]])
+				else:
+					newInitValueList[k].append(0.5)
+		model.initValueList=newInitValueList
+
+
+		# set up PBN-based simulator
+		propSimulator=sim.simulatorClass('propNaive')
+		propSimulator.simSteps=10
+		propSimulator.trainingData=model.initValueList
+		#propSimulator.train(model)
+		#print(propSimulator.andTrainer)
+
+		nodeWiseError=[]
+		for j in range(0,len(model.nodeList)):
+			nodeWiseError.append([])
+		for k in range(0,len(sss)):
+			ss=newSSS[k]
+			initValues=newInitValueList[k]
+			newVals, nums=sim.runModel(individual, model, propSimulator, initValues)
+			for entry in range(len(ss)):
+				nodeWiseError[entry].append((initValues[entry]-newVals[entry])**2)
+		print(utils.writeModel(individual, model))
+		for entry in range(len(nodeWiseError)):
+			print(model.nodeList[entry])
+			print(nodeWiseError[entry])
+def evaluate(individual, params, model, simulator, sss):
+	SSEs=[]
+	for j in range(0,len(sss)):
+		ss=sss[j]
+		initValues=model.initValueList[j]
+		SSE=0
+		boolValues, addnodeNums=sim.runModel(individual, model,simulator, model.initValueList[j])	
+		for i in range(0, len(model.evaluateNodes)):
+			SSE+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+		SSEs.append(SSE)
+	summer=0
+	for i in range(0,len(SSEs)):
+		summer+=SSEs[i]
+	summer=summer/len(SSEs)
+	likelihood=1-summer/len(model.andLenList)
+	for i in range(len(model.nodeList)):
+		if i==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[i+1]	 
+		if sum(individual[model.individualParse[i]:model.individualParse[i+1]])==0:
+			likelihood=.001	
+	if params.IC==1:
+		return addnodeNums-math.log(likelihood),
+	elif params.IC==2:
+		return addnodeNums*math.log(len(sss))-2*math.log(likelihood),
+	else:
+		return summer,
+
+class probInitSeqClass:
+	def __init__(self):
+		self.startNodes=[]
+		self.startProbs=[]
+		self.nodeOrder=[]
+def updateInitSeq(individual, model, probInitSeq):
+	#looks through list of nodes and adds to list of initial updated nodes if there are no specified inputs
+	initSeq=probInitSeqClass()
+	initSeq.startNodes=list(probInitSeq.startNodes)
+	initSeq.startProbs=list(probInitSeq.startProbs)
+	initSeq.nodeOrder=list(probInitSeq.nodeOrder)
+	for i in range(0,len(model.nodeList)):
+		parser=model.individualParse[i]
+		andList=model.andNodeList[i] # find the list of possible input combinations for the node we are on 
+		
+		if (model.andLenList[i]==0 or (len(andList)<2 and individual[0]==0)) and i not in initSeq.startNodes:
+			# if there are no inputs or the rule excludes a single input then add to initial node list if not already there
+			initSeq.startNodes.append(i)
+			initSeq.nodeOrder.pop(i)
+			initSeq.startProbs.append(1)		
+	return initSeq
