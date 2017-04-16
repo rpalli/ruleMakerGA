@@ -94,21 +94,21 @@ class paramClass:
 		self.rewire=False
 		self.async=False # run in asynchronous mode
 		self.simSteps=100 # number of steps each individual is run when evaluating
-		self.generations=5 # generations to run
+		self.generations=10 # generations to run
 		self.popSize=10 #size of population
 		self.mu= 10 #individuals selected
-		self.lambd= 10#children produced
+		self.lambd= 20#children produced
 		self.bitFlipProb=.1 # prob of flipping bits inside mutation
-		self.crossoverProb=.3 # prob of crossing over a particular parent
-		self.mutationProb=.7 # prob of mutating a particular parent
+		self.crossoverProb=.1 # prob of crossing over a particular parent
+		self.mutationProb=.9 # prob of mutating a particular parent
 		self.iters=10 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
 		self.cells=1000
-		self.samples=5
-		self.trials=2
+		self.samples=10
+		self.trials=5
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def boolAnd(num1, num2):

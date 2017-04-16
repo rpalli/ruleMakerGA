@@ -79,7 +79,7 @@ def buildToolbox( individualLength, bitFlipProb, model):
 	# finish registering the toolbox functions
 	toolbox.register("mate", tools.cxTwoPoint)
 	toolbox.register("mutate", tools.mutFlipBit, indpb=bitFlipProb)
-	toolbox.register("select", tools.selBest)
+	toolbox.register("select", tools.selNSGA2)
 	toolbox.register("similar", numpy.array_equal)
 	return toolbox, stats
 			
@@ -320,7 +320,7 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		netNegOnes.append(numpy.sum(negones))
 		
 		# calculate sensitivity and specificity for the node
-		temp=[100 if (sumindividual[i]-negones[i]+ones[i])==0 else (sumindividual[i]-negones[i])/(sumindividual[i]-negones[i]+ones[i]) for i in range(0,len(ones))]
+		temp=[100 if sumindividual[i]==0 else (sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
 		temp=filter(lambda a: a != 100, temp)
 		if len(temp)==0:
 			sensitivity=100
@@ -760,5 +760,5 @@ def rewireSimTest(graph):
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(1)
+	ifngStimTest(5)
 	print("--- %s seconds ---" % (time.time() - start_time))
