@@ -35,7 +35,7 @@ def genBits(model):
 			# 	else:
 			# 		truth[i]=0
 			counter=0
-			while sum(truth)>5 and counter < 100000:
+			while numpy.sum(truth)>5 and counter < 100000:
 				indices = [i for i in range(len(truth)) if truth[i] == 1]
 				chosen=math.floor(random()*len(indices))
 				truth[indices[int(chosen)]]=0
@@ -105,11 +105,13 @@ def evaluate(individual, cells, model,  sss, params):
 	return summer,
 	
 def evaluateByNode(individual, cells, model,  sss, params):
-	SSEs=[]
-	boolValues=Parallel(n_jobs=min(6,len(sss)))(delayed(iterateBooleanModel)(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss)))
-	for i in range(0, len(model.evaluateNodes)):
-		SSE= numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))])
-		SSEs.append(SSE)
+	# SSEs=[]
+	#boolValues=Parallel(n_jobs=min(6,len(sss)))(delayed(iterateBooleanModel)(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss)))
+	boolValues=[iterateBooleanModel(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss))]
+	# for i in range(0, len(model.evaluateNodes)):
+	# 	SSEs= numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))])
+	# 	SSEs.append(SSE)
+	SSEs= [numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))]) for i in range(0, len(model.evaluateNodes))]
 	return tuple(SSEs)
 # generates a random set of samples made up of cells by using parameteris from probInit seq
 # to set up then iterating using strict Boolean modeling. 
@@ -149,7 +151,7 @@ def iterateBooleanModel(individual, model, cells, initProbs, params):
 		# run Boolean simulation with initial values and append
 		vals=sim.runModel(individual, model, simulator, initValues, params)
 		cellArray.append(vals)
-	return [numpy.sum(col) / float(cells) for col in zip(*cellArray)]
+	return [1.*numpy.sum(col) / float(cells) for col in zip(*cellArray)]
 
 def genPBNInitValues(individual, model,sampleProbs):
 	#return [True if (random()<sampleProbs[node]) else False for node in range(0,len(sampleProbs))]
@@ -194,7 +196,7 @@ def mutFlipBitAdapt(individual, indpb, model):
 			if model.andLenList[model.evaluateNodes[j]]<2:
 				errors[model.evaluateNodes[j]]=0
 		# normalize errors to get a probability that the node  is modified
-		normerrors=[error/numpy.sum(errors) for error in errors]
+		normerrors=[1.*error/numpy.sum(errors) for error in errors]
 		probs=numpy.cumsum(normerrors)
 		# randomly select a node to mutate
 		randy=random()
@@ -213,10 +215,151 @@ def mutFlipBitAdapt(individual, indpb, model):
 				else:
 					individual[i] = 0
 			#ensure that there is at least one shadow and node turned on
-			if sum(individual[start:end])==0:
+			if numpy.sum(individual[start:end])==0:
 				individual[start+1]=1
-	print(individual)
 	return individual,
+
+
+def selNSGA2(individuals, k):
+	"""Apply NSGA-II selection operator on the *individuals*. Usually, the
+	size of *individuals* will be larger than *k* because any individual
+	present in *individuals* will appear in the returned list at most once.
+	Having the size of *individuals* equals to *k* will have no effect other
+	than sorting the population according to their front rank. The
+	list returned contains references to the input *individuals*. For more
+	details on the NSGA-II operator see [Deb2002]_.
+	
+	:param individuals: A list of individuals to select from.
+	:param k: The number of individuals to select.
+	:returns: A list of selected individuals.
+	
+	.. [Deb2002] Deb, Pratab, Agarwal, and Meyarivan, "A fast elitist
+	   non-dominated sorting genetic algorithm for multi-objective
+	   optimization: NSGA-II", 2002.
+	"""
+	pareto_fronts = sortNondominatedAdapt(individuals, k)
+	for front in pareto_fronts:
+		assignCrowdingDist(front)
+	
+	chosen = list(chain(*pareto_fronts[:-1]))
+	k = k - len(chosen)
+	if k > 0:
+		sorted_front = sorted(pareto_fronts[-1], key=attrgetter("fitness.crowding_dist"), reverse=True)
+		chosen.extend(sorted_front[:k])
+		
+	return chosen
+
+def sortNondominatedAdapt(individuals, k, first_front_only=False):
+	"""Sort the first *k* *individuals* into different nondomination levels 
+	using the "Fast Nondominated Sorting Approach" proposed by Deb et al.,
+	see [Deb2002]_. This algorithm has a time complexity of :math:`O(MN^2)`, 
+	where :math:`M` is the number of objectives and :math:`N` the number of 
+	individuals.
+	
+	:param individuals: A list of individuals to select from.
+	:param k: The number of individuals to select.
+	:param first_front_only: If :obj:`True` sort only the first front and
+							 exit.
+	:returns: A list of Pareto fronts (lists), the first list includes 
+			  nondominated individuals.
+
+	.. [Deb2002] Deb, Pratab, Agarwal, and Meyarivan, "A fast elitist
+	   non-dominated sorting genetic algorithm for multi-objective
+	   optimization: NSGA-II", 2002.
+	"""
+	if k == 0:
+		return []
+
+	map_fit_ind = defaultdict(list)
+	for ind in individuals:
+		map_fit_ind[ind.fitness].append(ind)
+	fits = map_fit_ind.keys()
+	
+	current_front = []
+	next_front = []
+	dominating_fits = defaultdict(int)
+	dominated_fits = defaultdict(list)
+	
+	# Rank first Pareto front
+	for i, fit_i in enumerate(fits):
+		for fit_j in fits[i+1:]:
+			if dominated(fit_i, fit_j):
+				dominating_fits[fit_j] += 1
+				dominated_fits[fit_i].append(fit_j)
+			elif dominated(fit_j, fit_i):
+				dominating_fits[fit_i] += 1
+				dominated_fits[fit_j].append(fit_i)
+		if dominating_fits[fit_i] == 0:
+			current_front.append(fit_i)
+	
+	fronts = [[]]
+	for fit in current_front:
+		fronts[-1].extend(map_fit_ind[fit])
+	pareto_sorted = len(fronts[-1])
+
+	# Rank the next front until all individuals are sorted or 
+	# the given number of individual are sorted.
+	if not first_front_only:
+		N = min(len(individuals), k)
+		while pareto_sorted < N:
+			fronts.append([])
+			for fit_p in current_front:
+				for fit_d in dominated_fits[fit_p]:
+					dominating_fits[fit_d] -= 1
+					if dominating_fits[fit_d] == 0:
+						next_front.append(fit_d)
+						pareto_sorted += len(map_fit_ind[fit_d])
+						fronts[-1].extend(map_fit_ind[fit_d])
+			current_front = next_front
+			next_front = []
+	
+	return fronts
+
+def dominated(ind1, ind2):
+	"""Return true if each objective of *self* is not strictly worse than 
+		the corresponding objective of *other* and at least one objective is 
+		strictly better.
+
+		:param obj: Slice indicating on which objectives the domination is 
+					tested. The default value is `slice(None)`, representing
+					every objectives.
+	"""
+	not_equal = False
+	for self_wvalue, other_wvalue in zip(self.wvalues[obj], other.wvalues[obj]):
+		if self_wvalue > other_wvalue + 1:
+			not_equal = True
+		elif self_wvalue < other_wvalue:
+			return False                
+	return not_equal
+
+
+
+def assignCrowdingDist(individuals):
+	"""Assign a crowding distance to each individual's fitness. The 
+	crowding distance can be retrieve via the :attr:`crowding_dist` 
+	attribute of each individual's fitness.
+	"""
+	if len(individuals) == 0:
+		return
+	
+	distances = [0.0] * len(individuals)
+	crowd = [(ind.fitness.values, i) for i, ind in enumerate(individuals)]
+	
+	nobj = len(individuals[0].fitness.values)
+	
+	for i in xrange(nobj):
+		crowd.sort(key=lambda element: element[0][i])
+		distances[crowd[0][1]] = float("inf")
+		distances[crowd[-1][1]] = float("inf")
+		if crowd[-1][0][i] == crowd[0][0][i]:
+			continue
+		norm = nobj * float(crowd[-1][0][i] - crowd[0][0][i])
+		for prev, cur, next in zip(crowd[:-2], crowd[1:-1], crowd[2:]):
+			distances[cur[1]] += 1.*(next[0][i] - prev[0][i]) / norm
+
+	for i, dist in enumerate(distances):
+		individuals[i].fitness.crowding_dist = dist
+
 
 def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb, ngen, stats=None, halloffame=None, verbose=__debug__):
 	logbook = tools.Logbook()
@@ -224,7 +367,9 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
-	fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+	# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+	fitnesses=Parallel(n_jobs=min(7,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
 
@@ -244,11 +389,10 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-		fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-		#fitnesses=Parallel(n_jobs=min(6,len(invalid_ind)))(delayed(toolbox.evaluate)(indy) for indy in invalid_ind)
+		#fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+		fitnesses=Parallel(n_jobs=min(6,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
-		
 
 
 		# Update the hall of fame with the generated individuals
@@ -267,6 +411,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 			break
 	return population, logbook
 
+
 def GAautoSolver(model, sss, params):
 	# set up toolbox and run GA with or without adaptive mutations turned on
 	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model)
@@ -282,11 +427,52 @@ def GAautoSolver(model, sss, params):
 		output=eaMuPlusLambdaAdaptive(population, toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
 	else:
 		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
-	return output, hof
+	return output
 
 def GAsearchModel(model, newSSS,params):
-	output, hof=GAautoSolver(model, newSSS, params)
-	return hof[0].fitness.values, hof[0]
+	population, logbook=GAautoSolver(model, newSSS, params)
+	minny=1000000
+	saveVal=-1
+	for i in range(len(population)):
+		if numpy.sum(population[i].fitness.values)< minny:
+			minny=numpy.sum(population[i].fitness.values)
+			saveVal=i
+	ultimate=list(population[saveVal])
+
+
+	newultimate=[]
+	#iterate over nodes
+	for node in range(0,len(model.nodeList)):
+		#get start and end indices for node in individual
+		if node==(len(model.nodeList)-1):
+			end=len(ultimate)-1
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		# get all the in edges for each and node
+		andNodeList=model.andNodeList[node]
+		inEdges=[]
+		for lister in andNodeList:
+			inEdges.append(set(lister))
+		truth=ultimate[start:end]
+		# check if any nodes are redundant
+		for i in range(len(truth)):
+			if truth[i]==1:
+				for j in range(len(truth)):
+					if truth[j]==1 and not i==j:
+						if inEdges[i].issubset(inEdges[j]):
+							truth[j]=0
+		newultimate.extend(truth)
+
+	ultimate=newultimate
+	for i in range(len(ultimate)):
+		copied=list(ultimate)
+		copied[i]=1-copied[i]
+		newtot=numpy.sum(evaluateByNode(copied, params.cells, model,  newSSS, params))
+		if newtot<minny:
+			ultimate=copied
+			minny=newtot
+	return minny, ultimate
 
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
@@ -320,19 +506,18 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		netNegOnes.append(numpy.sum(negones))
 		
 		# calculate sensitivity and specificity for the node
-		temp=[100 if sumindividual[i]==0 else (sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
+		temp=[100 if sumindividual[i]==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
 		temp=filter(lambda a: a != 100, temp)
 		if len(temp)==0:
 			sensitivity=100
 		else:
-			sensitivity=(sum(temp)/len(temp))
-		print(sensitivity)
+			sensitivity=(1.*numpy.sum(temp)/len(temp))
 		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
 		temp=filter(lambda a: a != 100, temp)
 		if len(temp)==0:
 			specificity=100
 		else:
-			specificity=(sum(temp)/len(temp))
+			specificity=(1.*numpy.sum(temp)/len(temp))
 		# add to list of sensitivity and specificity by node
 		nodesensitivity.append(sensitivity)
 		nodespecificity.append(specificity)
@@ -345,23 +530,23 @@ def compareIndividualsNodeWise(truthList, testList, model):
 	for i in range(len(truthList)):
 		truth= truthList[i]
 		test= testList[i]
-		sumindividual.append(1.*sum(truth))
+		sumindividual.append(1.*numpy.sum(truth))
 		newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
 		ones.append(newindividual.count(1))
 		zeros.append(newindividual.count(0))
 		negones.append(newindividual.count(-1))
-	temp=[100 if (sumindividual[i])==0 else (sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
+	temp=[100 if (sumindividual[i])==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
 	temp=filter(lambda a: a != 100, temp)
 	if len(temp)==0:
 		sensitivity=100
 	else:
-		sensitivity=(numpy.sum(temp)/len(temp))
+		sensitivity=(1.*numpy.sum(temp)/len(temp))
 	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
 	temp=filter(lambda a: a != 100, temp)
 	if len(temp)==0:
 		specificity=100
 	else:
-		specificity=(sum(temp)/len(temp))
+		specificity=(1.*numpy.sum(temp)/len(temp))
 	return sensitivity, specificity, nodesensitivity, nodespecificity
 
 		
@@ -511,11 +696,11 @@ def simTester(model, sss, simClass):
 			TN+=1.*(len((baseSet.difference(truthSet)).difference(testSet)))
 			FN+=1.*len(truthSet.difference(testSet))
 		if (TP+FN)>0:
-			sensitivity=TP/(TP+FN)
+			sensitivity=1.*TP/(TP+FN)
 		else:
 			sensitivity=100
 		if TN+FP>0:
-			specificity=TN/(TN+FP)
+			specificity=1.*TN/(TN+FP)
 		else:
 			specificity=100
 		sensitivities.append(sensitivity)
@@ -550,11 +735,11 @@ def simTester(model, sss, simClass):
 		overlaps.append(overlaper)
 	tuple2=compareIndividualsNodeWise(newtruths, testList, model)
 	if (TPsum+FNsum)>0:
-		sensitivity=TPsum/(TPsum+FNsum)
+		sensitivity=1.*TPsum/(TPsum+FNsum)
 	else:
 		sensitivity=100
 	if (FPsum+TNsum)>0:
-		specificity= TNsum/(FPsum+TNsum)
+		specificity= 1.*TNsum/(FPsum+TNsum)
 	else:
 		specificity=100
 	tuple3= (sensitivity, specificity, sensitivities, specificities)
@@ -664,22 +849,22 @@ def ifngStimTest(bioReplicates):
 				tempspecificities[i]=filter(lambda a: a != 100, tempspecificities[i])
 				if len(tempspecificities[i])==0:
 					tempspecificities[i].append(0.)
-			sensitivity=[numpy.sum(tempsensitivities[0])/len(tempsensitivities[0]),numpy.sum(tempsensitivities[1])/len(tempsensitivities[1]),numpy.sum(tempsensitivities[2])/len(tempsensitivities[2]),numpy.sum(tempsensitivities[3])/len(tempsensitivities[3])]
-			sensitivityStd=[numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),numpy.std(tempsensitivities[2])/len(tempsensitivities[2]),numpy.std(tempsensitivities[3])/len(tempsensitivities[3])]
-			specificity=[numpy.sum(tempspecificities[0])/len(tempspecificities[0]),numpy.sum(tempspecificities[1])/len(tempspecificities[1]),numpy.sum(tempspecificities[2])/len(tempspecificities[2]),numpy.sum(tempspecificities[3])/len(tempspecificities[3])]
-			specificityStd=[numpy.std(tempspecificities[0])/len(tempspecificities[0]),numpy.std(tempspecificities[1])/len(tempspecificities[1]),numpy.std(tempspecificities[2])/len(tempspecificities[2]),numpy.std(tempspecificities[3])/len(tempspecificities[3])]
+			sensitivity=[1.*numpy.sum(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.sum(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.sum(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.sum(tempsensitivities[3])/len(tempsensitivities[3])]
+			sensitivityStd=[1.*numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.std(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.std(tempsensitivities[3])/len(tempsensitivities[3])]
+			specificity=[1.*numpy.sum(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.sum(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.sum(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.sum(tempspecificities[3])/len(tempspecificities[3])]
+			specificityStd=[1.*numpy.std(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.std(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.std(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.std(tempspecificities[3])/len(tempspecificities[3])]
 			truthholder.append(truthlists)
 			specificities.append(specificity)
 			sensitivities.append(sensitivity)
 			specificityStds.append(specificityStd)
 			sensitivityStds.append(sensitivityStd)
-			print(sensitivity)
-			print(sensitivityStd)
-			print(specificity)
-			print(specificityStd)
-			print(nodesensitivities)
-			print(nodespecificities)
-			print(devLists)
+			# print(sensitivity)
+			# print(sensitivityStd)
+			# print(specificity)
+			# print(specificityStd)
+			# print(nodesensitivities)
+			# print(nodespecificities)
+			# print(devLists)
 	nodeLookup={}
 	for number in edgeDegree:
 		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
@@ -712,12 +897,10 @@ def ifngStimTest(bioReplicates):
 		for lister in nodeLookup[key]:
 			newlist=filter(lambda a: a != 100, lister)
 			tempExtended.append(newlist)
-			print("number of nodes by key")
-			print(len(newlist))
 			if len(newlist)==0:
-				templisting.append(0.)
+				templisting.append(100)
 			else:
-				templisting.append(sum(newlist)/len(newlist))
+				templisting.append(1.* numpy.sum(newlist)/len(newlist))
 		finalNodeData.append(templisting)
 		finalExtendData.append(tempExtended)
 	finalOverlapExtendData=[]
@@ -727,8 +910,6 @@ def ifngStimTest(bioReplicates):
 		for lister in overlapLookup[key]:
 			newlist=filter(lambda a: a != 100, lister)
 			tempOverlap.append(newlist)
-			print("number of overlaps by key")
-			print(len(newlist))
 		finalOverlapExtendData.append(tempOverlap)
 	print(nodeLookup.keys())
 	print(overlapLookup.keys())
@@ -760,5 +941,5 @@ def rewireSimTest(graph):
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(5)
+	ifngStimTest(1)
 	print("--- %s seconds ---" % (time.time() - start_time))

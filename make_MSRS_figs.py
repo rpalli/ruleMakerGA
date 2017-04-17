@@ -35,7 +35,7 @@ extendedNodeData=pickle.Unpickler(open( "extended_node_by_node_data.pickle", "rb
 # plt.title('Sensitivity by Nodes in Pathway')
 # plt.plot( [-.5,len(networkNodeNums)-.5],[threshold, threshold], "k--")
 # plt.tight_layout()
-# sns.despine()
+# sns.despine()s
 # plt.show()
 
 

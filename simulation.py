@@ -108,7 +108,7 @@ class paramClass:
 		self.hofSize=10
 		self.cells=1000
 		self.samples=10
-		self.trials=5
+		self.trials=1
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 
 def boolAnd(num1, num2):
