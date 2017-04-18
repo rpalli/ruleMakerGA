@@ -91,22 +91,23 @@ class modelClass:
 class paramClass:
 	def __init__(self):    
 		self.adaptive=True
-		self.rewire=False
+		self.rewire=True
 		self.async=False # run in asynchronous mode
+		self.verbose=True
 		self.simSteps=100 # number of steps each individual is run when evaluating
-		self.generations=10 # generations to run
-		self.popSize=10 #size of population
-		self.mu= 10 #individuals selected
-		self.lambd= 20#children produced
+		self.generations=5 # generations to run
+		self.popSize=5 #size of population
+		self.mu= 5 #individuals selected
+		self.lambd= 10#children produced
 		self.bitFlipProb=.1 # prob of flipping bits inside mutation
-		self.crossoverProb=.1 # prob of crossing over a particular parent
+		self.crossoverProb=.1 # prob of3crossing over a particular parent
 		self.mutationProb=.9 # prob of mutating a particular parent
 		self.iters=10 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
-		self.cells=1000
+		self.cells=250
 		self.samples=10
 		self.trials=1
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
@@ -370,8 +371,10 @@ def iterateModel(individual, model, simulator, initValues, params):
 			shuffle(seq)
 		for i in range(0,len(model.nodeList)):
 			#find start and finish for each node to update from the individualParse list
+			endTimes=False
 			if seq[i]==len(model.nodeList)-1:
 				end= model.size
+				endTimes=True
 			else:
 				end=model.individualParse[seq[i]+1]	 
 			#sum up number of nodes in rule... useful if you want an information criterion
@@ -380,10 +383,16 @@ def iterateModel(individual, model, simulator, initValues, params):
 			# 		if individual[bit]==1:
 			# 			totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
 			#update based on sync or async assumptions
-			if params.async:
-				temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
+			if endTimes:
+				if params.async:
+					temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:],  model,simulator)
+				else:
+					temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:], model,simulator)
 			else:
-				temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:end], model,simulator)
+				if params.async:
+					temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
+				else:
+					temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:end], model,simulator)
 			newValue[seq[i]]=temp
 
 		simData.append(list(newValue))

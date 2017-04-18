@@ -40,13 +40,13 @@ def genBits(model):
 				chosen=math.floor(random()*len(indices))
 				truth[indices[int(chosen)]]=0
 				counter+=1
-			startInd[start:end]=truth
+			#startInd[start:end]=truth
 			if numpy.sum(truth)==0:
 				chosen=math.floor(random()*len(truth))
 				truth[int(chosen)]=1
 		elif len(truth)==1:
 			truth[0]=1
-			startInd[start:end]=truth
+		startInd[start:end]=truth
 	return startInd
 
 def buildToolbox( individualLength, bitFlipProb, model):
@@ -216,7 +216,7 @@ def mutFlipBitAdapt(individual, indpb, model):
 					individual[i] = 0
 			#ensure that there is at least one shadow and node turned on
 			if numpy.sum(individual[start:end])==0:
-				individual[start+1]=1
+				individual[start]=1
 	return individual,
 
 
@@ -407,7 +407,11 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		logbook.record(gen=gen, nevals=len(invalid_ind), **record)
 		if verbose:
 			print logbook.stream
-		if numpy.sum(halloffame[0].fitness.values)<.4:
+		breaker=False
+		for ind in population:
+			if numpy.sum(ind.fitness.values)<.05:
+				breaker=True
+		if breaker:
 			break
 	return population, logbook
 
@@ -424,9 +428,9 @@ def GAautoSolver(model, sss, params):
 	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
 	
 	if params.adaptive:
-		output=eaMuPlusLambdaAdaptive(population, toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+		output=eaMuPlusLambdaAdaptive(population, toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose, halloffame=hof)
 	else:
-		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=False, halloffame=hof)
+		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose, halloffame=hof)
 	return output
 
 def GAsearchModel(model, newSSS,params):
@@ -438,14 +442,12 @@ def GAsearchModel(model, newSSS,params):
 			minny=numpy.sum(population[i].fitness.values)
 			saveVal=i
 	ultimate=list(population[saveVal])
-
-
 	newultimate=[]
 	#iterate over nodes
 	for node in range(0,len(model.nodeList)):
 		#get start and end indices for node in individual
 		if node==(len(model.nodeList)-1):
-			end=len(ultimate)-1
+			end=len(ultimate)
 		else:
 			end=model.individualParse[node+1]
 		start=model.individualParse[node]
@@ -463,15 +465,26 @@ def GAsearchModel(model, newSSS,params):
 						if inEdges[i].issubset(inEdges[j]):
 							truth[j]=0
 		newultimate.extend(truth)
-
 	ultimate=newultimate
 	for i in range(len(ultimate)):
 		copied=list(ultimate)
 		copied[i]=1-copied[i]
 		newtot=numpy.sum(evaluateByNode(copied, params.cells, model,  newSSS, params))
 		if newtot<minny:
-			ultimate=copied
-			minny=newtot
+			better=True
+			for node in range(0,len(model.nodeList)):
+				#get start and end indices for node in individual
+				if node==(len(model.nodeList)-1):
+					end=len(ultimate)-1
+				else:
+					end=model.individualParse[node+1]
+				start=model.individualParse[node]
+				if model.andLenList[node]>0:
+					if not sum(copied[start:end])>0:
+						better=False
+			if better:
+				ultimate=copied
+				minny=newtot
 	return minny, ultimate
 
 def compareIndividualsNodeWise(truthList, testList, model):
@@ -800,9 +813,9 @@ def ifngStimTest(bioReplicates):
 
 		# if(len(graph.edges())>1):
 		# 	graph=nc.simplifyNetwork(graph, data)
-		graph = simpleNetBuild()
-		#graph=liu.LiuNetwork1Builder()
-		coder='unrolled'
+		#graph = simpleNetBuild()
+		graph=liu.LiuNetwork1Builder()
+		coder='liu'
 		if(len(graph.edges())>1):
 			print(coder)
 			print(len(graph.edges()))
@@ -941,5 +954,5 @@ def rewireSimTest(graph):
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(1)
+	ifngStimTest(25)
 	print("--- %s seconds ---" % (time.time() - start_time))
