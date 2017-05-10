@@ -897,16 +897,16 @@ def ifngStimTestSetup(bioReplicates, params):
 
 	aliasDict={}
 	dict1={}
-	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
+	nc.parseKEGGdicthsa('inputData/hsa00001.keg',aliasDict,dict1)
 	dict2={}
-	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
+	nc.parseKEGGdict('inputData/ko00001.keg',aliasDict,dict2)
 
 	# read in list of codes then load them into network
 	#inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
-	inputfile = open('ID_filtered_IFNGpathways.txt', 'r')
+	inputfile = open('inputData/ID_filtered_IFNGpathways.txt', 'r')
 
 	lines = inputfile.readlines()
-	data=dict(utils.loadFpkms('Hela-C-1.count'))
+	data=dict(utils.loadFpkms('inputData/Hela-C-1.count'))
 
 
 	lines.pop(0)
@@ -924,12 +924,12 @@ def ifngStimTestSetup(bioReplicates, params):
 		if(len(graph.edges())>1):
 			graph=nc.simplifyNetwork(graph, data)
 		
-
 		#graph = utils.simpleNetBuild()
 		#coder='unrolled'
 
 		#graph=utils.LiuNetwork1Builder()
 		# coder='liu'
+		
 		# if the code has an interesting logic rule to find, run the algorithm... 
 		checker=False
 		for x in graph.in_degree():
