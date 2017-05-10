@@ -89,29 +89,30 @@ class modelClass:
 		self.initValueList=initValueList #puts an empty and correctly structured initValueList together for later population. 
 		
 class paramClass:
-	def __init__(self):    
-		self.adaptive=True
-		self.rewire=True
-		self.async=False # run in asynchronous mode
-		self.verbose=True
-		self.simSteps=25 # number of steps each individual is run when evaluating
+	def __init__(self,):    
+		self.bioReplicates=10
+		self.cells=250
+		self.samples=10
 		self.generations=10 # generations to run
 		self.popSize=15 #size of population
 		self.mu= 15 #individuals selected
 		self.lambd= 30#children produced
-		self.bitFlipProb=.1 # prob of flipping bits inside mutation
-		self.crossoverProb=.3 # prob of3crossing over a particular parent
-		self.mutationProb=.7 # prob of mutating a particular parent
 		self.iters=10 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
+		self.simSteps=100 # number of steps each individual is run when evaluating
+		self.crossoverProb=.3 # prob of3crossing over a particular parent
+		self.mutationProb=.7 # prob of mutating a particular parent
+		self.rewire=True
+		self.async=False # run in asynchronous mode
+		self.adaptive=True
+		self.verbose=True
+		self.bitFlipProb=.1 # prob of flipping bits inside mutation
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
-		self.cells=250
-		self.samples=10
 		self.trials=1
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
-
+		
 def boolAnd(num1, num2):
 	return num1 and num2
 def boolOr(num1, num2):

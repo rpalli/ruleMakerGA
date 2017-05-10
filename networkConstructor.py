@@ -1,4 +1,4 @@
-#import stuff
+#import external code
 import operator
 import networkx as nx
 import re
@@ -8,6 +8,9 @@ import itertools as it
 import sys
 from bs4 import BeautifulSoup
 from random import randint 
+# import our code
+import simulation as sim
+import utils as utils
 
 #definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
 #these biopax classes are iteracted over in the biopax methods
@@ -889,8 +892,54 @@ def download_PC_codes(codelist, graph):
 		print(code)
 	simplify_biopax_graph(graph)
 
-if __name__ == '__main__':
 
-	graph = nx.DiGraph()
-	download_PC_codes(['TNF'], graph)
-	nx.write_graphml(graph,'TNF.graphml')
+def ifngStimTestSetup(bioReplicates, params):
+
+	aliasDict={}
+	dict1={}
+	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
+	dict2={}
+	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
+
+	# read in list of codes then load them into network
+	#inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
+	inputfile = open('ID_filtered_IFNGpathways.txt', 'r')
+
+	lines = inputfile.readlines()
+	data=dict(utils.loadFpkms('Hela-C-1.count'))
+
+
+	lines.pop(0)
+	# lines.pop(0)
+	# lines=[0]
+	# lines=[lines[0]]
+	# lines=['04110\n']
+	codelist=[]
+	for code in lines:
+		graph=nx.DiGraph()
+		coder=str('ko'+code[:-1])
+		nc.uploadKEGGcodes([coder], graph, dict2)
+		coder=str('hsa'+code[:-1])
+		nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+		if(len(graph.edges())>1):
+			graph=nc.simplifyNetwork(graph, data)
+		
+
+		#graph = utils.simpleNetBuild()
+		#coder='unrolled'
+
+		#graph=utils.LiuNetwork1Builder()
+		# coder='liu'
+		# if the code has an interesting logic rule to find, run the algorithm... 
+		checker=False
+		for x in graph.in_degree():
+			if x>1:
+				checker=True
+		if(checker):
+			print(coder)
+			codelist.append(coder)			
+			nx.write_graphml(graph,coder+'.graphml')
+			nx.write_gpickle(graph,coder+'.gpickle')
+if __name__ == '__main__':
+	params=sim.paramClass()
+	ifngStimTestSetup(params)

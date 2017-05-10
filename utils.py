@@ -103,3 +103,35 @@ def writeNode(currentNode,nodeIndividual, model):
 		for val in orset:
 			writenode = writenode + ' or ' + val
 		return writenode
+
+
+def simpleNetBuild():
+	graph = nx.DiGraph()
+	graph.add_edge('a1','a', signal='a')	
+	graph.add_edge('a2','a', signal='a')
+	graph.add_edge('a3','a', signal='a')
+	graph.add_edge('a4','a', signal='a')
+	graph.add_edge('b1','b', signal='a')
+	graph.add_edge('b2','b', signal='a')
+	graph.add_edge('b3','b', signal='a')
+	graph.add_edge('a','d', signal='a')	
+	graph.add_edge('b','d', signal='a')
+	graph.add_edge('d','e', signal='a')
+	return graph
+
+
+
+def LiuNetwork1Builder():
+	graph = nx.DiGraph()
+	graph.add_edge('g','k', signal='a')	
+	graph.add_edge('h','j', signal='a')
+	graph.add_edge('j','c', signal='i')	
+	graph.add_edge('f','k', signal='i')
+	graph.add_edge('a','c', signal='a')
+	graph.add_edge('b','d', signal='a')
+	graph.add_edge('c','f', signal='a')	
+	graph.add_edge('c','h', signal='a')
+	graph.add_edge('d','f', signal='a')	
+	graph.add_edge('d','g', signal='a')
+
+	return graph

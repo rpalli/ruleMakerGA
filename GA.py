@@ -12,13 +12,10 @@ import operator
 import math as math
 from sets import Set
 from joblib import Parallel, delayed
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+import argparse as argparse
 
 # import other pieces of our software
 import networkConstructor as nc
-import liu_networks as liu
 import utils as utils
 import simulation as sim
 
@@ -473,38 +470,39 @@ def GAsearchModel(model, newSSS,params):
 			minny=numpy.sum(population[i].fitness.values)
 			saveVal=i
 	ultimate=list(population[saveVal])
+	minvals=population[saveVal].fitness.values
 	newultimate=[]
-	# if minny>1.:
-	# 	#iterate over nodes
-	# 	for node in range(0,len(model.nodeList)):
-	# 		#get start and end indices for node in individual
-	# 		if node==(len(model.nodeList)-1):
-	# 			end=len(ultimate)
-	# 		else:
-	# 			end=model.individualParse[node+1]
-	# 		start=model.individualParse[node]
-	# 		# get all the in edges for each and node
-	# 		andNodeList=model.andNodeList[node]
-	# 		inEdges=[]
-	# 		for lister in andNodeList:
-	# 			inEdges.append(set(lister))
-	# 		truth=ultimate[start:end]
-	# 		# check if any nodes are redundant
-	# 		for i in range(len(truth)):
-	# 			if truth[i]==1:
-	# 				for j in range(len(truth)):
-	# 					if truth[j]==1 and not i==j:
-	# 						if inEdges[i].issubset(inEdges[j]):
-	# 							truth[j]=0
-	# 		newultimate.extend(truth)
-	# 	ultimate=newultimate
-	# 	print(len(ultimate))
-	# 	flags=Parallel(n_jobs=min(6,len(ultimate)))(delayed(deltaTester)(list(ultimate), i, model,  newSSS, params, minny) for i in range(len(ultimate)))
-	# 	for flag, i in zip(flags,range(len(ultimate))):
-	# 		if flag:
-	# 			ultimate[i]=1-ultimate[i]
-	# 	minny=numpy.sum(evaluateByNode(ultimate, params.cells, model,  newSSS, params))
-	return minny, ultimate
+	if minny>.01*len(population[saveVal].fitness.values):
+		#iterate over nodes
+		for node in range(0,len(model.nodeList)):
+			#get start and end indices for node in individual
+			if node==(len(model.nodeList)-1):
+				end=len(ultimate)
+			else:
+				end=model.individualParse[node+1]
+			start=model.individualParse[node]
+			# get all the in edges for each and node
+			andNodeList=model.andNodeList[node]
+			inEdges=[]
+			for lister in andNodeList:
+				inEdges.append(set(lister))
+			truth=ultimate[start:end]
+			# check if any nodes are redundant
+			for i in range(len(truth)):
+				if truth[i]==1:
+					for j in range(len(truth)):
+						if truth[j]==1 and not i==j:
+							if inEdges[i].issubset(inEdges[j]):
+								truth[j]=0
+			newultimate.extend(truth)
+		ultimate=newultimate
+		print(len(ultimate))
+		flags=Parallel(n_jobs=min(24,len(ultimate)))(delayed(deltaTester)(list(ultimate), i, model,  newSSS, params, minny) for i in range(len(ultimate)))
+		for flag, i in zip(flags,range(len(ultimate))):
+			if flag:
+				ultimate[i]=1-ultimate[i]
+		minny=numpy.sum(evaluateByNode(ultimate, params.cells, model,  newSSS, params))
+	return minvals, ultimate
 
 
 def deltaTester(ultimate, i, model,  newSSS, params, minny):
@@ -526,6 +524,7 @@ def deltaTester(ultimate, i, model,  newSSS, params, minny):
 				if newtot<minny:
 					modifyFlag=True
 	return modifyFlag
+
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
 	nodespecificity=[]
@@ -601,34 +600,31 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		specificity=(1.*numpy.sum(temp)/len(temp))
 	return sensitivity, specificity, nodesensitivity, nodespecificity
 
-		
-def simTester(model, sss, simClass):
+def simTester(graph, name):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#trials is the number of different individuals to try
 	#samples is the number of different initial conditions to provide per trial
 	#graph specifies the network we are testing. 
 
-	# set up empty lists and call parameters
+	# set up params, sss, model, samples
+
+
 	params=sim.paramClass()
+	# rewire graph if necessary
+	if params.rewire:
+		graph=nc.rewireNetwork(graph)
+
+	sss=utils.synthesizeInputs(graph,params.samples)
+	model=sim.modelClass(graph,sss)
 	samples=params.samples
-	trials=params.trials
-	cells=params.cells
-	truthIndividuals=[]
-	truthAvgs=[]
-	hofScores=[]
-	newSSS=[]
-	trueNodeList=[]
-	zeros=[]
-	ones=[]
-	negones=[]
-	truthCounter=0
-	sumindividual=[]
+
+	# set up necessary lists for output
 	truthList= [] 
 	testList =[]
 	devList=[]
-	# loop over number of times we want to generate fake data and perform sequence of events
-	for i in range(0,trials):
 
+	# loop over number of times we want to generate fake data and perform sequence of events
+	for i in range(0,params.trials):
 		#generate random set of logic rules to start with
 		individual=genBits(model)
 		for node in range(0,len(model.nodeList)):
@@ -641,7 +637,7 @@ def simTester(model, sss, simClass):
 					individual[model.individualParse[node]]=1
 
 		# generate Boolean model for this trial
-		output=runProbabilityBooleanSims(individual, model, samples, cells, params)
+		output=runProbabilityBooleanSims(individual, model, samples, params.cells, params)
 		# copy new output into newSSS and initial values
 		newSSS=[]
 		for k in range(0,samples):
@@ -652,9 +648,6 @@ def simTester(model, sss, simClass):
 		newInitValueList=[]
 		for j in range(0,len(sss)):
 			newInitValueList.append([])
-		# print(len(newSSS))
-		# print(samples)
-		# print(len(sss))
 		for j in range(0,len(model.nodeList)):
 			for k in range(0,len(sss)):
 				ss=newSSS[k]
@@ -663,434 +656,26 @@ def simTester(model, sss, simClass):
 				else:
 					newInitValueList[k].append(0.5)
 		model.initValueList=newInitValueList
-
-
-		# # set up PBN-based simulator
-		# propSimulator=sim.simulatorClass(simClass)
-		# propSimulator.trainingData=model.initValueList
-		# propSimulator.train(model)
-		# #perform brute force search
-		# bruteOut=bruteForceSearchModel(model, newSSS,propSimulator)
-		
 		#perform GA run
 		dev, bruteOut=GAsearchModel(model, newSSS, params)
+		# add output of this trial to lists
 		truthList.append(individual)
 		testList.append(list(bruteOut))
 		devList.append(dev)
-	print('devList')
-	print(devList)
-
-	tuple1=compareIndividualsNodeWise(truthList, testList, model)
-	sensitivities=[]
-	specificities=[]
-	inEdgeNums=[]
-	overlaps=[]
-	# run correction that simplifies truth rules
-	TPsum=0
-	TNsum=0
-	FNsum=0
-	FPsum=0
-	newtruths=[]
-	for k in range(len(truthList)):
-		newtruths.append([])
-	newtests=[]
-	for k in range(len(testList)):
-		newtests.append([])
-	for node in range(0,len(model.nodeList)):
-		FP=0
-		TP=0
-		TN=0
-		FN=0
-		if node==(len(model.nodeList)-1):
-			end=len(truthList[0])-1
-		else:
-			end=model.individualParse[node+1]
-		start=model.individualParse[node]
-		andNodeList=model.andNodeList[node]
-		inEdges=[]
-		for lister in andNodeList:
-			inEdges.append(set(lister))
-		for k in range(len(truthList)):
-			truth=truthList[k][start:end]
-			test= testList[k][start:end]
-			for i in range(len(truth)):
-				if truth[i]==1:
-					for j in range(len(truth)):
-						if truth[j]==1 and not i==j:
-							if inEdges[i].issubset(inEdges[j]):
-								truth[j]=0
-			for i in range(len(test)):
-				if test[i]==1:
-					for j in range(len(test)):
-						if test[j]==1 and not i==j:
-							if inEdges[i].issubset(inEdges[j]):
-								test[j]=0
-			newtests[k].extend(test)
-			newtruths[k].extend(truth)
-		for k in range(len(truthList)):
-			truth=newtruths[k][start:end]
-			test= newtests[k][start:end]
-			truthSet=Set([])
-			testSet=Set([])
-			baseSet=Set([])
-			for i in range(0,len(truth)):
-				if truth[i]==1:
-					for nodeToAdd in andNodeList[i]:
-						truthSet.add(nodeToAdd)
-			for i in range(0,len(test)):
-				if test[i]==1:
-					for nodeToAdd in andNodeList[i]:
-						testSet.add(nodeToAdd)
-				for nodeToAdd in andNodeList[i]:
-					baseSet.add(nodeToAdd)
-			FP+=1.*len(testSet.difference(truthSet))
-			TP+=1.*len(testSet.intersection(truthSet))
-			TN+=1.*(len((baseSet.difference(truthSet)).difference(testSet)))
-			FN+=1.*len(truthSet.difference(testSet))
-		if (TP+FN)>0:
-			sensitivity=1.*TP/(TP+FN)
-		else:
-			sensitivity=100
-		if TN+FP>0:
-			specificity=1.*TN/(TN+FP)
-		else:
-			specificity=100
-		sensitivities.append(sensitivity)
-		specificities.append(specificity)
-		TPsum+=TP
-		TNsum+=TN
-		FNsum+=FN
-		FPsum+=FP
-		inEdgeNums.append(len(baseSet))
-		overlaper=-1
-		if len(baseSet)==2:
-			overlapSet=Set([])
-			lappersets=[]
-			inneredge=[]
-			for upstream in baseSet:
-				lapperset=Set([])
-				if upstream==(len(model.nodeList)-1):
-					end=len(truthList[0])-1
-				else:
-					end=model.individualParse[upstream+1]
-				start=model.individualParse[upstream]
-				andNodeList=model.andNodeList[upstream]
-				for lister in andNodeList:
-					lapperset.add(Set(lister))
-				lappersets.append(lapperset)
-			overlaper=len(lappersets[0].intersection(lappersets[1]))
-			if overlaper==0:
-				for upstream in baseSet:
-					if upstream in lappersets[0] or upstream in lappersets[1]:
-						print("feed-forward")
-						overlaper=1
-		overlaps.append(overlaper)
-	tuple2=compareIndividualsNodeWise(newtruths, testList, model)
-	if (TPsum+FNsum)>0:
-		sensitivity=1.*TPsum/(TPsum+FNsum)
-	else:
-		sensitivity=100
-	if (FPsum+TNsum)>0:
-		specificity= 1.*TNsum/(FPsum+TNsum)
-	else:
-		specificity=100
-	tuple3= (sensitivity, specificity, sensitivities, specificities)
-
-	tuple4=compareIndividualsNodeWise(newtruths, newtests, model)
-	for i in range(len(newtruths)):
-		print("truth, found")
-		print(utils.writeModel(newtruths[i], model))
-		print(utils.writeModel(newtests[i], model))
-
-	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, [testList, truthList,  newtruths, newtests]
-
-def simpleNetBuild():
-	graph = nx.DiGraph()
-	graph.add_edge('a1','a', signal='a')	
-	graph.add_edge('a2','a', signal='a')
-	graph.add_edge('a3','a', signal='a')
-	graph.add_edge('a4','a', signal='a')
-	graph.add_edge('b1','b', signal='a')
-	graph.add_edge('b2','b', signal='a')
-	graph.add_edge('b3','b', signal='a')
-	graph.add_edge('a','d', signal='a')	
-	graph.add_edge('b','d', signal='a')
-	graph.add_edge('d','e', signal='a')
-	return graph
-
-def ifngStimTest(bioReplicates):
-	aliasDict={}
-	dict1={}
-	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
-	dict2={}
-	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
-
-	# read in list of codes then load them into network
-	#inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
-	inputfile = open('ID_filtered_IFNGpathways.txt', 'r')
-
-	lines = inputfile.readlines()
-	data=dict(utils.loadFpkms('Hela-C-1.count'))
-	sensitivities=[]
-	specificities=[]
-	specificityStds=[]
-	sensitivityStds=[]
-	lines.pop(0)
-	nodesensitivities=[[],[],[],[]]
-	nodespecificities=[[],[],[],[]]
-	truthholder=[]
-	edgeDegree=[]
-	overlapNodes=[]
-	lines.pop(0)
-	lines=[0]
-	lines=[lines[0]]
-	lines=['04110\n']
-	for code in lines:
-		# graph=nx.DiGraph()
-		# coder=str('ko'+code[:-1])
-		# nc.uploadKEGGcodes([coder], graph, dict2)
-		# coder=str('hsa'+code[:-1])
-		# nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
-		# if(len(graph.edges())>1):
-		# 	graph=nc.simplifyNetwork(graph, data)
-		#graph = simpleNetBuild()
-		graph=liu.LiuNetwork1Builder()
-		# coder='liu'
-		if(len(graph.edges())>1):
-			print(coder)
-			print(len(graph.edges()))
-			
-			nx.write_graphml(graph,coder+'.graphml')
-			tempsensitivities=[[],[],[],[]]
-			tempspecificities=[[],[],[],[]]
-			truthlists=[[],[],[],[]]
-			devLists=[]
-			for i in range(bioReplicates):
-				tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=rewireSimTest(graph)
-				sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
-				sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
-				sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
-				sensitivity4, specificity4, nodesensitivity4, nodespecificity4 = tuple4
-				tempsensitivities[0].append(sensitivity1)
-				tempsensitivities[1].append(sensitivity2)
-				tempsensitivities[2].append(sensitivity3)
-				tempsensitivities[3].append(sensitivity4)
-				tempspecificities[0].append(specificity1)
-				tempspecificities[1].append(specificity2)
-				tempspecificities[2].append(specificity3)
-				tempspecificities[3].append(specificity4)
-				nodesensitivities[0].extend(nodesensitivity1)
-				nodesensitivities[1].extend(nodesensitivity2)
-				nodesensitivities[2].extend(nodesensitivity3)
-				nodesensitivities[3].extend(nodesensitivity4)
-				nodespecificities[0].extend(nodespecificity1)
-				nodespecificities[1].extend(nodespecificity2)
-				nodespecificities[2].extend(nodespecificity3)
-				nodespecificities[3].extend(nodespecificity4)
-				devLists.append(devList)
-				overlapNodes.extend(overlaps)
-				edgeDegree.extend(inEdgeNums)
-				truthlists[0].extend(truthlisttemp[0])
-				truthlists[1].extend(truthlisttemp[1])
-				truthlists[2].extend(truthlisttemp[2])
-				truthlists[3].extend(truthlisttemp[3])
-			for i in range(len(tempsensitivities)):
-				tempsensitivities[i]=filter(lambda a: a != 100, tempsensitivities[i])
-				if len(tempsensitivities[i])==0:
-					tempsensitivities[i].append(100)
-			for tempholder in tempspecificities:
-				tempspecificities[i]=filter(lambda a: a != 100, tempspecificities[i])
-				if len(tempspecificities[i])==0:
-					tempspecificities[i].append(0.)
-			sensitivity=[1.*numpy.sum(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.sum(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.sum(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.sum(tempsensitivities[3])/len(tempsensitivities[3])]
-			sensitivityStd=[1.*numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.std(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.std(tempsensitivities[3])/len(tempsensitivities[3])]
-			specificity=[1.*numpy.sum(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.sum(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.sum(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.sum(tempspecificities[3])/len(tempspecificities[3])]
-			specificityStd=[1.*numpy.std(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.std(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.std(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.std(tempspecificities[3])/len(tempspecificities[3])]
-			truthholder.append(truthlists)
-			specificities.append(specificity)
-			sensitivities.append(sensitivity)
-			specificityStds.append(specificityStd)
-			sensitivityStds.append(sensitivityStd)
-			print(sensitivity)
-			print(sensitivityStd)
-			print(specificity)
-			print(specificityStd)
-			print(nodesensitivities)
-			print(nodespecificities)
-			print(devLists)
-	nodeLookup={}
-	for number in edgeDegree:
-		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
-	for i in range(len(edgeDegree)):
-		nodeLookup[edgeDegree[i]][0].append(nodesensitivities[0][i])
-		nodeLookup[edgeDegree[i]][1].append(nodesensitivities[1][i])
-		nodeLookup[edgeDegree[i]][2].append(nodesensitivities[2][i])
-		nodeLookup[edgeDegree[i]][3].append(nodesensitivities[3][i])
-		nodeLookup[edgeDegree[i]][4].append(nodespecificities[0][i])
-		nodeLookup[edgeDegree[i]][5].append(nodespecificities[1][i])
-		nodeLookup[edgeDegree[i]][6].append(nodespecificities[2][i])
-		nodeLookup[edgeDegree[i]][7].append(nodespecificities[3][i])
-	overlapLookup={}
-	for overlap in overlapNodes:
-		overlapLookup[overlap]=[[],[],[],[],[],[],[],[]]
-	for i in range(len(overlapNodes)):
-		overlapLookup[overlapNodes[i]][0].append(nodesensitivities[0][i])
-		overlapLookup[overlapNodes[i]][1].append(nodesensitivities[1][i])
-		overlapLookup[overlapNodes[i]][2].append(nodesensitivities[2][i])
-		overlapLookup[overlapNodes[i]][3].append(nodesensitivities[3][i])
-		overlapLookup[overlapNodes[i]][4].append(nodespecificities[0][i])
-		overlapLookup[overlapNodes[i]][5].append(nodespecificities[1][i])
-		overlapLookup[overlapNodes[i]][6].append(nodespecificities[2][i])
-		overlapLookup[overlapNodes[i]][7].append(nodespecificities[3][i])
-	finalNodeData=[]
-	finalExtendData=[]
-	for key in nodeLookup.keys():
-		templisting=[]
-		tempExtended=[]
-		for lister in nodeLookup[key]:
-			newlist=filter(lambda a: a != 100, lister)
-			tempExtended.append(newlist)
-			if len(newlist)==0:
-				templisting.append(100)
-			else:
-				templisting.append(1.* numpy.sum(newlist)/len(newlist))
-		finalNodeData.append(templisting)
-		finalExtendData.append(tempExtended)
-	finalOverlapExtendData=[]
-	for key in overlapLookup.keys():
-		templisting=[]
-		tempOverlap=[]
-		for lister in overlapLookup[key]:
-			newlist=filter(lambda a: a != 100, lister)
-			tempOverlap.append(newlist)
-		finalOverlapExtendData.append(tempOverlap)
-	print(nodeLookup.keys())
-	print(overlapLookup.keys())
-	print(finalNodeData)
-	print(finalExtendData)
-	pickle.dump( finalNodeData, open( "node_by_node_data.pickle", "wb" ) )
-	pickle.dump( finalExtendData, open( "extended_node_by_node_data.pickle", "wb" ) )
-	pickle.dump( finalOverlapExtendData, open( "extended_overlap_data.pickle", "wb" ) )
-	
-	pickle.dump( devLists, open( "devLists.pickle", "wb" ) )
-
-	pickle.dump( [sensitivities,sensitivityStds,specificities, specificityStds], open( "network_by_network_data.pickle", "wb" ) )
-	print(sensitivities)
-	print(specificities)
-	print(finalNodeData)
-	pickle.dump( truthholder, open( "expt_true_corrected_bits.pickle", "wb" ) )
-def rewireSimTest(graph):
-	params=sim.paramClass()
-	if params.rewire:
-		graph=nc.rewireNetwork(graph)
-
-	sss=utils.synthesizeInputs(graph,params.samples)
-	model=sim.modelClass(graph,sss)
-	#print(model.nodeList)
-	#print(model.size)
-	#print(model.individualParse)
-	return simTester(model, sss,'prop')
-
-def PBNsimTest(trials):
-
-	graph=liu.LiuNetwork1Builder()
-
-	# graph=simpleNetBuild()
-	params=sim.paramClass()
-	sss=utils.synthesizeInputs(graph,params.samples)
-	model=sim.modelClass(graph,sss)
-	nodeWiseError=[]
-	nodeWiseError3=[]
-	nodeWiseError2=[]
-	for j in range(0,len(model.nodeList)):
-		nodeWiseError.append([])
-		nodeWiseError2.append([])
-		nodeWiseError3.append([])
-
-	for i in range(0,trials):
-		nodeWiseErrortemp=[]
-		nodeWiseError3temp=[]
-		nodeWiseError2temp=[]
-		for j in range(0,len(model.nodeList)):
-			nodeWiseErrortemp.append([])
-			nodeWiseError2temp.append([])
-			nodeWiseError3temp.append([])
-
-		individual=genBits(model) #generate random set of logic rules to start with
-		# generate Boolean model for this trial
-		output=runProbabilityBooleanSims(individual, model, params.samples, params.cells, params)
-		# copy new output into newSSS and initial values
-		newSSS=[]
-		for k in range(0,params.samples):
-			newSS=copy.deepcopy(sss[k])
-			for j in range(0,len(model.nodeList)):
-				newSS[model.nodeList[j]]=output[k][j]
-			newSSS.append(newSS)
-		newInitValueList=[]
-		for j in range(0,len(sss)):
-			newInitValueList.append([])
-		# print(len(newSSS))
-		# print(samples)
-		# print(len(sss))
-		for j in range(0,len(model.nodeList)):
-			for k in range(0,len(sss)):
-				ss=newSSS[k]
-				if  model.nodeList[j] in sss[0].keys():
-					newInitValueList[k].append(ss[model.nodeList[j]])
-				else:
-					newInitValueList[k].append(0.5)
-		model.initValueList=newInitValueList
-		for k in range(len(sss)):
-			boolValues=iterateBooleanModel(individual, model, params.cells, model.initValueList[k], params)
-			SSE=[(boolValues[model.evaluateNodes[i]]-model.initValueList[k][i])**2 for i in range(0, len(model.evaluateNodes))]
-			for i in range(len(SSE)):
-				nodeWiseError2temp[i].append(SSE[i])
-		# set up PBN-based simulator
-		propSimulator1=sim.simulatorClass('prop')
-		propSimulator1.simSteps=10
-		propSimulator1.trainingData=model.initValueList
-		propSimulator1.train(model)
-		#print(propSimulator1.andTrainer)
-		for k in range(0,len(sss)):
-			ss=newSSS[k]
-			initValues=newInitValueList[k]
-			newVals=sim.runModel(individual, model, propSimulator1, initValues, params)
-			for entry in range(len(ss)):
-				nodeWiseErrortemp[entry].append((initValues[entry]-newVals[entry])**2)		
-		# set up PBN-based simulator
-		propSimulator2=sim.simulatorClass('propAdj')
-		propSimulator2.simSteps=10
-		propSimulator2.trainingData=model.initValueList
-		propSimulator2.train(model)
-		#print(propSimulator1.andTrainer)
-		for k in range(0,len(sss)):
-			ss=newSSS[k]
-			initValues=newInitValueList[k]
-			newVals=sim.runModel(individual, model, propSimulator2, initValues, params)
-			for entry in range(len(ss)):
-				nodeWiseError3temp[entry].append((initValues[entry]-newVals[entry])**2)	
-
-		for j in range(0,len(model.nodeList)):
-			nodeWiseError[j].append(numpy.sum(nodeWiseErrortemp[j])/(1.*len(nodeWiseErrortemp[j])))
-			nodeWiseError2[j].append(numpy.sum(nodeWiseError2temp[j])/(1.*len(nodeWiseErrortemp[j])))
-			nodeWiseError3[j].append(numpy.sum(nodeWiseError3temp[j])/(1.*len(nodeWiseErrortemp[j])))
-	dataDict=[]
-	for entry in range(len(nodeWiseError2)):
-		#or model.nodeList[entry]=='d'
-		if (not model.nodeList[entry]=='a' and not model.nodeList[entry]=='b' ):
-			for i in range(len(nodeWiseError2[entry])):
-				dataDict.append({'node':model.nodeList[entry], 'value':nodeWiseError[entry][i], 'mode':'linReg'})
-				dataDict.append({'node':model.nodeList[entry], 'value':nodeWiseError2[entry][i], 'mode':'iterated'})
-				dataDict.append({'node':model.nodeList[entry], 'value':nodeWiseError3[entry][i], 'mode':'adjLinReg'})
-
-	df=pd.DataFrame(dataDict)
-	ax=sns.swarmplot(data=df,x='node', y='value', hue='mode')
-	plt.show()
-
+	# set up output and save as a pickle
+	outputList=[truthList,testList, devList,model.size, model.evaluateNodes, model.individualParse, model.andNodeInvertList, model.andLenList,model.earlyEvalNodes,	model.nodeList, model.nodeDict, model.initValueList]
+	pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
 
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(10)
-	#PBNsimTest(10)
+	parser = argparse.ArgumentParser()
+	parser.add_argument("graph")
+	parser.add_argument("iterNum")
+	results = parser.parse_args()
+	graphName=results.graph
+	iterNum=int(results.iterNum)
+	name=graphName[:-8]+'_'+results.iterNum
+	graph = nx.read_gpickle(graphName)
+	simTester(graph, name)
 	print("--- %s seconds ---" % (time.time() - start_time))
