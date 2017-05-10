@@ -1,13 +1,12 @@
 #!/bin/sh
-#SBATCH --partition=debug 
+#SBATCH --partition=standard 
 #SBATCH --time=1:00:00 
 #SBATCH --mem-per-cpu=1g
 #SBATCH --cpus-per-task=24
 export OMP_NUM_THREADS=24
 #SBATCH --output=slurm_out.txt -N 1 -J ruleMakerRun
-#SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
-#SBATCH --array=1
+
 
 GADIR="/home/rpalli/rulemakerGA"
 OUTDIR="/public/rpalli/data/5-10-17"
