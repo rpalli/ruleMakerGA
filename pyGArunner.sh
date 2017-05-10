@@ -7,9 +7,9 @@ export OMP_NUM_THREADS=24
 #SBATCH --output=slurm_out.txt -N 1 -J ruleMakerRun
 #SBATCH --nodes=1
 
-
+mk dir "/home/rpalli/data/5-10-17"
 GADIR="/home/rpalli/rulemakerGA"
-OUTDIR="/public/rpalli/data/5-10-17"
+OUTDIR="/home/rpalli/data/5-10-17"
 
 if [! -d $OUTDIR  ]
 	mkdir -p $OUTDIR
