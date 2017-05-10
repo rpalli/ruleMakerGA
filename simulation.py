@@ -90,16 +90,16 @@ class modelClass:
 		
 class paramClass:
 	def __init__(self,):    
-		self.bioReplicates=10
-		self.cells=250
-		self.samples=10
-		self.generations=10 # generations to run
-		self.popSize=15 #size of population
-		self.mu= 15 #individuals selected
-		self.lambd= 30#children produced
-		self.iters=10 #number of simulations to try in asynchronous mode
-		self.genSteps=100 # steps to find steady state with fake data
-		self.simSteps=100 # number of steps each individual is run when evaluating
+		self.bioReplicates=1
+		self.cells=25
+		self.samples=1
+		self.generations=1 # generations to run
+		self.popSize=1 #size of population
+		self.mu= 1 #individuals selected
+		self.lambd= 3 #children produced
+		self.iters=100 #number of simulations to try in asynchronous mode
+		self.genSteps=1 # steps to find steady state with fake data
+		self.simSteps=1 # number of steps each individual is run when evaluating
 		self.crossoverProb=.3 # prob of3crossing over a particular parent
 		self.mutationProb=.7 # prob of mutating a particular parent
 		self.rewire=True

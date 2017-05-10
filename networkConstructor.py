@@ -893,13 +893,13 @@ def download_PC_codes(codelist, graph):
 	simplify_biopax_graph(graph)
 
 
-def ifngStimTestSetup(bioReplicates, params):
+def ifngStimTestSetup(params):
 
 	aliasDict={}
 	dict1={}
-	nc.parseKEGGdicthsa('inputData/hsa00001.keg',aliasDict,dict1)
+	parseKEGGdicthsa('inputData/hsa00001.keg',aliasDict,dict1)
 	dict2={}
-	nc.parseKEGGdict('inputData/ko00001.keg',aliasDict,dict2)
+	parseKEGGdict('inputData/ko00001.keg',aliasDict,dict2)
 
 	# read in list of codes then load them into network
 	#inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
@@ -918,18 +918,18 @@ def ifngStimTestSetup(bioReplicates, params):
 	for code in lines:
 		graph=nx.DiGraph()
 		coder=str('ko'+code[:-1])
-		nc.uploadKEGGcodes([coder], graph, dict2)
+		uploadKEGGcodes([coder], graph, dict2)
 		coder=str('hsa'+code[:-1])
-		nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+		uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
 		if(len(graph.edges())>1):
-			graph=nc.simplifyNetwork(graph, data)
+			graph=simplifyNetwork(graph, data)
 		
 		#graph = utils.simpleNetBuild()
 		#coder='unrolled'
 
 		#graph=utils.LiuNetwork1Builder()
 		# coder='liu'
-		
+
 		# if the code has an interesting logic rule to find, run the algorithm... 
 		checker=False
 		for x in graph.in_degree():
