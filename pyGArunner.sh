@@ -9,11 +9,14 @@ export OMP_NUM_THREADS=24
 echo "working"
 GADIR=/home/rpalli/rulemakerGA
 OUTDIR=/home/rpalli/data/5-10-17
+if [ ! -d $OUTDIR ] ; then mkdir -p $OUTDIR; fi
 
-if [! -d $OUTDIR  ]
-	mkdir $OUTDIR
 cp -r $GADIR $OUTDIR
+
 cd $OUTDIR
+
 module load intelpython/2.7.12
+
 srun python networkConstructor.py
+
 echo "ran python"
