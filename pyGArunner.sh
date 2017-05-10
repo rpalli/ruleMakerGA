@@ -13,8 +13,8 @@ OUTDIR=/home/rpalli/data/5-10-17
 
 if [! -d $OUTDIR  ]
 	mkdir -p $OUTDIR
-cp $GADIR $OUTDIR
+cp -rf $GADIR $OUTDIR
 cd $OUTDIR
 module load intelpython/2.7.12
-
 srun python networkConstructor.py
+echo "ran python"
