@@ -94,14 +94,14 @@ class paramClass:
 		self.rewire=True
 		self.async=False # run in asynchronous mode
 		self.verbose=True
-		self.simSteps=100 # number of steps each individual is run when evaluating
-		self.generations=5 # generations to run
-		self.popSize=5 #size of population
-		self.mu= 5 #individuals selected
-		self.lambd= 10#children produced
+		self.simSteps=25 # number of steps each individual is run when evaluating
+		self.generations=10 # generations to run
+		self.popSize=15 #size of population
+		self.mu= 15 #individuals selected
+		self.lambd= 30#children produced
 		self.bitFlipProb=.1 # prob of flipping bits inside mutation
-		self.crossoverProb=.1 # prob of3crossing over a particular parent
-		self.mutationProb=.9 # prob of mutating a particular parent
+		self.crossoverProb=.3 # prob of3crossing over a particular parent
+		self.mutationProb=.7 # prob of mutating a particular parent
 		self.iters=10 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.sigmaNetwork=0
@@ -133,6 +133,23 @@ def propOr(A,B,AgivenB, BgivenA):
 	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
 def propAnd(A,B,AgivenB, BgivenA):
 	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
+
+def propOr2(A,B,AgivenB, BgivenA):
+	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
+def propAnd2(A,B,AgivenB, BgivenA):
+	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
+def adjOr(A,B,AgivenB, BgivenA,rsquare):
+	if rsquare>.25:
+		return propOr(A,B,AgivenB, BgivenA)
+	else:
+		return naiveOr(A,B)
+	#return rsquare*propAnd(A,B,AgivenB, BgivenA)+ (1-rsquare)*naiveAnd(A,B)
+def adjAnd(A,B,AgivenB, BgivenA,rsquare):
+	if rsquare>.25:
+		return propAnd(A,B,AgivenB, BgivenA)
+	else:
+		return naiveAnd(A,B)
+	#return rsquare*propOr(A,B,AgivenB, BgivenA)+ (1-rsquare)*naiveOr(A,B)
 def Inv(x, inverter): #inverts if necessary then applies hill fun
 	if inverter:
 		return (1-x)
@@ -152,6 +169,15 @@ class simulatorClass:
 			self.corrMat={}
 			self.switch=1			
 			self.simSteps=1
+			self.adj=0
+		if simTyping=='propAdj':
+			self.And=adjAnd
+			self.Or=adjOr
+			self.Inv=Inv
+			self.corrMat={}
+			self.switch=1			
+			self.simSteps=1
+			self.adj=1
 		if simTyping=='fuzzy':
 			self.And=fuzzyAnd
 			self.Inv=Inv
@@ -214,15 +240,18 @@ class simulatorClass:
 									node1=[]
 									for sample in self.trainingData:
 										node1.append(sample[node1index])
-									slope1, intercept1, r_value, p_value, std_err = regress.linregress(tempdata,node1)
-									slope2, intercept2, r_value, p_value, std_err = regress.linregress(node1,tempdata)
+									slope1, intercept1, r_value1, p_value, std_err = regress.linregress(tempdata,node1)
+									slope2, intercept2, r_value2, p_value, std_err = regress.linregress(node1,tempdata)
 									# if(p_value<.1):
 									# 	print(model.nodeList[currentNode])
 									# 	print(model.nodeList[node1index])
 									#store relevant linreg results
-									temp.append([slope1,intercept1, slope2, intercept2])
+									temp.append([slope1,intercept1, slope2, intercept2,(r_value1**2+r_value2**2)/2])
 									for sample in range(len(self.trainingData)):
-										tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],slope1+intercept1,slope2+intercept2)
+										if self.adj:
+											tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],tempdata[sample]*slope1+intercept1,self.trainingData[sample][node1index]*slope2+intercept2,(r_value1**2+r_value2**2)/2)
+										else:
+											tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],tempdata[sample]*slope1+intercept1,self.trainingData[sample][node1index]*slope2+intercept2)
 						# append the tempdata to do or calculations....
 						temp.append(tempdata)
 					tempTrainer.append(temp)
@@ -302,7 +331,11 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 								intercept1=simulator.andTrainer[currentNode][andindex][nodeIn][1]
 								slope2=simulator.andTrainer[currentNode][andindex][nodeIn][2]
 								intercept2=simulator.andTrainer[currentNode][andindex][nodeIn][3]
-								tempVal=simulator.And(oldValue[node1index],tempVal,slope1+intercept1,slope2+intercept2)
+								if simulator.adj: # case where we adjust by the r value
+									rval=simulator.andTrainer[currentNode][andindex][nodeIn][4]
+									tempVal=simulator.And(oldValue[node1index],tempVal,tempVal*slope1+intercept1,oldValue[node1index]*slope2+intercept2,rval)
+								else:
+									tempVal=simulator.And(oldValue[node1index],tempVal,tempVal*slope1+intercept1,oldValue[node1index]*slope2+intercept2)
 							# append calculated values of training and test 
 							ortraininglist.append(simulator.andTrainer[currentNode][andindex][-1])
 							orset.append(tempVal)
@@ -322,13 +355,21 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 						slope2=orDict[tuple(incNodes[0:i])][2]
 						intercept2=orDict[tuple(incNodes[0:i])][3]
 						currentrain=orDict[tuple(incNodes[0:i])][4]
+						rvalue=orDict[tuple(incNodes[0:i])][5]
 					else:
-						slope1, intercept1, r_value, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
-						slope2, intercept2, r_value, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
+						slope1, intercept1, r_value1, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
+						slope2, intercept2, r_value2, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
 						for j in range(len(ortraininglist[i])):
-							currentrain[j]=simulator.Or(ortraininglist[i][j],currentrain[j],slope1+intercept1,slope2+intercept2)
-						orDict[tuple(incNodes[0:i])]=[slope1,intercept1,slope2, intercept2,currentrain]
-					currentval=simulator.Or(orset[i],currentval,slope1+intercept1,slope2+intercept2)
+							if simulator.adj:
+								currentrain[j]=simulator.Or(ortraininglist[i][j],currentrain[j],currentrain[j]*slope1+intercept1,ortraininglist[i][j]*slope2+intercept2,(r_value1**2+r_value2**2)/2)
+							else:
+								currentrain[j]=simulator.Or(ortraininglist[i][j],currentrain[j],currentrain[j]*slope1+intercept1,ortraininglist[i][j]*slope2+intercept2)
+						orDict[tuple(incNodes[0:i])]=[slope1,intercept1,slope2, intercept2,currentrain,(r_value1**2+r_value2**2)/2 ]
+						rvalue=(r_value1**2+r_value2**2)/2
+					if simulator.adj:
+						currentval=simulator.Or(orset[i],currentval,slope1*currentval+intercept1,slope2*orset[i]+intercept2, rvalue)
+					else:
+						currentval=simulator.Or(orset[i],currentval,slope1*currentval+intercept1,slope2*orset[i]+intercept2)
 			return currentval
 
 #run a simulation given a starting state

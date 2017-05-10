@@ -3446,71 +3446,7 @@ def evalNode(individual, currentNode, params, model, simulator, sss):
 	else:
 		return summer,
 
-def PBNsimTest(trials):
 
-	graph=simpleNetBuild()
-	params=sim.paramClass()
-	sss=utils.synthesizeInputs(graph,params.samples)
-	model=sim.modelClass(graph,sss)
-
-	for i in range(0,trials):
-
-		#generate random set of logic rules to start with
-		individual=genBits(model)
-		for node in range(0,len(model.nodeList)):
-			if model.andLenList[node]>0:
-				if node==len(model.nodeList)-1:
-					end=len(model.nodeList)
-				else:
-					end=model.individualParse[node+1]
-				if sum(individual[model.individualParse[node]:end])==0:
-					individual[model.individualParse[node]]=1
-
-		# generate Boolean model for this trial
-		output=runProbabilityBooleanSims(individual, model, params.samples, params.cells)
-		# copy new output into newSSS and initial values
-		newSSS=[]
-		for k in range(0,params.samples):
-			newSS=copy.deepcopy(sss[k])
-			for j in range(0,len(model.nodeList)):
-				newSS[model.nodeList[j]]=output[k][j]
-			newSSS.append(newSS)
-		newInitValueList=[]
-		for j in range(0,len(sss)):
-			newInitValueList.append([])
-		# print(len(newSSS))
-		# print(samples)
-		# print(len(sss))
-		for j in range(0,len(model.nodeList)):
-			for k in range(0,len(sss)):
-				ss=newSSS[k]
-				if  model.nodeList[j] in sss[0].keys():
-					newInitValueList[k].append(ss[model.nodeList[j]])
-				else:
-					newInitValueList[k].append(0.5)
-		model.initValueList=newInitValueList
-
-
-		# set up PBN-based simulator
-		propSimulator=sim.simulatorClass('propNaive')
-		propSimulator.simSteps=10
-		propSimulator.trainingData=model.initValueList
-		#propSimulator.train(model)
-		#print(propSimulator.andTrainer)
-
-		nodeWiseError=[]
-		for j in range(0,len(model.nodeList)):
-			nodeWiseError.append([])
-		for k in range(0,len(sss)):
-			ss=newSSS[k]
-			initValues=newInitValueList[k]
-			newVals, nums=sim.runModel(individual, model, propSimulator, initValues)
-			for entry in range(len(ss)):
-				nodeWiseError[entry].append((initValues[entry]-newVals[entry])**2)
-		print(utils.writeModel(individual, model))
-		for entry in range(len(nodeWiseError)):
-			print(model.nodeList[entry])
-			print(nodeWiseError[entry])
 def evaluate(individual, params, model, simulator, sss):
 	SSEs=[]
 	for j in range(0,len(sss)):

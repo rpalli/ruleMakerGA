@@ -12,6 +12,9 @@ import operator
 import math as math
 from sets import Set
 from joblib import Parallel, delayed
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # import other pieces of our software
 import networkConstructor as nc
@@ -48,6 +51,30 @@ def genBits(model):
 			truth[0]=1
 		startInd[start:end]=truth
 	return startInd
+
+def cxTwoPointNode(ind1, ind2, model):
+	"""Executes a two-point crossover on the input :term:`sequence`
+    individuals. The two individuals are modified in place and both keep
+    their original length. 
+    
+    :param ind1: The first individual participating in the crossover.
+    :param ind2: The second individual participating in the crossover.
+    :returns: A tuple of two individuals.
+
+    This function uses the :func:`~random.randint` function from the Python 
+    base :mod:`random` module.
+    """
+	size = len(model.nodeList)
+	cxpoint1 = random.randint(1, size)
+	cxpoint2 = random.randint(1, size - 1)
+	if cxpoint2 >= cxpoint1:
+		cxpoint2 += 1
+	else: # Swap the two cx points
+		cxpoint1, cxpoint2 = cxpoint2, cxpoint1
+	cxpoint1=model.individualParse[cxpoint1]
+	cxpoint2=model.individualParse[cxpoint2]
+	ind1[cxpoint1:cxpoint2], ind2[cxpoint1:cxpoint2] = ind2[cxpoint1:cxpoint2], ind1[cxpoint1:cxpoint2]
+	return ind1, ind2
 
 def buildToolbox( individualLength, bitFlipProb, model):
 	# # #setup toolbox
@@ -170,7 +197,7 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb):
 		op_choice = random()
 		if op_choice < cxpb:            # Apply crossover
 			ind1, ind2 = map(toolbox.clone, rand.sample(population, 2))
-			ind1, ind2 = toolbox.mate(ind1, ind2)
+			ind1, ind2 = cxTwoPointNode(ind1, ind2, model)
 			del ind1.fitness.values
 			offspring.append(ind1)
 		elif op_choice < cxpb + mutpb:  # Apply mutation
@@ -185,16 +212,20 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb):
 def mutFlipBitAdapt(individual, indpb, model):
 	# get errors
 	errors=list(individual.fitness.values)
+
+	# get rid of errors in nodes that can't be changed
+	for j in xrange(len(errors)):
+		if model.andLenList[model.evaluateNodes[j]]<2:
+			errors[model.evaluateNodes[j]]=0
+
 	# if error is relatively low, do a totally random mutation
-	if numpy.sum(errors)<.1:
+	if numpy.sum(errors)<.05:
 		for i in xrange(len(individual)):
 			if random() < indpb:
 				individual[i] = type(individual[i])(not individual[i])
 	else:
 		# if errors are relatively high, focus on nodes that fit the worst
-		for j in xrange(len(errors)):
-			if model.andLenList[model.evaluateNodes[j]]<2:
-				errors[model.evaluateNodes[j]]=0
+
 		# normalize errors to get a probability that the node  is modified
 		normerrors=[1.*error/numpy.sum(errors) for error in errors]
 		probs=numpy.cumsum(normerrors)
@@ -218,7 +249,6 @@ def mutFlipBitAdapt(individual, indpb, model):
 			if numpy.sum(individual[start:end])==0:
 				individual[start]=1
 	return individual,
-
 
 def selNSGA2(individuals, k):
 	"""Apply NSGA-II selection operator on the *individuals*. Usually, the
@@ -332,8 +362,6 @@ def dominated(ind1, ind2):
 			return False                
 	return not_equal
 
-
-
 def assignCrowdingDist(individuals):
 	"""Assign a crowding distance to each individual's fitness. The 
 	crowding distance can be retrieve via the :attr:`crowding_dist` 
@@ -360,7 +388,6 @@ def assignCrowdingDist(individuals):
 	for i, dist in enumerate(distances):
 		individuals[i].fitness.crowding_dist = dist
 
-
 def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb, ngen, stats=None, halloffame=None, verbose=__debug__):
 	logbook = tools.Logbook()
 	logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
@@ -368,7 +395,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
 	# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-	fitnesses=Parallel(n_jobs=min(7,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+	fitnesses=Parallel(n_jobs=min(6,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
@@ -379,12 +406,17 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 	record = stats.compile(population) if stats is not None else {}
 	logbook.record(gen=0, nevals=len(invalid_ind), **record)
 	if verbose:
-		print logbook.stream
+		print(logbook.stream)
 
+	breaker=False
+	for ind in population:
+		if numpy.sum(ind.fitness.values)< .01*len(ind.fitness.values):
+			breaker=True
+	if breaker:
+		return population, logbook
 	# Begin the generational process
 	for gen in range(1, ngen+1):
 		# Vary the population
-		errors=[ind.fitness.values for ind in population]
 		offspring = varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb)
 		
 		# Evaluate the individuals with an invalid fitness
@@ -406,15 +438,14 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		record = stats.compile(population) if stats is not None else {}
 		logbook.record(gen=gen, nevals=len(invalid_ind), **record)
 		if verbose:
-			print logbook.stream
+			print(logbook.stream)
 		breaker=False
 		for ind in population:
-			if numpy.sum(ind.fitness.values)<.05:
+			if numpy.sum(ind.fitness.values)< .01*len(ind.fitness.values):
 				breaker=True
 		if breaker:
 			break
 	return population, logbook
-
 
 def GAautoSolver(model, sss, params):
 	# set up toolbox and run GA with or without adaptive mutations turned on
@@ -443,50 +474,58 @@ def GAsearchModel(model, newSSS,params):
 			saveVal=i
 	ultimate=list(population[saveVal])
 	newultimate=[]
-	#iterate over nodes
+	# if minny>1.:
+	# 	#iterate over nodes
+	# 	for node in range(0,len(model.nodeList)):
+	# 		#get start and end indices for node in individual
+	# 		if node==(len(model.nodeList)-1):
+	# 			end=len(ultimate)
+	# 		else:
+	# 			end=model.individualParse[node+1]
+	# 		start=model.individualParse[node]
+	# 		# get all the in edges for each and node
+	# 		andNodeList=model.andNodeList[node]
+	# 		inEdges=[]
+	# 		for lister in andNodeList:
+	# 			inEdges.append(set(lister))
+	# 		truth=ultimate[start:end]
+	# 		# check if any nodes are redundant
+	# 		for i in range(len(truth)):
+	# 			if truth[i]==1:
+	# 				for j in range(len(truth)):
+	# 					if truth[j]==1 and not i==j:
+	# 						if inEdges[i].issubset(inEdges[j]):
+	# 							truth[j]=0
+	# 		newultimate.extend(truth)
+	# 	ultimate=newultimate
+	# 	print(len(ultimate))
+	# 	flags=Parallel(n_jobs=min(6,len(ultimate)))(delayed(deltaTester)(list(ultimate), i, model,  newSSS, params, minny) for i in range(len(ultimate)))
+	# 	for flag, i in zip(flags,range(len(ultimate))):
+	# 		if flag:
+	# 			ultimate[i]=1-ultimate[i]
+	# 	minny=numpy.sum(evaluateByNode(ultimate, params.cells, model,  newSSS, params))
+	return minny, ultimate
+
+
+def deltaTester(ultimate, i, model,  newSSS, params, minny):
+	print(i)
+	modifyFlag=False
+	copied=list(ultimate)
+	copied[i]=1-copied[i]
 	for node in range(0,len(model.nodeList)):
+		better=True
 		#get start and end indices for node in individual
 		if node==(len(model.nodeList)-1):
-			end=len(ultimate)
+			end=len(ultimate)-1
 		else:
 			end=model.individualParse[node+1]
 		start=model.individualParse[node]
-		# get all the in edges for each and node
-		andNodeList=model.andNodeList[node]
-		inEdges=[]
-		for lister in andNodeList:
-			inEdges.append(set(lister))
-		truth=ultimate[start:end]
-		# check if any nodes are redundant
-		for i in range(len(truth)):
-			if truth[i]==1:
-				for j in range(len(truth)):
-					if truth[j]==1 and not i==j:
-						if inEdges[i].issubset(inEdges[j]):
-							truth[j]=0
-		newultimate.extend(truth)
-	ultimate=newultimate
-	for i in range(len(ultimate)):
-		copied=list(ultimate)
-		copied[i]=1-copied[i]
-		newtot=numpy.sum(evaluateByNode(copied, params.cells, model,  newSSS, params))
-		if newtot<minny:
-			better=True
-			for node in range(0,len(model.nodeList)):
-				#get start and end indices for node in individual
-				if node==(len(model.nodeList)-1):
-					end=len(ultimate)-1
-				else:
-					end=model.individualParse[node+1]
-				start=model.individualParse[node]
-				if model.andLenList[node]>0:
-					if not sum(copied[start:end])>0:
-						better=False
-			if better:
-				ultimate=copied
-				minny=newtot
-	return minny, ultimate
-
+		if model.andLenList[node]>0:
+			if sum(copied[start:end])>0:
+				newtot=numpy.sum(evaluateByNode(copied, params.cells, model,  newSSS, params))
+				if newtot<minny:
+					modifyFlag=True
+	return modifyFlag
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
 	nodespecificity=[]
@@ -785,10 +824,11 @@ def ifngStimTest(bioReplicates):
 	nc.parseKEGGdicthsa('hsa00001.keg',aliasDict,dict1)
 	dict2={}
 	nc.parseKEGGdict('ko00001.keg',aliasDict,dict2)
-	
 
 	# read in list of codes then load them into network
-	inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
+	#inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
+	inputfile = open('ID_filtered_IFNGpathways.txt', 'r')
+
 	lines = inputfile.readlines()
 	data=dict(utils.loadFpkms('Hela-C-1.count'))
 	sensitivities=[]
@@ -804,18 +844,18 @@ def ifngStimTest(bioReplicates):
 	lines.pop(0)
 	lines=[0]
 	lines=[lines[0]]
+	lines=['04110\n']
 	for code in lines:
 		# graph=nx.DiGraph()
 		# coder=str('ko'+code[:-1])
 		# nc.uploadKEGGcodes([coder], graph, dict2)
 		# coder=str('hsa'+code[:-1])
 		# nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
-
 		# if(len(graph.edges())>1):
 		# 	graph=nc.simplifyNetwork(graph, data)
 		#graph = simpleNetBuild()
 		graph=liu.LiuNetwork1Builder()
-		coder='liu'
+		# coder='liu'
 		if(len(graph.edges())>1):
 			print(coder)
 			print(len(graph.edges()))
@@ -871,13 +911,13 @@ def ifngStimTest(bioReplicates):
 			sensitivities.append(sensitivity)
 			specificityStds.append(specificityStd)
 			sensitivityStds.append(sensitivityStd)
-			# print(sensitivity)
-			# print(sensitivityStd)
-			# print(specificity)
-			# print(specificityStd)
-			# print(nodesensitivities)
-			# print(nodespecificities)
-			# print(devLists)
+			print(sensitivity)
+			print(sensitivityStd)
+			print(specificity)
+			print(specificityStd)
+			print(nodesensitivities)
+			print(nodespecificities)
+			print(devLists)
 	nodeLookup={}
 	for number in edgeDegree:
 		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
@@ -951,8 +991,106 @@ def rewireSimTest(graph):
 	#print(model.individualParse)
 	return simTester(model, sss,'prop')
 
+def PBNsimTest(trials):
+
+	graph=liu.LiuNetwork1Builder()
+
+	# graph=simpleNetBuild()
+	params=sim.paramClass()
+	sss=utils.synthesizeInputs(graph,params.samples)
+	model=sim.modelClass(graph,sss)
+	nodeWiseError=[]
+	nodeWiseError3=[]
+	nodeWiseError2=[]
+	for j in range(0,len(model.nodeList)):
+		nodeWiseError.append([])
+		nodeWiseError2.append([])
+		nodeWiseError3.append([])
+
+	for i in range(0,trials):
+		nodeWiseErrortemp=[]
+		nodeWiseError3temp=[]
+		nodeWiseError2temp=[]
+		for j in range(0,len(model.nodeList)):
+			nodeWiseErrortemp.append([])
+			nodeWiseError2temp.append([])
+			nodeWiseError3temp.append([])
+
+		individual=genBits(model) #generate random set of logic rules to start with
+		# generate Boolean model for this trial
+		output=runProbabilityBooleanSims(individual, model, params.samples, params.cells, params)
+		# copy new output into newSSS and initial values
+		newSSS=[]
+		for k in range(0,params.samples):
+			newSS=copy.deepcopy(sss[k])
+			for j in range(0,len(model.nodeList)):
+				newSS[model.nodeList[j]]=output[k][j]
+			newSSS.append(newSS)
+		newInitValueList=[]
+		for j in range(0,len(sss)):
+			newInitValueList.append([])
+		# print(len(newSSS))
+		# print(samples)
+		# print(len(sss))
+		for j in range(0,len(model.nodeList)):
+			for k in range(0,len(sss)):
+				ss=newSSS[k]
+				if  model.nodeList[j] in sss[0].keys():
+					newInitValueList[k].append(ss[model.nodeList[j]])
+				else:
+					newInitValueList[k].append(0.5)
+		model.initValueList=newInitValueList
+		for k in range(len(sss)):
+			boolValues=iterateBooleanModel(individual, model, params.cells, model.initValueList[k], params)
+			SSE=[(boolValues[model.evaluateNodes[i]]-model.initValueList[k][i])**2 for i in range(0, len(model.evaluateNodes))]
+			for i in range(len(SSE)):
+				nodeWiseError2temp[i].append(SSE[i])
+		# set up PBN-based simulator
+		propSimulator1=sim.simulatorClass('prop')
+		propSimulator1.simSteps=10
+		propSimulator1.trainingData=model.initValueList
+		propSimulator1.train(model)
+		#print(propSimulator1.andTrainer)
+		for k in range(0,len(sss)):
+			ss=newSSS[k]
+			initValues=newInitValueList[k]
+			newVals=sim.runModel(individual, model, propSimulator1, initValues, params)
+			for entry in range(len(ss)):
+				nodeWiseErrortemp[entry].append((initValues[entry]-newVals[entry])**2)		
+		# set up PBN-based simulator
+		propSimulator2=sim.simulatorClass('propAdj')
+		propSimulator2.simSteps=10
+		propSimulator2.trainingData=model.initValueList
+		propSimulator2.train(model)
+		#print(propSimulator1.andTrainer)
+		for k in range(0,len(sss)):
+			ss=newSSS[k]
+			initValues=newInitValueList[k]
+			newVals=sim.runModel(individual, model, propSimulator2, initValues, params)
+			for entry in range(len(ss)):
+				nodeWiseError3temp[entry].append((initValues[entry]-newVals[entry])**2)	
+
+		for j in range(0,len(model.nodeList)):
+			nodeWiseError[j].append(numpy.sum(nodeWiseErrortemp[j])/(1.*len(nodeWiseErrortemp[j])))
+			nodeWiseError2[j].append(numpy.sum(nodeWiseError2temp[j])/(1.*len(nodeWiseErrortemp[j])))
+			nodeWiseError3[j].append(numpy.sum(nodeWiseError3temp[j])/(1.*len(nodeWiseErrortemp[j])))
+	dataDict=[]
+	for entry in range(len(nodeWiseError2)):
+		#or model.nodeList[entry]=='d'
+		if (not model.nodeList[entry]=='a' and not model.nodeList[entry]=='b' ):
+			for i in range(len(nodeWiseError2[entry])):
+				dataDict.append({'node':model.nodeList[entry], 'value':nodeWiseError[entry][i], 'mode':'linReg'})
+				dataDict.append({'node':model.nodeList[entry], 'value':nodeWiseError2[entry][i], 'mode':'iterated'})
+				dataDict.append({'node':model.nodeList[entry], 'value':nodeWiseError3[entry][i], 'mode':'adjLinReg'})
+
+	df=pd.DataFrame(dataDict)
+	ax=sns.swarmplot(data=df,x='node', y='value', hue='mode')
+	plt.show()
+
+
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	ifngStimTest(25)
+	ifngStimTest(10)
+	#PBNsimTest(10)
 	print("--- %s seconds ---" % (time.time() - start_time))
