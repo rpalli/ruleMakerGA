@@ -8,4 +8,4 @@ export OMP_NUM_THREADS=24
 #SBATCH --nodes=1
 
 module load intelpython/2.7.12
-srun python networkConstructor.py
+srun python ruleMakerGA/networkConstructor.py
