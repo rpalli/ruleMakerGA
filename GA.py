@@ -441,6 +441,12 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		for ind in population:
 			if numpy.sum(ind.fitness.values)< .01*len(ind.fitness.values):
 				breaker=True
+				saveInd=ind
+		if breaker:
+			errorTemp=saveInd.fitness.values
+			for value in errorTemp:
+				if value> .1:
+					breaker=False
 		if breaker:
 			break
 	return population, logbook
