@@ -47,9 +47,6 @@ Temporary Items
 .apdisk
 *.pyc
 *.graphml
-hsa00001_dd.keg
-*.keg
-hsa00001.keg
 *.lprof
 output.txt
 *.png
