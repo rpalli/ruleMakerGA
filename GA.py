@@ -238,12 +238,13 @@ def mutFlipBitAdapt(individual, indpb, model):
 			else:
 				end=model.individualParse[model.evaluateNodes[focusNode]+1]
 			for i in range(start,end):
-				if random()< .5:
+				if random()< 2/(end-start):
 					individual[i] = 1
 				else:
 					individual[i] = 0
 			#ensure that there is at least one shadow and node turned on
 			if numpy.sum(individual[start:end])==0:
+				individual[start+1]=1
 				individual[start]=1
 	return individual,
 
@@ -352,8 +353,8 @@ def dominated(ind1, ind2):
 					every objectives.
 	"""
 	not_equal = False
-	for self_wvalue, other_wvalue in zip(self.wvalues[obj], other.wvalues[obj]):
-		if self_wvalue > other_wvalue + 1:
+	for self_wvalue, other_wvalue in zip(ind1.wvalues[obj], ind2.wvalues[obj]):
+		if self_wvalue > other_wvalue + .2:
 			not_equal = True
 		elif self_wvalue < other_wvalue:
 			return False                
