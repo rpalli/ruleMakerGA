@@ -144,7 +144,7 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells, params):
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random())
-	samples=Parallel(n_jobs=min(6,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params) for i in range(sampleNum))
+	samples=Parallel(n_jobs=min(24,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params) for i in range(sampleNum))
 	# counter=0
 	# for sample in range(len(samples)):
 	# 	if sum(samples(sample))==0:
@@ -393,7 +393,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
 	# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-	fitnesses=Parallel(n_jobs=min(6,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
@@ -420,7 +420,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
 		#fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-		fitnesses=Parallel(n_jobs=min(6,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
 
