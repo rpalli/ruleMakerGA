@@ -208,7 +208,7 @@ def mutFlipBitAdapt(individual, indpb, model):
 
 	# if error is relatively low, do a totally random mutation
 	if numpy.sum(errors)<.05:
-		focusNode=math.floor(random()*len(model.andLenList))
+		focusNode=int(math.floor(random()*len(model.andLenList)))
 	else:
 		# if errors are relatively high, focus on nodes that fit the worst
 
