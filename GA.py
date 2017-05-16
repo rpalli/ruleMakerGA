@@ -33,11 +33,6 @@ def genBits(model):
 		start=model.individualParse[node]
 		if (end-start)>1:
 			counter=0
-			while numpy.sum(startInd[start:end])>5 and counter < 10000:
-				indices = [i for i in range(start,end) if startInd[i] == 1]
-				chosen=math.floor(random()*len(indices))
-				startInd[indices[int(chosen)]]=0
-				counter+=1
 			if numpy.sum(startInd[start:end])==0:
 				chosen=math.floor(random()*(end-start))
 				startInd[start+int(chosen)]=1
@@ -213,9 +208,7 @@ def mutFlipBitAdapt(individual, indpb, model):
 
 	# if error is relatively low, do a totally random mutation
 	if numpy.sum(errors)<.05:
-		for i in xrange(len(individual)):
-			if random() < indpb:
-				individual[i] = type(individual[i])(not individual[i])
+		focusNode=math.floor(random()*len(model.andLenList))
 	else:
 		# if errors are relatively high, focus on nodes that fit the worst
 
@@ -225,23 +218,23 @@ def mutFlipBitAdapt(individual, indpb, model):
 		# randomly select a node to mutate
 		randy=random()
 		focusNode=next(i for i in xrange(len(probs)) if probs[i]>randy)
-		# mutate on average 1.5 shadow ands from the node. 
-		if model.andLenList[model.evaluateNodes[focusNode]]>1:
-			# find ends of the node of interest in the individual
-			start=model.individualParse[model.evaluateNodes[focusNode]]
-			if model.evaluateNodes[focusNode]==len(model.nodeList)-1:
-				end= model.size
+	# mutate on average 1.5 shadow ands from the node. 
+	if model.andLenList[model.evaluateNodes[focusNode]]>1:
+		# find ends of the node of interest in the individual
+		start=model.individualParse[model.evaluateNodes[focusNode]]
+		if model.evaluateNodes[focusNode]==len(model.nodeList)-1:
+			end= model.size
+		else:
+			end=model.individualParse[model.evaluateNodes[focusNode]+1]
+		for i in range(start,end):
+			if random()< 2/(end-start+1):
+				individual[i] = 1
 			else:
-				end=model.individualParse[model.evaluateNodes[focusNode]+1]
-			for i in range(start,end):
-				if random()< 2/(end-start+1):
-					individual[i] = 1
-				else:
-					individual[i] = 0
-			#ensure that there is at least one shadow and node turned on
-			if numpy.sum(individual[start:end])==0:
-				individual[start+1]=1
-				individual[start]=1
+				individual[i] = 0
+		#ensure that there is at least one shadow and node turned on
+		if numpy.sum(individual[start:end])==0:
+			individual[start+1]=1
+			individual[start]=1
 	return individual,
 
 def selNSGA2(individuals, k):
