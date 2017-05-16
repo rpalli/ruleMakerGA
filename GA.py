@@ -20,14 +20,17 @@ import utils as utils
 import simulation as sim
 
 def genBits(model):
-	startInd=utils.genRandBits(model.size)
+	startInd=list(utils.genRandBits(model.size))
+	counter=0
+	while numpy.sum(startInd)==0 and counter < 10000:
+		startInd=list(utils.genRandBits(model.size))
+		counter+=1
 	for node in range(0,len(model.nodeList)):
 		if node==(len(model.nodeList)-1):
-			end=len(startInd)-1
+			end= model.size
 		else:
 			end=model.individualParse[node+1]
 		start=model.individualParse[node]
-		truth=startInd[start:end]
 		if (end-start)>1:
 			counter=0
 			while numpy.sum(startInd[start:end])>5 and counter < 10000:
@@ -35,9 +38,8 @@ def genBits(model):
 				chosen=math.floor(random()*len(indices))
 				startInd[indices[int(chosen)]]=0
 				counter+=1
-			#startInd[start:end]=truth
 			if numpy.sum(startInd[start:end])==0:
-				chosen=math.floor(random()(end-start))
+				chosen=math.floor(random()*(end-start))
 				startInd[start+int(chosen)]=1
 		elif (end-start)==1:
 			startInd[start]=1
