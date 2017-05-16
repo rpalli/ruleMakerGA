@@ -1,19 +1,105 @@
 import matplotlib.pyplot as plt
-import numpy as np
+import numpy as numpy
 import pickle
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import seaborn as sns
 
+def compareIndividualsNodeWise(truthList, testList, model):
+	nodesensitivity=[]
+	nodespecificity=[]
+	netOnes=[]
+	netZeros=[]
+	netNegOnes=[]
+	for node in range(len(model.nodeList)):
+		ones=[]
+		zeros=[]
+		negones=[]
+		# get indices to extract individual for this node
+		if node==len(model.nodeList)-1:
+			end=len(model.nodeList)
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		sumindividual=[]
+		#loop over individuals provided and calculate relevant values
+		for i in range(len(truthList)):
+			truth= truthList[i][start:end]
+			test= testList[i][start:end]
+			sumindividual.append(numpy.sum(truth))
+			newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
+			ones.append(newindividual.count(1))
+			zeros.append(newindividual.count(0))
+			negones.append(newindividual.count(-1))
+		# append node-wise breakdowns to list of breakdowns for the model as a whole
+		netOnes.append(numpy.sum(ones))
+		netZeros.append(numpy.sum(zeros))
+		netNegOnes.append(numpy.sum(negones))
+		
+		# calculate sensitivity and specificity for the node
+		temp=[100 if sumindividual[i]==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
+		temp=filter(lambda a: a != 100, temp)
+		if len(temp)==0:
+			sensitivity=100
+		else:
+			sensitivity=(1.*numpy.sum(temp)/len(temp))
+		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+		temp=filter(lambda a: a != 100, temp)
+		if len(temp)==0:
+			specificity=100
+		else:
+			specificity=(1.*numpy.sum(temp)/len(temp))
+		# add to list of sensitivity and specificity by node
+		nodesensitivity.append(sensitivity)
+		nodespecificity.append(specificity)
+	#calculate sensitivity and specificity on the network as a whole
+	ones=[]
+	zeros=[]
+	negones=[]
+	sumindividual=[]
 
+	for i in range(len(truthList)):
+		truth= truthList[i]
+		test= testList[i]
+		sumindividual.append(1.*numpy.sum(truth))
+		newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
+		ones.append(newindividual.count(1))
+		zeros.append(newindividual.count(0))
+		negones.append(newindividual.count(-1))
+	temp=[100 if (sumindividual[i])==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
+	temp=filter(lambda a: a != 100, temp)
+	if len(temp)==0:
+		sensitivity=100
+	else:
+		sensitivity=(1.*numpy.sum(temp)/len(temp))
+	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+	temp=filter(lambda a: a != 100, temp)
+	if len(temp)==0:
+		specificity=100
+	else:
+		specificity=(1.*numpy.sum(temp)/len(temp))
+	return sensitivity, specificity, nodesensitivity, nodespecificity
 
-def analyzeRewire(name1, name2,name3, replicates):	
-	
-	outputList=
-	outputList=[truthList,testList, devList,model.size, model.evaluateNodes, model.individualParse, model.andNodeInvertList, model.andLenList,model.earlyEvalNodes,	model.nodeList, model.nodeDict, model.initValueList]=outputList
+class modelHolder:
+	def __init__(self,valueList):
+		[ evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList]=valueList
+		self.evaluateNodes=evaluateNodes
+		self.individualParse=individualParse
+		self.andNodeList=andNodeList
+		self.andNodeInvertList=andNodeInvertList
+		self.andLenList=andLenList
+		self.earlyEvalNodes=earlyEvalNodes
+		self.nodeList=nodeList
+		self.nodeDict=nodeDict
+		self.initValueList=initValueList
 
-	
+def analyzeRewire(fileName):
+	# upload data for this replicate
+	outputList=pickle.Unpickler(open( fileName, "rb" )).load()
+	[truthList,testList, devList,size, evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList]=outputList
+	model=modelHolder([evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList])
+
 	truthIndividuals=[]
 	truthAvgs=[]
 	hofScores=[]
@@ -24,9 +110,6 @@ def analyzeRewire(name1, name2,name3, replicates):
 	negones=[]
 	truthCounter=0
 	sumindividual=[]
-	# loop over number of times we want to generate fake data and perform sequence of events
-	for i in range(0,replicates):
-
 
 	print('devList')
 	print(devList)
@@ -153,7 +236,7 @@ def analyzeRewire(name1, name2,name3, replicates):
 		print(utils.writeModel(newtruths[i], model))
 		print(utils.writeModel(newtests[i], model))
 
-	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, [testList, truthList,  newtruths, newtests]
+	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, [testList, truthList, newtruths, newtests]
 
 
 def analyzeExperiment():
@@ -166,6 +249,8 @@ def analyzeExperiment():
 	truthholder=[]
 	edgeDegree=[]
 	overlapNodes=[]
+
+	#FOR .gpickle!
 	for code in lines:
 		# graph=nx.DiGraph()
 		# coder=str('ko'+code[:-1])
@@ -177,68 +262,70 @@ def analyzeExperiment():
 		#graph = simpleNetBuild()
 		graph=liu.LiuNetwork1Builder()
 		# coder='liu'
-		if(len(graph.edges())>1):
-			print(coder)
-			print(len(graph.edges()))
-			
-			nx.write_graphml(graph,coder+'.graphml')
-			tempsensitivities=[[],[],[],[]]
-			tempspecificities=[[],[],[],[]]
-			truthlists=[[],[],[],[]]
-			devLists=[]
-			for i in range(bioReplicates):
-				tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=analyzeRewire(name1, name2,name3, replicates)
-				sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
-				sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
-				sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
-				sensitivity4, specificity4, nodesensitivity4, nodespecificity4 = tuple4
-				tempsensitivities[0].append(sensitivity1)
-				tempsensitivities[1].append(sensitivity2)
-				tempsensitivities[2].append(sensitivity3)
-				tempsensitivities[3].append(sensitivity4)
-				tempspecificities[0].append(specificity1)
-				tempspecificities[1].append(specificity2)
-				tempspecificities[2].append(specificity3)
-				tempspecificities[3].append(specificity4)
-				nodesensitivities[0].extend(nodesensitivity1)
-				nodesensitivities[1].extend(nodesensitivity2)
-				nodesensitivities[2].extend(nodesensitivity3)
-				nodesensitivities[3].extend(nodesensitivity4)
-				nodespecificities[0].extend(nodespecificity1)
-				nodespecificities[1].extend(nodespecificity2)
-				nodespecificities[2].extend(nodespecificity3)
-				nodespecificities[3].extend(nodespecificity4)
-				devLists.append(devList)
-				overlapNodes.extend(overlaps)
-				edgeDegree.extend(inEdgeNums)
-				truthlists[0].extend(truthlisttemp[0])
-				truthlists[1].extend(truthlisttemp[1])
-				truthlists[2].extend(truthlisttemp[2])
-				truthlists[3].extend(truthlisttemp[3])
-			for i in range(len(tempsensitivities)):
-				tempsensitivities[i]=filter(lambda a: a != 100, tempsensitivities[i])
-				if len(tempsensitivities[i])==0:
-					tempsensitivities[i].append(100)
-			for tempholder in tempspecificities:
-				tempspecificities[i]=filter(lambda a: a != 100, tempspecificities[i])
-				if len(tempspecificities[i])==0:
-					tempspecificities[i].append(0.)
-			sensitivity=[1.*numpy.sum(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.sum(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.sum(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.sum(tempsensitivities[3])/len(tempsensitivities[3])]
-			sensitivityStd=[1.*numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.std(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.std(tempsensitivities[3])/len(tempsensitivities[3])]
-			specificity=[1.*numpy.sum(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.sum(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.sum(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.sum(tempspecificities[3])/len(tempspecificities[3])]
-			specificityStd=[1.*numpy.std(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.std(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.std(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.std(tempspecificities[3])/len(tempspecificities[3])]
-			truthholder.append(truthlists)
-			specificities.append(specificity)
-			sensitivities.append(sensitivity)
-			specificityStds.append(specificityStd)
-			sensitivityStds.append(sensitivityStd)
-			print(sensitivity)
-			print(sensitivityStd)
-			print(specificity)
-			print(specificityStd)
-			print(nodesensitivities)
-			print(nodespecificities)
-			print(devLists)
+	
+		print(coder)
+		print(len(graph.edges()))
+		
+		nx.write_graphml(graph,coder+'.graphml')
+		tempsensitivities=[[],[],[],[]]
+		tempspecificities=[[],[],[],[]]
+		truthlists=[[],[],[],[]]
+		devLists=[]
+
+		#FOR EACH RUN WITH THAT GPICKLE
+		for i in range(bioReplicates):
+			tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=analyzeRewire(name1, name2,name3, replicates)
+			sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
+			sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
+			sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
+			sensitivity4, specificity4, nodesensitivity4, nodespecificity4 = tuple4
+			tempsensitivities[0].append(sensitivity1)
+			tempsensitivities[1].append(sensitivity2)
+			tempsensitivities[2].append(sensitivity3)
+			tempsensitivities[3].append(sensitivity4)
+			tempspecificities[0].append(specificity1)
+			tempspecificities[1].append(specificity2)
+			tempspecificities[2].append(specificity3)
+			tempspecificities[3].append(specificity4)
+			nodesensitivities[0].extend(nodesensitivity1)
+			nodesensitivities[1].extend(nodesensitivity2)
+			nodesensitivities[2].extend(nodesensitivity3)
+			nodesensitivities[3].extend(nodesensitivity4)
+			nodespecificities[0].extend(nodespecificity1)
+			nodespecificities[1].extend(nodespecificity2)
+			nodespecificities[2].extend(nodespecificity3)
+			nodespecificities[3].extend(nodespecificity4)
+			devLists.append(devList)
+			overlapNodes.extend(overlaps)
+			edgeDegree.extend(inEdgeNums)
+			truthlists[0].extend(truthlisttemp[0])
+			truthlists[1].extend(truthlisttemp[1])
+			truthlists[2].extend(truthlisttemp[2])
+			truthlists[3].extend(truthlisttemp[3])
+		for i in range(len(tempsensitivities)):
+			tempsensitivities[i]=filter(lambda a: a != 100, tempsensitivities[i])
+			if len(tempsensitivities[i])==0:
+				tempsensitivities[i].append(100)
+		for tempholder in tempspecificities:
+			tempspecificities[i]=filter(lambda a: a != 100, tempspecificities[i])
+			if len(tempspecificities[i])==0:
+				tempspecificities[i].append(0.)
+		sensitivity=[1.*numpy.sum(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.sum(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.sum(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.sum(tempsensitivities[3])/len(tempsensitivities[3])]
+		sensitivityStd=[1.*numpy.std(tempsensitivities[0])/len(tempsensitivities[0]),1.*numpy.std(tempsensitivities[1])/len(tempsensitivities[1]),1.*numpy.std(tempsensitivities[2])/len(tempsensitivities[2]),1.*numpy.std(tempsensitivities[3])/len(tempsensitivities[3])]
+		specificity=[1.*numpy.sum(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.sum(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.sum(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.sum(tempspecificities[3])/len(tempspecificities[3])]
+		specificityStd=[1.*numpy.std(tempspecificities[0])/len(tempspecificities[0]),1.*numpy.std(tempspecificities[1])/len(tempspecificities[1]),1.*numpy.std(tempspecificities[2])/len(tempspecificities[2]),1.*numpy.std(tempspecificities[3])/len(tempspecificities[3])]
+		truthholder.append(truthlists)
+		specificities.append(specificity)
+		sensitivities.append(sensitivity)
+		specificityStds.append(specificityStd)
+		sensitivityStds.append(sensitivityStd)
+		print(sensitivity)
+		print(sensitivityStd)
+		print(specificity)
+		print(specificityStd)
+		print(nodesensitivities)
+		print(nodespecificities)
+		print(devLists)
 	nodeLookup={}
 	for number in edgeDegree:
 		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
@@ -290,7 +377,7 @@ def analyzeExperiment():
 	print(finalNodeData)
 	print(finalExtendData) 
 
-def plotResults()
+def plotResults():
 	networkNodeNums=[18,32,7,23,68,78,72,28]
 
 	finalNodeData=pickle.Unpickler(open( "node_by_node_data.pickle", "rb" )).load()
@@ -432,3 +519,4 @@ def plotResults()
 	plt.clf()
 
 
+print(analyzeRewire('hsa04066_6_output.pickle'))

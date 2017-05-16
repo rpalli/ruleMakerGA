@@ -535,80 +535,6 @@ def deltaTester(ultimate, i, model,  newSSS, params, minny):
 					modifyFlag=True
 	return modifyFlag
 
-def compareIndividualsNodeWise(truthList, testList, model):
-	nodesensitivity=[]
-	nodespecificity=[]
-	netOnes=[]
-	netZeros=[]
-	netNegOnes=[]
-	for node in range(len(model.nodeList)):
-		ones=[]
-		zeros=[]
-		negones=[]
-		# get indices to extract individual for this node
-		if node==len(model.nodeList)-1:
-			end=len(model.nodeList)
-		else:
-			end=model.individualParse[node+1]
-		start=model.individualParse[node]
-		sumindividual=[]
-		#loop over individuals provided and calculate relevant values
-		for i in range(len(truthList)):
-			truth= truthList[i][start:end]
-			test= testList[i][start:end]
-			sumindividual.append(numpy.sum(truth))
-			newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
-			ones.append(newindividual.count(1))
-			zeros.append(newindividual.count(0))
-			negones.append(newindividual.count(-1))
-		# append node-wise breakdowns to list of breakdowns for the model as a whole
-		netOnes.append(numpy.sum(ones))
-		netZeros.append(numpy.sum(zeros))
-		netNegOnes.append(numpy.sum(negones))
-		
-		# calculate sensitivity and specificity for the node
-		temp=[100 if sumindividual[i]==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
-		temp=filter(lambda a: a != 100, temp)
-		if len(temp)==0:
-			sensitivity=100
-		else:
-			sensitivity=(1.*numpy.sum(temp)/len(temp))
-		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
-		temp=filter(lambda a: a != 100, temp)
-		if len(temp)==0:
-			specificity=100
-		else:
-			specificity=(1.*numpy.sum(temp)/len(temp))
-		# add to list of sensitivity and specificity by node
-		nodesensitivity.append(sensitivity)
-		nodespecificity.append(specificity)
-	#calculate sensitivity and specificity on the network as a whole
-	ones=[]
-	zeros=[]
-	negones=[]
-	sumindividual=[]
-
-	for i in range(len(truthList)):
-		truth= truthList[i]
-		test= testList[i]
-		sumindividual.append(1.*numpy.sum(truth))
-		newindividual=[a_i - b_i for a_i, b_i in zip(truth, test)]
-		ones.append(newindividual.count(1))
-		zeros.append(newindividual.count(0))
-		negones.append(newindividual.count(-1))
-	temp=[100 if (sumindividual[i])==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
-	temp=filter(lambda a: a != 100, temp)
-	if len(temp)==0:
-		sensitivity=100
-	else:
-		sensitivity=(1.*numpy.sum(temp)/len(temp))
-	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
-	temp=filter(lambda a: a != 100, temp)
-	if len(temp)==0:
-		specificity=100
-	else:
-		specificity=(1.*numpy.sum(temp)/len(temp))
-	return sensitivity, specificity, nodesensitivity, nodespecificity
 
 def simTester(graph, name):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
@@ -673,7 +599,7 @@ def simTester(graph, name):
 		testList.append(list(bruteOut))
 		devList.append(dev)
 	# set up output and save as a pickle
-	outputList=[truthList,testList, devList,model.size, model.evaluateNodes, model.individualParse, model.andNodeInvertList, model.andLenList,model.earlyEvalNodes,	model.nodeList, model.nodeDict, model.initValueList]
+	outputList=[truthList,testList, devList,model.size, model.evaluateNodes, model.individualParse,model.andNodeList ,model.andNodeInvertList, model.andLenList,model.earlyEvalNodes,	model.nodeList, model.nodeDict, model.initValueList]
 	pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
 
 if __name__ == '__main__':
