@@ -2,7 +2,7 @@
 #SBATCH --partition=standard 
 #SBATCH -a 1-10
 #SBATCH -J GArun
-#SBATCH -o GA_out-%a.txt
+#SBATCH -o GA_out_%A_%a.txt
 #SBATCH --mem-per-cpu=100MB
 #SBATCH -t 10:00:00
 #SBATCH -n 1
