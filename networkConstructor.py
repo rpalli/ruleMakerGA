@@ -941,3 +941,13 @@ def ifngStimTestSetup(params):
 if __name__ == '__main__':
 	params=sim.paramClass()
 	ifngStimTestSetup(params)
+	# # graph=nx.DiGraph()
+	# # coder=str('ko'+code[:-1])
+	# # nc.uploadKEGGcodes([coder], graph, dict2)
+	# # coder=str('hsa'+code[:-1])
+	# # nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+	# # if(len(graph.edges())>1):
+	# # 	graph=nc.simplifyNetwork(graph, data)
+	# #graph = simpleNetBuild()
+	# graph=liu.LiuNetwork1Builder()
+	# # coder='liu'

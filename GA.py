@@ -35,7 +35,7 @@ def genBits(model):
 			# 	else:
 			# 		truth[i]=0
 			counter=0
-			while numpy.sum(truth)>5 and counter < 100000:
+			while numpy.sum(truth)>5 and counter < 10000:
 				indices = [i for i in range(len(truth)) if truth[i] == 1]
 				chosen=math.floor(random()*len(indices))
 				truth[indices[int(chosen)]]=0
@@ -238,7 +238,7 @@ def mutFlipBitAdapt(individual, indpb, model):
 			else:
 				end=model.individualParse[model.evaluateNodes[focusNode]+1]
 			for i in range(start,end):
-				if random()< 2/(end-start):
+				if random()< 2/(end-start+1):
 					individual[i] = 1
 				else:
 					individual[i] = 0

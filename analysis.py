@@ -5,7 +5,9 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import seaborn as sns
+from sets import Set
 
+import utils as utils
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
 	nodespecificity=[]
@@ -99,7 +101,7 @@ def analyzeRewire(fileName):
 	outputList=pickle.Unpickler(open( fileName, "rb" )).load()
 	[truthList,testList, devList,size, evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList]=outputList
 	model=modelHolder([evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList])
-
+	print(testList)
 	truthIndividuals=[]
 	truthAvgs=[]
 	hofScores=[]
@@ -111,8 +113,6 @@ def analyzeRewire(fileName):
 	truthCounter=0
 	sumindividual=[]
 
-	print('devList')
-	print(devList)
 
 	tuple1=compareIndividualsNodeWise(truthList, testList, model)
 	sensitivities=[]
@@ -231,15 +231,15 @@ def analyzeRewire(fileName):
 	tuple3= (sensitivity, specificity, sensitivities, specificities)
 
 	tuple4=compareIndividualsNodeWise(newtruths, newtests, model)
-	for i in range(len(newtruths)):
-		print("truth, found")
-		print(utils.writeModel(newtruths[i], model))
-		print(utils.writeModel(newtests[i], model))
+	# for i in range(len(newtruths)):
+	# 	print("truth, found")
+	# 	print(utils.writeModel(newtruths[i], model))
+	# 	print(utils.writeModel(newtests[i], model))
 
 	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, [testList, truthList, newtruths, newtests]
 
 
-def analyzeExperiment():
+def analyzeExperiment(codes):
 	sensitivities=[]
 	specificities=[]
 	specificityStds=[]
@@ -250,31 +250,18 @@ def analyzeExperiment():
 	edgeDegree=[]
 	overlapNodes=[]
 
-	#FOR .gpickle!
-	for code in lines:
-		# graph=nx.DiGraph()
-		# coder=str('ko'+code[:-1])
-		# nc.uploadKEGGcodes([coder], graph, dict2)
-		# coder=str('hsa'+code[:-1])
-		# nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
-		# if(len(graph.edges())>1):
-		# 	graph=nc.simplifyNetwork(graph, data)
-		#graph = simpleNetBuild()
-		graph=liu.LiuNetwork1Builder()
-		# coder='liu'
-	
-		print(coder)
-		print(len(graph.edges()))
-		
-		nx.write_graphml(graph,coder+'.graphml')
+	# for each gpickle
+	for code in codes:
+		print(code)		
+
 		tempsensitivities=[[],[],[],[]]
 		tempspecificities=[[],[],[],[]]
 		truthlists=[[],[],[],[]]
 		devLists=[]
 
 		#FOR EACH RUN WITH THAT GPICKLE
-		for i in range(bioReplicates):
-			tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=analyzeRewire(name1, name2,name3, replicates)
+		for i in range(1,11):
+			tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=analyzeRewire(code+'_'+str(i)+'_output.pickle')
 			sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
 			sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
 			sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
@@ -323,9 +310,9 @@ def analyzeExperiment():
 		print(sensitivityStd)
 		print(specificity)
 		print(specificityStd)
-		print(nodesensitivities)
-		print(nodespecificities)
-		print(devLists)
+		# print(nodesensitivities)
+		# print(nodespecificities)
+		# print(devLists)
 	nodeLookup={}
 	for number in edgeDegree:
 		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
@@ -372,10 +359,10 @@ def analyzeExperiment():
 			newlist=filter(lambda a: a != 100, lister)
 			tempOverlap.append(newlist)
 		finalOverlapExtendData.append(tempOverlap)
-	print(nodeLookup.keys())
-	print(overlapLookup.keys())
-	print(finalNodeData)
-	print(finalExtendData) 
+	# print(nodeLookup.keys())
+	# print(overlapLookup.keys())
+	# print(finalNodeData)
+	# print(finalExtendData) 
 
 def plotResults():
 	networkNodeNums=[18,32,7,23,68,78,72,28]
@@ -518,5 +505,4 @@ def plotResults():
 
 	plt.clf()
 
-
-print(analyzeRewire('hsa04066_6_output.pickle'))
+analyzeExperiment(['hsa04066'])
