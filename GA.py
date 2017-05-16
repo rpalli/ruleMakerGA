@@ -28,7 +28,7 @@ def genBits(model):
 			end=model.individualParse[node+1]
 		start=model.individualParse[node]
 		truth=startInd[start:end]
-		if len(end-start)>1:
+		if (end-start)>1:
 			counter=0
 			while numpy.sum(startInd[start:end])>5 and counter < 10000:
 				indices = [i for i in range(start,end) if startInd[i] == 1]
@@ -39,7 +39,7 @@ def genBits(model):
 			if numpy.sum(startInd[start:end])==0:
 				chosen=math.floor(random()(end-start))
 				startInd[start+int(chosen)]=1
-		elif len(startInd[start:end])==1:
+		elif (end-start)==1:
 			startInd[start]=1
 	return startInd
 
