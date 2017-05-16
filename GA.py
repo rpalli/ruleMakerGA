@@ -62,8 +62,8 @@ def cxTwoPointNode(ind1, ind2, model):
     base :mod:`random` module.
     """
 	size = len(model.nodeList)
-	cxpoint1 = random.randint(1, size)
-	cxpoint2 = random.randint(1, size - 1)
+	cxpoint1 = rand.randint(1, size)
+	cxpoint2 = rand.randint(1, size - 1)
 	if cxpoint2 >= cxpoint1:
 		cxpoint2 += 1
 	else: # Swap the two cx points

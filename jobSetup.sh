@@ -6,5 +6,3 @@ cp -r $GADIR $OUTDIR
 cd $OUTDIR
 chmod -R 755 ruleMakerGA/pyNCsubmit.sh
 chmod -R 755 ruleMakerGA/networkConstructor.py
-mv ruleMakerGA/inputData inputData
-sbatch ruleMakerGA/pyNCsubmit.sh
