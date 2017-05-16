@@ -28,25 +28,19 @@ def genBits(model):
 			end=model.individualParse[node+1]
 		start=model.individualParse[node]
 		truth=startInd[start:end]
-		if len(truth)>1:
-			# for i in range(len(truth)):
-			# 	if random()<(1./len(truth)):
-			# 		truth[i]=1
-			# 	else:
-			# 		truth[i]=0
+		if len(end-start)>1:
 			counter=0
-			while numpy.sum(truth)>5 and counter < 10000:
-				indices = [i for i in range(len(truth)) if truth[i] == 1]
+			while numpy.sum(startInd[start:end])>5 and counter < 10000:
+				indices = [i for i in range(start,end) if startInd[i] == 1]
 				chosen=math.floor(random()*len(indices))
-				truth[indices[int(chosen)]]=0
+				startInd[indices[int(chosen)]]=0
 				counter+=1
 			#startInd[start:end]=truth
-			if numpy.sum(truth)==0:
-				chosen=math.floor(random()*len(truth))
-				truth[int(chosen)]=1
-		elif len(truth)==1:
-			truth[0]=1
-		startInd[start:end]=truth
+			if numpy.sum(startInd[start:end])==0:
+				chosen=math.floor(random()(end-start))
+				startInd[start+int(chosen)]=1
+		elif len(startInd[start:end])==1:
+			startInd[start]=1
 	return startInd
 
 def cxTwoPointNode(ind1, ind2, model):

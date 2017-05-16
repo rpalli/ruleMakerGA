@@ -262,6 +262,7 @@ def analyzeExperiment(codes):
 		#FOR EACH RUN WITH THAT GPICKLE
 		for i in range(1,11):
 			tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=analyzeRewire(code+'_'+str(i)+'_output.pickle')
+			print(tuple1)
 			sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
 			sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
 			sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
