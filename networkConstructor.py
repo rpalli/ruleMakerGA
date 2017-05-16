@@ -144,7 +144,7 @@ def uploadKEGGcodes_hsa(codelist, graph, hsaDict, KEGGdict):
 
 def readKEGGhsa(lines, graph, hsaDict, KEGGdict):
 	#read all lines into a bs4 object using libXML parser
-	soup = BeautifulSoup(''.join(lines), 'lxml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
 	id_to_name = {} # map id numbers to names
 
@@ -331,7 +331,7 @@ def parseKEGGdict(filename, aliasDict, dict1):
 
 def readKEGG(lines, graph, KEGGdict):
 	#read all lines into a bs4 object using libXML parser
-	soup = BeautifulSoup(''.join(lines), 'lxml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
 	id_to_name = {} # map id numbers to names
 
@@ -418,8 +418,8 @@ def read_biopax(lines, graph):
 	#treating edge classes as nodes for now, will simplify later
 	#constuct a BeautifulSoup4 parser object with the libxml backend
 	#input in lines is given as an array, the join function converts to 1 long string
-	#On windows this fails, try 'lxml' instead of 'lxml'
-	soup = BeautifulSoup(''.join(lines), 'lxml')
+	#On windows this fails, try 'lxml' instead of 'lxml-xml'
+	soup = BeautifulSoup(''.join(lines), 'xml')
 
 	#in BioPAX, both physical objects (proteins, genes, etc.) and interactions (activation, 
 	#inhibition, etc.) are represented as NODES.  The edges in the system represent membership 
@@ -594,7 +594,7 @@ def read_biopax_dev(lines, graph):
 	#constuct a BeautifulSoup4 parser object with the libxml backend
 	#input in lines is given as an array, the join function converts to 1 long string
 	#On windows this fails, try 'lxml' instead of 'lxml'
-	soup = BeautifulSoup(''.join(lines), 'lxml')
+	soup = BeautifulSoup(''.join(lines), 'xml')
 	node_id_to_name = {}
 
 	#in BioPAX, both physical objects (proteins, genes, etc.) and interactions (activation, 
