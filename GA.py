@@ -478,37 +478,40 @@ def GAsearchModel(model, newSSS,params):
 			saveVal=i
 	ultimate=list(population[saveVal])
 	minvals=population[saveVal].fitness.values
-	newultimate=[]
-	if minny>.01*len(population[saveVal].fitness.values):
-		#iterate over nodes
-		for node in range(0,len(model.nodeList)):
-			#get start and end indices for node in individual
-			if node==(len(model.nodeList)-1):
-				end=len(ultimate)
-			else:
-				end=model.individualParse[node+1]
-			start=model.individualParse[node]
-			# get all the in edges for each and node
-			andNodeList=model.andNodeList[node]
-			inEdges=[]
-			for lister in andNodeList:
-				inEdges.append(set(lister))
-			truth=ultimate[start:end]
-			# check if any nodes are redundant
-			for i in range(len(truth)):
-				if truth[i]==1:
-					for j in range(len(truth)):
-						if truth[j]==1 and not i==j:
-							if inEdges[i].issubset(inEdges[j]):
-								truth[j]=0
-			newultimate.extend(truth)
-		ultimate=newultimate
-		print(len(ultimate))
-		flags=Parallel(n_jobs=min(24,len(ultimate)))(delayed(deltaTester)(list(ultimate), i, model,  newSSS, params, minny) for i in range(len(ultimate)))
-		for flag, i in zip(flags,range(len(ultimate))):
-			if flag:
-				ultimate[i]=1-ultimate[i]
-		minny=numpy.sum(evaluateByNode(ultimate, params.cells, model,  newSSS, params))
+	# get rid of redundant edges
+	# newultimate=[]
+	# for node in range(0,len(model.nodeList)):
+	# 	#get start and end indices for node in individual
+	# 	if node==(len(model.nodeList)-1):
+	# 		end=len(ultimate)
+	# 	else:
+	# 		end=model.individualParse[node+1]
+	# 	start=model.individualParse[node]
+	# 	# get all the in edges for each and node
+	# 	andNodeList=model.andNodeList[node]
+	# 	inEdges=[]
+	# 	for lister in andNodeList:
+	# 		inEdges.append(set(lister))
+	# 	truth=ultimate[start:end]
+	# 	# check if any nodes are redundant
+	# 	for i in range(len(truth)):
+	# 		if truth[i]==1:
+	# 			for j in range(len(truth)):
+	# 				if truth[j]==1 and not i==j:
+	# 					if inEdges[i].issubset(inEdges[j]):
+	# 						truth[j]=0
+	# 	newultimate.extend(truth)
+	# ultimate=newultimate
+
+	# # check single bitflip perturbations
+	# if minny>.01*len(population[saveVal].fitness.values):
+	# 	#iterate over nodes
+	# 	print(len(ultimate))
+	# 	flags=Parallel(n_jobs=min(24,len(ultimate)))(delayed(deltaTester)(list(ultimate), i, model,  newSSS, params, minny) for i in range(len(ultimate)))
+	# 	for flag, i in zip(flags,range(len(ultimate))):
+	# 		if flag:
+	# 			ultimate[i]=1-ultimate[i]
+	# 	minny=numpy.sum(evaluateByNode(ultimate, params.cells, model,  newSSS, params))
 	return minvals, ultimate
 
 
