@@ -229,13 +229,13 @@ def mutFlipBitAdapt(individual, indpb, model, genfrac):
 			end= model.size
 		else:
 			end=model.individualParse[model.evaluateNodes[focusNode]+1]
-		if genfrac<.5:
+		if genfrac<.25:
 			for i in range(start,end):
 				if random()< 2/(end-start+1):
 					individual[i] = 1
 				else:
 					individual[i] = 0
-		elif genfrac<.75:
+		elif genfrac<.5:
 			for i in range(start,end):
 				if random()< 2/(end-start+1):
 					individual[i] = 1-individual[i]
