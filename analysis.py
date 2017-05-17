@@ -1,3 +1,4 @@
+# import python packages
 import matplotlib.pyplot as plt
 import numpy as numpy
 import pickle
@@ -6,7 +7,8 @@ import pandas as pd
 import matplotlib as mpl
 import seaborn as sns
 from sets import Set
-
+import os as os
+# import other parts of our code
 import utils as utils
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
@@ -506,4 +508,11 @@ def plotResults():
 
 	plt.clf()
 
-analyzeExperiment(['hsa04066'])
+if __name__ == '__main__':
+	codes=[]
+	for file in os.listdir("gpickles"):
+		if file.endswith(".gpickle"):
+			print(file)
+			codes.append(file)
+	print(codes)
+#	analyzeExperiment(['hsa04066'])

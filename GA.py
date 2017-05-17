@@ -18,7 +18,6 @@ import argparse as argparse
 import networkConstructor as nc
 import utils as utils
 import simulation as sim
-
 def genBits(model):
 	startInd=list(utils.genRandBits(model.size))
 	counter=0
@@ -33,6 +32,10 @@ def genBits(model):
 		start=model.individualParse[node]
 		if (end-start)>1:
 			counter=0
+			while numpy.sum(startInd[start:end])>5 and counter < 10000:
+				chosen=math.floor(random()*(end-start))
+				startInd[start+int(chosen)]=0
+				counter+=1
 			if numpy.sum(startInd[start:end])==0:
 				chosen=math.floor(random()*(end-start))
 				startInd[start+int(chosen)]=1
@@ -176,7 +179,7 @@ def genPBNInitValues(individual, model,sampleProbs):
 			initValues[node]=True
 	return initValues
 
-def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb):
+def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac):
 	# algorithm for generating a list of offspring... copied and pasted from DEAP with modification for adaptive mutation
 	assert (cxpb + mutpb) <= 1.0, ("The sum of the crossover and mutation "
 		"probabilities must be smaller or equal to 1.0.")
@@ -190,14 +193,14 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb):
 			offspring.append(ind1)
 		elif op_choice < cxpb + mutpb:  # Apply mutation
 			ind = toolbox.clone(rand.choice(population))
-			ind, = mutFlipBitAdapt(ind,  .5, model)
+			ind, = mutFlipBitAdapt(ind,  .5, model, genfrac)
 			del ind.fitness.values
 			offspring.append(ind)
 		else:                           # Apply reproduction
 			offspring.append(rand.choice(population))
 	return offspring
 
-def mutFlipBitAdapt(individual, indpb, model):
+def mutFlipBitAdapt(individual, indpb, model, genfrac):
 	# get errors
 	errors=list(individual.fitness.values)
 
@@ -226,11 +229,20 @@ def mutFlipBitAdapt(individual, indpb, model):
 			end= model.size
 		else:
 			end=model.individualParse[model.evaluateNodes[focusNode]+1]
-		for i in range(start,end):
-			if random()< 2/(end-start+1):
-				individual[i] = 1
-			else:
-				individual[i] = 0
+		if genfrac<.5:
+			for i in range(start,end):
+				if random()< 2/(end-start+1):
+					individual[i] = 1
+				else:
+					individual[i] = 0
+		elif genfrac<.75:
+			for i in range(start,end):
+				if random()< 2/(end-start+1):
+					individual[i] = 1-individual[i]
+		else:
+			for i in range(start,end):
+				if random()< 1/(end-start+1):
+					individual[i] = 1-individual[i]
 		#ensure that there is at least one shadow and node turned on
 		if numpy.sum(individual[start:end])==0:
 			individual[start+1]=1
@@ -404,7 +416,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 	# Begin the generational process
 	for gen in range(1, ngen+1):
 		# Vary the population
-		offspring = varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb)
+		offspring = varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, (1.*gen/ngen))
 		
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
