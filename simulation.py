@@ -38,8 +38,8 @@ class modelClass:
 		#find all possible combinations of upstream contributors for each node. These become the shadow And nodes
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
-			if len(preds)>5: #handle case where there are too many predecessors by truncation
-				preds=preds[1:5]
+			if len(preds)>4: #handle case where there are too many predecessors by truncation
+				preds=preds[1:4]
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -93,7 +93,7 @@ class paramClass:
 		self.bioReplicates=1
 		self.cells=1000
 		self.samples=10
-		self.generations=100 # generations to run
+		self.generations=40 # generations to run
 		self.popSize=24 #size of population
 		self.mu= 24 #individuals selected
 		self.lambd= 24 #children produced

@@ -20,16 +20,16 @@ graph_classes = ['Pathway']
 
 def rewireNetwork(graph):
 	rewired=graph.copy()
-	for i in range(3*len(rewired.edges())):
+	for i in range(5*len(rewired.edges())):
 		a= randint(0,len(rewired.edges())-1)
 		b=a
 		while a==b:
 			b= randint(0,len(rewired.edges())-1)
-		edge1=rewired.edges()[a]
-		edge2=rewired.edges()[b]
+		edge1=list(rewired.edges()[a])
+		edge2=list(rewired.edges()[b])
 		activity1=rewired.get_edge_data(edge1[0],edge1[1])['signal']
-		activity2=rewired.get_edge_data(edge2[0],edge2[1])['signal']
-		if (edge2[0]!=edge1[1] and edge1[0]!=edge2[1]):
+		activity2=rewired.get_edge_data(edge2[0],edge2[1])['signal']		
+		if (edge2[0]!=edge1[1] and edge1[0]!=edge2[1] and not rewired.has_edge(edge2[0],edge1[1])and not rewired.has_edge(edge1[0],edge2[1])):
 			rewired.remove_edge(edge1[0],edge1[1])
 			rewired.remove_edge(edge2[0],edge2[1])
 			rewired.add_edge(edge2[0],edge1[1],signal=activity1)
@@ -130,6 +130,11 @@ def simplifyNetwork(graph, ss):
 			graph.remove_node(rm)
 	#print(graph.nodes())
 	flag=True
+
+	# remove self edges
+	for edge in graph.edges():
+		if edge[0]==edge[1]:
+			graph.remove_edge(edge[0],edge[1])
 	return graph
 
 #Upload KEGG codes modified for human pathways

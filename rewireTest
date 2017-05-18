@@ -1,0 +1,8 @@
+
+import networkx
+import networkConstructor as nc
+graph = nx.read_gpickle('hsa04630.gpickle')
+
+rewired=nc.rewire(graph)
+print(graph.edges())
+print(rewired.edges())

@@ -12,11 +12,14 @@ import os as os
 import utils as utils
 def compareIndividualsNodeWise(truthList, testList, model):
 	nodesensitivity=[]
-	nodespecificity=[]
+	nodePPV=[]
 	netOnes=[]
 	netZeros=[]
 	netNegOnes=[]
+	ruleTruths=[]
+	SDs=[]
 	for node in range(len(model.nodeList)):
+		
 		ones=[]
 		zeros=[]
 		negones=[]
@@ -41,6 +44,13 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		netZeros.append(numpy.sum(zeros))
 		netNegOnes.append(numpy.sum(negones))
 		
+
+		# calculate % rules correct and structural distance
+		temp=[1 if (ones[i]+negones[i])==0 else 0 for i in range(0,len(ones))]
+		ruleTruths.append(1.*numpy.sum(temp)/len(temp))
+		temp=[ones[i]+negones[i] for i in range(0,len(ones))]
+		SDs.append(1.*numpy.sum(temp)/len(temp))
+
 		# calculate sensitivity and specificity for the node
 		temp=[100 if sumindividual[i]==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]) for i in range(0,len(ones))]
 		temp=filter(lambda a: a != 100, temp)
@@ -48,15 +58,16 @@ def compareIndividualsNodeWise(truthList, testList, model):
 			sensitivity=100
 		else:
 			sensitivity=(1.*numpy.sum(temp)/len(temp))
-		temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+
+		temp=[100 if (sumindividual[i]-ones[i]+negones[i])==0 else 1.*(sumindividual[i]-ones[i])/(sumindividual[i]-ones[i]+negones[i]) for i in range(0,len(ones))]
 		temp=filter(lambda a: a != 100, temp)
 		if len(temp)==0:
-			specificity=100
+			PPV=100
 		else:
-			specificity=(1.*numpy.sum(temp)/len(temp))
+			PPV=(1.*numpy.sum(temp)/len(temp))
 		# add to list of sensitivity and specificity by node
 		nodesensitivity.append(sensitivity)
-		nodespecificity.append(specificity)
+		nodePPV.append(PPV)
 	#calculate sensitivity and specificity on the network as a whole
 	ones=[]
 	zeros=[]
@@ -77,13 +88,13 @@ def compareIndividualsNodeWise(truthList, testList, model):
 		sensitivity=100
 	else:
 		sensitivity=(1.*numpy.sum(temp)/len(temp))
-	temp=[100 if (len(newindividual)-sumindividual[i])==0 else (1.*len(newindividual)-sumindividual[i]-negones[i])/(len(newindividual)-sumindividual[i]) for i in range(0,len(ones))]
+	temp=[100 if (len(newindividual)-sumindividual[i])==0 else 1.*(sumindividual[i]-ones[i])/((sumindividual[i]-ones[i])+negones[i]) for i in range(0,len(ones))]
 	temp=filter(lambda a: a != 100, temp)
 	if len(temp)==0:
-		specificity=100
+		PPV=100
 	else:
-		specificity=(1.*numpy.sum(temp)/len(temp))
-	return sensitivity, specificity, nodesensitivity, nodespecificity
+		PPV=(1.*numpy.sum(temp)/len(temp))
+	return sensitivity, PPV, nodesensitivity, nodePPV, ruleTruths, SDs
 
 class modelHolder:
 	def __init__(self,valueList):
@@ -103,7 +114,6 @@ def analyzeRewire(fileName):
 	outputList=pickle.Unpickler(open( fileName, "rb" )).load()
 	[truthList,testList, devList,size, evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList]=outputList
 	model=modelHolder([evaluateNodes,individualParse, andNodeList, andNodeInvertList, andLenList,earlyEvalNodes,nodeList, nodeDict, initValueList])
-	print(testList)
 	truthIndividuals=[]
 	truthAvgs=[]
 	hofScores=[]
@@ -114,18 +124,16 @@ def analyzeRewire(fileName):
 	negones=[]
 	truthCounter=0
 	sumindividual=[]
-
-
 	tuple1=compareIndividualsNodeWise(truthList, testList, model)
 	sensitivities=[]
 	specificities=[]
 	inEdgeNums=[]
-	overlaps=[]
 	# run correction that simplifies truth rules
 	TPsum=0
 	TNsum=0
 	FNsum=0
 	FPsum=0
+	PPVs=[]
 	newtruths=[]
 	for k in range(len(truthList)):
 		newtruths.append([])
@@ -187,59 +195,33 @@ def analyzeRewire(fileName):
 			sensitivity=1.*TP/(TP+FN)
 		else:
 			sensitivity=100
-		if TN+FP>0:
-			specificity=1.*TN/(TN+FP)
+		if TP+FP>0:
+			PPV=1.*TP/(TP+FP)
 		else:
-			specificity=100
+			PPV=100
 		sensitivities.append(sensitivity)
-		specificities.append(specificity)
+		PPVs.append(PPV)
 		TPsum+=TP
 		TNsum+=TN
 		FNsum+=FN
 		FPsum+=FP
 		inEdgeNums.append(len(baseSet))
-		overlaper=-1
-		if len(baseSet)==2:
-			overlapSet=Set([])
-			lappersets=[]
-			inneredge=[]
-			for upstream in baseSet:
-				lapperset=Set([])
-				if upstream==(len(model.nodeList)-1):
-					end=len(truthList[0])-1
-				else:
-					end=model.individualParse[upstream+1]
-				start=model.individualParse[upstream]
-				andNodeList=model.andNodeList[upstream]
-				for lister in andNodeList:
-					lapperset.add(Set(lister))
-				lappersets.append(lapperset)
-			overlaper=len(lappersets[0].intersection(lappersets[1]))
-			if overlaper==0:
-				for upstream in baseSet:
-					if upstream in lappersets[0] or upstream in lappersets[1]:
-						print("feed-forward")
-						overlaper=1
-		overlaps.append(overlaper)
-	tuple2=compareIndividualsNodeWise(newtruths, testList, model)
 	if (TPsum+FNsum)>0:
 		sensitivity=1.*TPsum/(TPsum+FNsum)
 	else:
 		sensitivity=100
-	if (FPsum+TNsum)>0:
-		specificity= 1.*TNsum/(FPsum+TNsum)
+	if (FPsum+TPsum)>0:
+		PPV= 1.*TPsum/(FPsum+TPsum)
 	else:
-		specificity=100
-	tuple3= (sensitivity, specificity, sensitivities, specificities)
-
+		PPV=100
+	tuple2=compareIndividualsNodeWise(newtruths, testList, model)
+	tuple3= (sensitivity, PPV, sensitivities, PPVs)
 	tuple4=compareIndividualsNodeWise(newtruths, newtests, model)
 	# for i in range(len(newtruths)):
 	# 	print("truth, found")
 	# 	print(utils.writeModel(newtruths[i], model))
 	# 	print(utils.writeModel(newtests[i], model))
-
-	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, [testList, truthList, newtruths, newtests]
-
+	return tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, [testList, truthList, newtruths, newtests], len(model.andNodeList), model
 
 def analyzeExperiment(codes):
 	sensitivities=[]
@@ -249,26 +231,37 @@ def analyzeExperiment(codes):
 	nodesensitivities=[[],[],[],[]]
 	nodespecificities=[[],[],[],[]]
 	truthholder=[]
-	edgeDegree=[]
-	overlapNodes=[]
+	degree2dictlist=[]
 
+	combinedInDegrees={}
+	ruleTruths=[]
+	SDs=[]
+	nodeNumbers=[]
 	# for each gpickle
 	for code in codes:
 		print(code)		
-
+		nodeLookup={}
 		tempsensitivities=[[],[],[],[]]
 		tempspecificities=[[],[],[],[]]
 		truthlists=[[],[],[],[]]
 		devLists=[]
-
+		ruletruthtemp=[]
+		SDtemp=[]
 		#FOR EACH RUN WITH THAT GPICKLE
 		for i in range(1,11):
-			tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums, overlaps, truthlisttemp=analyzeRewire(code+'_'+str(i)+'_output.pickle')
-			print(tuple1)
-			sensitivity1, specificity1, nodesensitivity1, nodespecificity1 = tuple1
-			sensitivity2, specificity2, nodesensitivity2, nodespecificity2 = tuple2
+			edgeDegree=[]
+			nodesensitivities=[[],[],[],[]]
+			nodespecificities=[[],[],[],[]]
+
+
+			tuple1, tuple2, tuple3, tuple4, devList, inEdgeNums,  truthlisttemp, nodeNum, model=analyzeRewire('pickles/'+code+'_'+str(i)+'_output.pickle')
+			if i==1:
+				nodeNumbers.append(nodeNum)
+				print(nodeNum)
+			sensitivity1, specificity1, nodesensitivity1, nodespecificity1, ruleTruths1, SDs1 = tuple1
+			sensitivity2, specificity2, nodesensitivity2, nodespecificity2, ruleTruths2, SDs2 = tuple2
 			sensitivity3, specificity3, nodesensitivity3, nodespecificity3 = tuple3
-			sensitivity4, specificity4, nodesensitivity4, nodespecificity4 = tuple4
+			sensitivity4, specificity4, nodesensitivity4, nodespecificity4, ruleTruth, SD = tuple4
 			tempsensitivities[0].append(sensitivity1)
 			tempsensitivities[1].append(sensitivity2)
 			tempsensitivities[2].append(sensitivity3)
@@ -285,13 +278,36 @@ def analyzeExperiment(codes):
 			nodespecificities[1].extend(nodespecificity2)
 			nodespecificities[2].extend(nodespecificity3)
 			nodespecificities[3].extend(nodespecificity4)
+			ruletruthtemp.extend(ruleTruth)
+			SDtemp.extend(SD)
 			devLists.append(devList)
-			overlapNodes.extend(overlaps)
 			edgeDegree.extend(inEdgeNums)
 			truthlists[0].extend(truthlisttemp[0])
 			truthlists[1].extend(truthlisttemp[1])
 			truthlists[2].extend(truthlisttemp[2])
 			truthlists[3].extend(truthlisttemp[3])
+			for number in edgeDegree:
+				if not number in nodeLookup.keys():
+					nodeLookup[number]=[[],[],[],[],[],[],[],[]]
+				if not number in combinedInDegrees.keys():
+					combinedInDegrees[number]=[[],[],[],[],[],[],[],[]]
+			for i in range(len(edgeDegree)):
+				for j in range(0,4):
+					nodeLookup[edgeDegree[i]][j].append(nodesensitivities[j][i])
+				for j in range(0,4):
+					nodeLookup[edgeDegree[i]][j+4].append(nodespecificities[j][i])
+			for number in nodeLookup.keys():
+				for i in range(0,8):
+					tempcomb=filter(lambda a: a != 100, nodeLookup[number][i])
+					combinedInDegrees[number][i].append(numpy.mean(tempcomb))
+			if 2 in nodeLookup.keys():
+				tempcomb=filter(lambda a: a != 100, nodeLookup[2][3])
+				tempcomb1=filter(lambda a: a != 100, nodeLookup[2][7])
+				degree2dictlist.append({'Node_Num':nodeNum,'Sensitivity':numpy.mean(tempcomb), 'PPV': numpy.mean(tempcomb1)})
+			if code=='hsa04630':
+				print(model.andNodeList)
+		SDs.append(numpy.mean(SDtemp))
+		ruleTruths.append(numpy.mean(ruletruthtemp))
 		for i in range(len(tempsensitivities)):
 			tempsensitivities[i]=filter(lambda a: a != 100, tempsensitivities[i])
 			if len(tempsensitivities[i])==0:
@@ -309,43 +325,23 @@ def analyzeExperiment(codes):
 		sensitivities.append(sensitivity)
 		specificityStds.append(specificityStd)
 		sensitivityStds.append(sensitivityStd)
-		print(sensitivity)
-		print(sensitivityStd)
-		print(specificity)
-		print(specificityStd)
+		# print(sensitivity)
+		# print(sensitivityStd)
+		# print(specificity)
+		# print(specificityStd)
 		# print(nodesensitivities)
 		# print(nodespecificities)
 		# print(devLists)
-	nodeLookup={}
-	for number in edgeDegree:
-		nodeLookup[number]=[[],[],[],[],[],[],[],[]]
-	for i in range(len(edgeDegree)):
-		nodeLookup[edgeDegree[i]][0].append(nodesensitivities[0][i])
-		nodeLookup[edgeDegree[i]][1].append(nodesensitivities[1][i])
-		nodeLookup[edgeDegree[i]][2].append(nodesensitivities[2][i])
-		nodeLookup[edgeDegree[i]][3].append(nodesensitivities[3][i])
-		nodeLookup[edgeDegree[i]][4].append(nodespecificities[0][i])
-		nodeLookup[edgeDegree[i]][5].append(nodespecificities[1][i])
-		nodeLookup[edgeDegree[i]][6].append(nodespecificities[2][i])
-		nodeLookup[edgeDegree[i]][7].append(nodespecificities[3][i])
-	overlapLookup={}
-	for overlap in overlapNodes:
-		overlapLookup[overlap]=[[],[],[],[],[],[],[],[]]
-	for i in range(len(overlapNodes)):
-		overlapLookup[overlapNodes[i]][0].append(nodesensitivities[0][i])
-		overlapLookup[overlapNodes[i]][1].append(nodesensitivities[1][i])
-		overlapLookup[overlapNodes[i]][2].append(nodesensitivities[2][i])
-		overlapLookup[overlapNodes[i]][3].append(nodesensitivities[3][i])
-		overlapLookup[overlapNodes[i]][4].append(nodespecificities[0][i])
-		overlapLookup[overlapNodes[i]][5].append(nodespecificities[1][i])
-		overlapLookup[overlapNodes[i]][6].append(nodespecificities[2][i])
-		overlapLookup[overlapNodes[i]][7].append(nodespecificities[3][i])
+	print(SDs)
+	print(ruleTruths)
+
+		
 	finalNodeData=[]
 	finalExtendData=[]
-	for key in nodeLookup.keys():
+	for key in combinedInDegrees.keys():
 		templisting=[]
 		tempExtended=[]
-		for lister in nodeLookup[key]:
+		for lister in combinedInDegrees[key]:
 			newlist=filter(lambda a: a != 100, lister)
 			tempExtended.append(newlist)
 			if len(newlist)==0:
@@ -354,49 +350,29 @@ def analyzeExperiment(codes):
 				templisting.append(1.* numpy.sum(newlist)/len(newlist))
 		finalNodeData.append(templisting)
 		finalExtendData.append(tempExtended)
-	finalOverlapExtendData=[]
-	for key in overlapLookup.keys():
-		templisting=[]
-		tempOverlap=[]
-		for lister in overlapLookup[key]:
-			newlist=filter(lambda a: a != 100, lister)
-			tempOverlap.append(newlist)
-		finalOverlapExtendData.append(tempOverlap)
-	# print(nodeLookup.keys())
-	# print(overlapLookup.keys())
-	# print(finalNodeData)
-	# print(finalExtendData) 
-
-def plotResults():
-	networkNodeNums=[18,32,7,23,68,78,72,28]
-
-	finalNodeData=pickle.Unpickler(open( "node_by_node_data.pickle", "rb" )).load()
-	extendedNodeData=pickle.Unpickler(open( "extended_node_by_node_data.pickle", "rb" )).load()
-	[sensitivities,sensStd, specificities, specsStd]=pickle.Unpickler(open( "network_by_network_data.pickle", "rb" )).load()
-
 
 
 	sensitivities=[sens[3] for sens in sensitivities]
 	specificities=[spec[3] for spec in specificities]
-	senStd=[sens[3] for sens in sensStd]
-	specStd=[sens[3] for sens in specsStd]
-	specStd.pop(0)
-	senStd.pop(0)
-	sensitivities.pop(0)
-	specificities.pop(0)
+	senStd=[sens[3] for sens in sensitivityStds]
+	specStd=[sens[3] for sens in specificityStds]
+	# specStd.pop(0)
+	# senStd.pop(0)
+	# sensitivities.pop(0)
+	# specificities.pop(0)
 	print(sensitivities)
 	sns.set_style("ticks")
 	sns.set(font_scale=2) 
 	sns.set_palette(sns.light_palette("purple/blue", input="xkcd", reverse=True))
 	threshold=.8
-
-	y_pos = np.arange(len(networkNodeNums))
+	# nodeNumbers.pop(0)
+	y_pos = np.arange(len(nodeNumbers))
 	plt.bar(y_pos, sensitivities, align='center', alpha=0.5,yerr=senStd, capsize=20)
-	plt.xticks(y_pos, networkNodeNums)
+	plt.xticks(y_pos, nodeNumbers)
 	plt.ylabel('Sensitivity')
 	plt.xlabel('Node number')
 	plt.title('Sensitivity by Nodes in Pathway')
-	plt.plot( [-.5,len(networkNodeNums)-.5],[threshold, threshold], "k--")
+	plt.plot( [-.5,len(nodeNumbers)-.5],[threshold, threshold], "k--")
 	plt.tight_layout()
 	sns.despine()
 	plt.savefig('IFNG_network_sensitivities.png', bbox_inches='tight')
@@ -404,30 +380,42 @@ def plotResults():
 	plt.clf()
 
 	plt.bar(y_pos, specificities, align='center', alpha=0.5,yerr=specStd)
-	plt.xticks(y_pos, networkNodeNums)
+	plt.xticks(y_pos, nodeNumbers)
 
-	plt.plot( [-.5,len(networkNodeNums)-.5],[threshold, threshold], "k--")
-	plt.ylabel('Specificity')
+	plt.plot( [-.5,len(nodeNumbers)-.5],[threshold, threshold], "k--")
+	plt.ylabel('PPV')
 	plt.xlabel('Node number')
-	plt.title('Specificity by Nodes in Pathway')
+	plt.title('PPV by Nodes in Pathway')
 	sns.despine()
 	plt.tight_layout()
-	plt.savefig('IFNG_network_specificities.png', bbox_inches='tight')
-
-
-
-
-
+	plt.savefig('IFNG_network_PPV.png', bbox_inches='tight')
 
 
 	plt.clf()
+
+
+	plt.bar(y_pos, ruleTruths, align='center', alpha=0.5)
+	plt.xticks(y_pos, nodeNumbers)
+
+	plt.plot( [-.5,len(nodeNumbers)-.5],[threshold, threshold], "k--")
+	plt.ylabel('Specificity')
+	plt.xlabel('Node number')
+	plt.title('% Rules True by Nodes in Pathway')
+	sns.despine()
+	plt.tight_layout()
+	plt.savefig('IFNG_network_Percent_T_Rules.png', bbox_inches='tight')
+
+
+	plt.clf()
+
+
+
 
 	# nodeNums=[2, 3, 4, 5, 6, 7, 9]
 	nodeNums=[0,1,2,3,4,5,6]
 
 	nodeArray=[]
-	extendedNodeData.pop(0)
-	for tempExtended in extendedNodeData:
+	for tempExtended in finalExtendData:
 		nodeArray.append(tempExtended[3])
 	for array in nodeArray:
 		if len(array)==0:
@@ -440,9 +428,9 @@ def plotResults():
 	dfdictlist=[]
 	for i in range(len(nodeArray)):
 		for element in nodeArray[i]:
-			dfdictlist.append({'In-degree':nodeNums[i],'Sensitivity':element})
+			if nodeNums[i]!=1:
+				dfdictlist.append({'In-degree':nodeNums[i],'Sensitivity':element})
 	df=pd.DataFrame(dfdictlist)
-
 	# plt.title('Sensitivity by in-degree')
 
 	#print(df)
@@ -464,7 +452,7 @@ def plotResults():
 	nodeNums=[0,1,2,3,4,5,6]
 
 	nodeArray=[]
-	for tempExtended in extendedNodeData:
+	for tempExtended in finalExtendData:
 		nodeArray.append(tempExtended[7])
 	for array in nodeArray:
 		if len(array)==0:
@@ -508,11 +496,42 @@ def plotResults():
 
 	plt.clf()
 
+	df=pd.DataFrame(degree2dictlist)
+	sns.set(font_scale=2) 
+	sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+
+	ax=sns.swarmplot(data=df,x='Node_Num', y='Sensitivity', color='orange')
+
+	plt.ylabel('Sensitivity')
+	plt.xlabel('Node Number')
+	plt.title('Sensitivity at in-degree 2 by Node Number', color='white')
+	plt.ylim([0,1])
+	plt.tight_layout()
+	plt.ylim([0,1])
+	plt.savefig('IFNG_sens_node_num.png', bbox_inches='tight', transparent=True)
+	plt.clf()
+
+	sns.set(font_scale=2) 
+	sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+
+	ax=sns.swarmplot(data=df,x='Node_Num', y='PPV', color='orange')
+
+	plt.ylabel('PPV')
+	plt.xlabel('Node Number')
+	plt.title('PPV at in-degree 2 by Node Number', color='white')
+	plt.ylim([0,1])
+	plt.tight_layout()
+	plt.ylim([0,1])
+	plt.savefig('IFNG_PPV_node_num.png', bbox_inches='tight', transparent=True)
+	plt.clf()
+
+
+
+
 if __name__ == '__main__':
 	codes=[]
 	for file in os.listdir("gpickles"):
 		if file.endswith(".gpickle"):
-			print(file)
-			codes.append(file)
+			codes.append(file[:-8])
 	print(codes)
-#	analyzeExperiment(['hsa04066'])
+	analyzeExperiment(codes)
