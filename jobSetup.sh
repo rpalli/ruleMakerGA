@@ -1,6 +1,6 @@
 
 GADIR=/home/rpalli/ruleMakerGA/
-OUTDIR=/home/rpalli/data/localsearch40genCorrected/
+OUTDIR=/home/rpalli/data/biasedCrossoverSearch40genCorrected/
 mkdir -p $OUTDIR
 cp -r $GADIR $OUTDIR
 cd $OUTDIR

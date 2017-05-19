@@ -62,11 +62,17 @@ def cxTwoPointNode(ind1, ind2, model):
 		cxpoint2 += 1
 	else: # Swap the two cx points
 		cxpoint1, cxpoint2 = cxpoint2, cxpoint1
+	errors1=list(ind1.fitness.values)
+	errors2=list(ind2.fitness.values)
+	sum1= numpy.sum(errors1[:cxpoint1])+numpy.sum(errors2[cxpoint1:cxpoint2])+numpy.sum(errors1[cxpoint1:])
+	sum2= numpy.sum(errors2[:cxpoint1])+numpy.sum(errors1[cxpoint1:cxpoint2])+numpy.sum(errors2[cxpoint1:])
 	cxpoint1=model.individualParse[cxpoint1]
 	cxpoint2=model.individualParse[cxpoint2]
 	ind1[cxpoint1:cxpoint2], ind2[cxpoint1:cxpoint2] = ind2[cxpoint1:cxpoint2], ind1[cxpoint1:cxpoint2]
-	return ind1, ind2
-
+	if sum1 < sum2:
+		return ind1, ind2
+	else:
+		return ind2, ind1
 def buildToolbox( individualLength, bitFlipProb, model):
 	# # #setup toolbox
 	toolbox = base.Toolbox()
