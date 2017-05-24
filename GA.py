@@ -220,7 +220,8 @@ def mutFlipBitAdapt(individual, indpb, model, genfrac):
 		focusNode=int(math.floor(random()*len(model.andLenList)))
 	else:
 		# if errors are relatively high, focus on nodes that fit the worst
-
+		for j in xrange(len(errors)):
+			errors[model.evaluateNodes[j]]=errors[model.evaluateNodes[j]]/model.andLenList[model.evaluateNodes[j]]
 		# normalize errors to get a probability that the node  is modified
 		normerrors=[1.*error/numpy.sum(errors) for error in errors]
 		probs=numpy.cumsum(normerrors)
