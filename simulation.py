@@ -38,8 +38,8 @@ class modelClass:
 		#find all possible combinations of upstream contributors for each node. These become the shadow And nodes
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
-			if len(preds)>4: #handle case where there are too many predecessors by truncation
-				preds=preds[1:4]
+			if len(preds)>3: #handle case where there are too many predecessors by truncation
+				preds=preds[1:3]
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
