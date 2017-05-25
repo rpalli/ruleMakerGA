@@ -1,6 +1,6 @@
 
 GADIR=/home/rpalli/ruleMakerGA/
-OUTDIR=/home/rpalli/data/in_degree_focus_biased_crossover_40gen/
+OUTDIR=/home/rpalli/data/3_restrict/
 mkdir -p $OUTDIR
 cp -r $GADIR $OUTDIR
 cd $OUTDIR
