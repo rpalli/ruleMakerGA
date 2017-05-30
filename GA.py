@@ -231,23 +231,13 @@ def mutFlipBitAdapt(individual, indpb, model, genfrac):
 			end= model.size
 		else:
 			end=model.individualParse[model.evaluateNodes[focusNode]+1]
-		if genfrac<.25:
-			for i in range(start,end):
-				if random()< 2/(end-start+1):
-					individual[i] = 1
-				else:
-					individual[i] = 0
-		elif genfrac<.5:
-			for i in range(start,end):
-				if random()< 2/(end-start+1):
-					individual[i] = 1-individual[i]
-		else:
-			for i in range(start,end):
-				if random()< 1/(end-start+1):
-					individual[i] = 1-individual[i]
+		for i in range(start,end):
+			if random()< 2/(end-start+1):
+				individual[i] = 1
+			else:
+				individual[i] = 0
 		#ensure that there is at least one shadow and node turned on
 		if numpy.sum(individual[start:end])==0:
-			individual[start+1]=1
 			individual[start]=1
 	return individual,
 

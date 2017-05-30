@@ -102,7 +102,7 @@ class paramClass:
 		self.simSteps=100 # number of steps each individual is run when evaluating
 		self.crossoverProb=.3 # prob of3crossing over a particular parent
 		self.mutationProb=.7 # prob of mutating a particular parent
-		self.rewire=True
+		self.rewire=False
 		self.async=False # run in asynchronous mode
 		self.adaptive=True
 		self.verbose=True
