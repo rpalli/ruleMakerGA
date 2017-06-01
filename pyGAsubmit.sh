@@ -4,7 +4,7 @@
 #SBATCH -J GArun
 #SBATCH -o GA_out_%A_%a.txt
 #SBATCH --mem-per-cpu=100MB
-#SBATCH -t 10:00:00
+#SBATCH -t 4:00:00
 #SBATCH -n 1
 #SBATCH -c 24
 export OMP_NUM_THREADS=24
