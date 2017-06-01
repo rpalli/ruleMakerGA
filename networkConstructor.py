@@ -924,8 +924,8 @@ def ifngStimTestSetup(params):
 		uploadKEGGcodes([coder], graph, dict2)
 		coder=str('hsa'+code[:-1])
 		uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
-		if(len(graph.edges())>1):
-			graph=simplifyNetwork(graph, data)
+		# if(len(graph.edges())>1):
+		# 	graph=simplifyNetwork(graph, data)
 		
 		#graph = utils.simpleNetBuild()
 		#coder='unrolled'
@@ -941,8 +941,8 @@ def ifngStimTestSetup(params):
 		if(checker):
 			print(coder)
 			codelist.append(coder)			
-			nx.write_graphml(graph,coder+'.graphml')
-			nx.write_gpickle(graph,coder+'.gpickle')
+			nx.write_graphml(graph,coder+'_unsimplified.graphml')
+			nx.write_gpickle(graph,coder+'_unsimplified.gpickle')
 if __name__ == '__main__':
 	params=sim.paramClass()
 	ifngStimTestSetup(params)
