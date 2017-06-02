@@ -472,29 +472,68 @@ def GAsearchModel(model, newSSS,params):
 	ultimate=list(population[saveVal])
 	minvals=population[saveVal].fitness.values
 	# get rid of redundant edges
-	# newultimate=[]
-	# for node in range(0,len(model.nodeList)):
-	# 	#get start and end indices for node in individual
-	# 	if node==(len(model.nodeList)-1):
-	# 		end=len(ultimate)
-	# 	else:
-	# 		end=model.individualParse[node+1]
-	# 	start=model.individualParse[node]
-	# 	# get all the in edges for each and node
-	# 	andNodeList=model.andNodeList[node]
-	# 	inEdges=[]
-	# 	for lister in andNodeList:
-	# 		inEdges.append(set(lister))
-	# 	truth=ultimate[start:end]
-	# 	# check if any nodes are redundant
-	# 	for i in range(len(truth)):
-	# 		if truth[i]==1:
-	# 			for j in range(len(truth)):
-	# 				if truth[j]==1 and not i==j:
-	# 					if inEdges[i].issubset(inEdges[j]):
-	# 						truth[j]=0
-	# 	newultimate.extend(truth)
-	# ultimate=newultimate
+	newultimate=[]
+	for node in range(0,len(model.nodeList)):
+		#get start and end indices for node in individual
+		if node==(len(model.nodeList)-1):
+			end=len(ultimate)
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		# get all the in edges for each and node
+		andNodeList=model.andNodeList[node]
+		inEdges=[]
+		for lister in andNodeList:
+			inEdges.append(set(lister))
+		truth=ultimate[start:end]
+		# check if any nodes are redundant
+		for i in range(len(truth)):
+			if truth[i]==1:
+				for j in range(len(truth)):
+					if truth[j]==1 and not i==j:
+						if inEdges[i].issubset(inEdges[j]):
+							truth[j]=0
+		newultimate.extend(truth)
+	ultimate=newultimate
+	newultimate=[]
+	print(ultimate)
+	for node in range(0,len(model.nodeList)):
+		#get start and end indices for node in individual
+		if node==(len(model.nodeList)-1):
+			end=len(ultimate)
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		# get all the in edges for each and node
+		andNodeList=model.andNodeList[node]
+		inEdges=[]
+		for lister in andNodeList:
+			inEdges.append(set(lister))
+		truth=ultimate[start:end]
+		# check if any nodes are redundant
+		invalid_ind=[]
+		for i in range(1,2**(end-start)):
+			tempultimate=list(ultimate)
+			tempInd=utils.bitList(i, len(truth))
+			print(tempInd)
+			print(truth)
+			tempultimate[start:end]=tempInd
+			invalid_ind.append(tempultimate)
+			print(tempultimate)
+			# need to check which one is the most effective rule
+		if end-start>1:
+			fitnesses=Parallel(n_jobs=min(7,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params) for indy in invalid_ind)
+			minny=1000
+			mini=100
+			for i in range(len(fitnesses)):
+				currentsum= numpy.sum(fitnesses[i])
+				if currentsum< minny:
+					minny=currentsum
+					mini=i
+			ultimate=invalid_ind[mini]
+	ultimate=newultimate
+
+
 
 	# # check single bitflip perturbations
 	# if minny>.01*len(population[saveVal].fitness.values):
@@ -542,6 +581,30 @@ def simTester(graph, name):
 	# rewire graph if necessary
 	if params.rewire:
 		graph=nc.rewireNetwork(graph)
+
+	# # remove two node bunches
+	# i=0
+	# while i < range(len(graph.nodes())):
+	# 	nodes=graph.nodes()
+	# 	node=nodes[i]
+	# 	if len(graph.predecessors(node))==0:
+	# 		successorless=True
+	# 		for successor in graph.successors(node):
+	# 			if graph.successors(successor)>0 or graph.predecessors(successor)>1:
+	# 				successorless=False
+	# 		if successorless:
+	# 			graph.remove_node(node)
+	# 			i=i-1
+	# 	i+=1
+
+	# # remove orphan nodes
+	# for i in range(len(graph.nodes())):
+	# 	nodes=graph.nodes()
+	# 	node=nodes[i]
+	# 	if len(graph.predecessors(node))==0 and len(graph.successors(node))==0:
+	# 		graph.remove_node(node)
+
+
 
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)

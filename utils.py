@@ -7,10 +7,13 @@ def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
 	return list(arr) 
 
+
 def bitList(n, x):
-	templist=[1 if digit=='1' else 0 for digit in bin(n)[2:]]
+	templist=[1 if digit=='1' else 0 for digit in bin(n)[::-1]]
 	while len(templist)<x:
 		templist.append(0)
+	while(len(templist))>x:
+		templist.pop()
 	return templist
 
 def loadFpkms(filename): #loads data from fpkms tab delimited csv file
