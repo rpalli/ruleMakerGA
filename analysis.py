@@ -232,6 +232,7 @@ def analyzeExperiment(codes):
 	nodespecificities=[[],[],[],[]]
 	truthholder=[]
 	degree2dictlist=[]
+	degree3dictlist=[]
 
 	combinedInDegrees={}
 	ruleTruths=[]
@@ -304,6 +305,10 @@ def analyzeExperiment(codes):
 				tempcomb=filter(lambda a: a != 100, nodeLookup[2][3])
 				tempcomb1=filter(lambda a: a != 100, nodeLookup[2][7])
 				degree2dictlist.append({'Node_Num':nodeNum,'Sensitivity':numpy.mean(tempcomb), 'PPV': numpy.mean(tempcomb1)})
+			if 3 in nodeLookup.keys():
+				tempcomb=filter(lambda a: a != 100, nodeLookup[3][3])
+				tempcomb1=filter(lambda a: a != 100, nodeLookup[3][7])
+				degree3dictlist.append({'Node_Num':nodeNum,'Sensitivity':numpy.mean(tempcomb), 'PPV': numpy.mean(tempcomb1)})
 			if code=='hsa04630':
 				print(model.andNodeList)
 		SDs.append(numpy.mean(SDtemp))
@@ -435,18 +440,26 @@ def analyzeExperiment(codes):
 
 	#print(df)
 	sns.set(font_scale=2) 
-	sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	# sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	sns.set_style("dark")
 
 	ax=sns.swarmplot(data=df,x='In-degree', y='Sensitivity', color='orange')
 
 	plt.ylabel('Sensitivity')
 	plt.xlabel('In-degree')
-	plt.title('Sensitivity by in-degree', color='white')
+	plt.title('Sensitivity by in-degree', color='black')
 	plt.ylim([0,1])
 	plt.tight_layout()
 	plt.ylim([0,1])
 	plt.savefig('IFNG_clear_sens.png', bbox_inches='tight', transparent=True)
 	plt.clf()
+
+
+
+
+
+
+
 
 
 	nodeNums=[0,1,2,3,4,5,6]
@@ -471,40 +484,41 @@ def analyzeExperiment(codes):
 	df=pd.DataFrame(dfdictlist)
 
 
-	sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	# sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	sns.set_style("dark")
 
-
-	plt.xlabel('In-degree', color='white')
+	# plt.xlabel('In-degree', color='gray')
 	# plt.title('Sensitivity by in-degree')
 
 	sns.set(font_scale=2) 
 
-
+	sns.set_style("dark")
 	ax=sns.swarmplot(data=df,x='In-degree', y='Specificity', color='orange')
 	# ax.set_xticklabels(nodeNums, color='white')
 	# ax.set_yticklabels(np.arange(0,1.2,.2),color='white')
-
-	plt.ylabel('Specificity')
+	sns.set_style("dark")
+	plt.ylabel('PPV')
 	plt.xlabel('In-degree')
-	plt.title('Specificity by in-degree', color='white')
+	plt.title('PPV by in-degree', color='black')
 	plt.ylim([0,1])
 	plt.tight_layout()
 	# sns.despine()
 
-	plt.savefig('IFNG_clear_spec.png', bbox_inches='tight', transparent=True)
+	plt.savefig('IFNG_clear_PPV.png', bbox_inches='tight', transparent=True)
 
 
 	plt.clf()
 
 	df=pd.DataFrame(degree2dictlist)
 	sns.set(font_scale=2) 
-	sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	sns.set_style("dark")
+	# sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
 
 	ax=sns.swarmplot(data=df,x='Node_Num', y='Sensitivity', color='orange')
 
 	plt.ylabel('Sensitivity')
 	plt.xlabel('Node Number')
-	plt.title('Sensitivity at in-degree 2 by Node Number', color='white')
+	plt.title('Sensitivity at in-degree 2 by Node Number', color='black')
 	plt.ylim([0,1])
 	plt.tight_layout()
 	plt.ylim([0,1])
@@ -512,18 +526,50 @@ def analyzeExperiment(codes):
 	plt.clf()
 
 	sns.set(font_scale=2) 
-	sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
-
+	# sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	sns.set_style("dark")
 	ax=sns.swarmplot(data=df,x='Node_Num', y='PPV', color='orange')
 
 	plt.ylabel('PPV')
 	plt.xlabel('Node Number')
-	plt.title('PPV at in-degree 2 by Node Number', color='white')
+	plt.title('PPV at in-degree 2 by Node Number', color='black')
 	plt.ylim([0,1])
 	plt.tight_layout()
 	plt.ylim([0,1])
 	plt.savefig('IFNG_PPV_node_num.png', bbox_inches='tight', transparent=True)
 	plt.clf()
+	
+
+
+	df=pd.DataFrame(degree3dictlist)
+	sns.set(font_scale=2) 
+	sns.set_style("dark")
+	# sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+
+	ax=sns.swarmplot(data=df,x='Node_Num', y='Sensitivity', color='orange')
+	plt.ylabel('Sensitivity')
+	plt.xlabel('Node Number')
+	plt.title('Sensitivity at in-degree 3 by Node Number', color='black')
+	plt.ylim([0,1])
+	plt.tight_layout()
+	plt.ylim([0,1])
+	plt.savefig('IFNG_sens_node_num3.png', bbox_inches='tight', transparent=True)
+	plt.clf()
+
+	sns.set(font_scale=2) 
+	# sns.set_style("dark",{'axes.edgecolor': 'white', 'axes.facecolor': 'white',  'axes.grid': True,'axes.labelcolor': 'white',  'figure.facecolor': 'white',  'grid.color': '.2',  'text.color': 'white', 'xtick.color': 'white', 'ytick.color': 'white'})
+	sns.set_style("dark")
+	ax=sns.swarmplot(data=df,x='Node_Num', y='PPV', color='orange')
+
+	plt.ylabel('PPV')
+	plt.xlabel('Node Number')
+	plt.title('PPV at in-degree 3 by Node Number', color='black')
+	plt.ylim([0,1])
+	plt.tight_layout()
+	plt.ylim([0,1])
+	plt.savefig('IFNG_PPV_node_num3.png', bbox_inches='tight', transparent=True)
+	plt.clf()
+
 
 
 

@@ -495,55 +495,39 @@ def GAsearchModel(model, newSSS,params):
 							truth[j]=0
 		newultimate.extend(truth)
 	ultimate=newultimate
-	# newultimate=[]
-	# print(ultimate)
-	# for node in range(0,len(model.nodeList)):
-	# 	#get start and end indices for node in individual
-	# 	if node==(len(model.nodeList)-1):
-	# 		end=len(ultimate)
-	# 	else:
-	# 		end=model.individualParse[node+1]
-	# 	start=model.individualParse[node]
-	# 	# get all the in edges for each and node
-	# 	andNodeList=model.andNodeList[node]
-	# 	inEdges=[]
-	# 	for lister in andNodeList:
-	# 		inEdges.append(set(lister))
-	# 	truth=ultimate[start:end]
-	# 	# check if any nodes are redundant
-	# 	invalid_ind=[]
-	# 	for i in range(1,2**(end-start)):
-	# 		tempultimate=list(ultimate)
-	# 		tempInd=utils.bitList(i, len(truth))
-	# 		print(tempInd)
-	# 		print(truth)
-	# 		tempultimate[start:end]=tempInd
-	# 		invalid_ind.append(tempultimate)
-	# 		print(tempultimate)
-	# 		# need to check which one is the most effective rule
-	# 	if end-start>1:
-	# 		fitnesses=Parallel(n_jobs=min(7,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params) for indy in invalid_ind)
-	# 		minny=1000
-	# 		mini=100
-	# 		for i in range(len(fitnesses)):
-	# 			currentsum= numpy.sum(fitnesses[i])
-	# 			if currentsum< minny:
-	# 				minny=currentsum
-	# 				mini=i
-	# 		ultimate=invalid_ind[mini]
-	# ultimate=newultimate
+	for node in range(0,len(model.nodeList)):
+		#get start and end indices for node in individual
+		if node==(len(model.nodeList)-1):
+			end=len(ultimate)
+		else:
+			end=model.individualParse[node+1]
+		start=model.individualParse[node]
+		# get all the in edges for each and node
+		andNodeList=model.andNodeList[node]
+		inEdges=[]
+		for lister in andNodeList:
+			inEdges.append(set(lister))
+		truth=ultimate[start:end]
+		invalid_ind=[]
+		# generate a list of possibilities
+		for i in range(1,2**(end-start)):
+			tempultimate=list(newultimate)
+			tempInd=utils.bitList(i, len(truth))
+			tempultimate[start:end]=tempInd
+			invalid_ind.append(tempultimate)
+		# see which rule is the best
+		if end-start>1:
+			fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params) for indy in invalid_ind)
+			minny=1000
+			mini=100
+			for i in range(len(fitnesses)):
+				currentsum= numpy.sum(fitnesses[i])
+				if currentsum< minny:
+					minny=currentsum
+					mini=i
+			newultimate=invalid_ind[mini]
+	ultimate=newultimate
 
-
-
-	# # check single bitflip perturbations
-	# if minny>.01*len(population[saveVal].fitness.values):
-	# 	#iterate over nodes
-	# 	print(len(ultimate))
-	# 	flags=Parallel(n_jobs=min(24,len(ultimate)))(delayed(deltaTester)(list(ultimate), i, model,  newSSS, params, minny) for i in range(len(ultimate)))
-	# 	for flag, i in zip(flags,range(len(ultimate))):
-	# 		if flag:
-	# 			ultimate[i]=1-ultimate[i]
-	# 	minny=numpy.sum(evaluateByNode(ultimate, params.cells, model,  newSSS, params))
 	return minvals, ultimate
 
 
