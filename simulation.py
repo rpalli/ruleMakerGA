@@ -3,6 +3,7 @@ import utils as utils
 #import python modules
 from random import random
 from random import shuffle
+import random as rand
 import operator
 import networkx as nx
 import itertools as itertool
@@ -38,8 +39,8 @@ class modelClass:
 		#find all possible combinations of upstream contributors for each node. These become the shadow And nodes
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
-			if len(preds)>3: #handle case where there are too many predecessors by truncation
-				preds=preds[1:3]
+			while len(preds)>3: #handle case where there are too many predecessors by truncation
+				preds.pop(rand.randint(0, len(preds)-1))
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -93,10 +94,10 @@ class paramClass:
 		self.bioReplicates=1
 		self.cells=1000
 		self.samples=10
-		self.generations=40 # generations to run
-		self.popSize=24 #size of population
-		self.mu= 24 #individuals selected
-		self.lambd= 24 #children produced
+		self.generations=1 # generations to run
+		self.popSize=4 #size of population
+		self.mu= 4 #individuals selected
+		self.lambd= 4 #children produced
 		self.iters=100 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.simSteps=100 # number of steps each individual is run when evaluating
@@ -374,17 +375,17 @@ def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
 			return currentval
 
 #run a simulation given a starting state
-def runModel(individual, model, simulator, initValues, params):
+def runModel(individual, model, simulator, initValues, params, knockouts, knockins):
 	if params.async:
-		return averageResultModelSim(individual, model, simulator, initValues, params)
+		return averageResultModelSim(individual, model, simulator, initValues, params, knockouts, knockins)
 	else:
-		return iterateModel(individual, model, simulator, initValues, params)
+		return iterateModel(individual, model, simulator, initValues, params, knockouts, knockins)
 
 #run a simulation and average it over iters trials
-def averageResultModelSim(individual, model, simulator, initValues, params):
+def averageResultModelSim(individual, model, simulator, initValues, params, knockouts, knockins):
 	sum=[0 for x in range(0,len(initValues))]
 	for i in range(0,params.iters):
-		avg=iterateModel(individual, model, simulator, initValues, params)
+		avg=iterateModel(individual, model, simulator, initValues, params, knockouts, knockins)
 		for j in range(0,len(sum)):
 			sum[j]=sum[j]+avg[j]
 	avgs=list(sum)
@@ -392,7 +393,7 @@ def averageResultModelSim(individual, model, simulator, initValues, params):
 		avgs[i]=sum[i]/float(params.iters)
 	return avgs
 
-def iterateModel(individual, model, simulator, initValues, params):
+def iterateModel(individual, model, simulator, initValues, params, knockouts, knockins):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	# set up data storage for simulation, add step 0
 	newValue=list(initValues)
@@ -404,7 +405,6 @@ def iterateModel(individual, model, simulator, initValues, params):
 	seq=range(0,len(model.nodeList))
 	for node in range(0,len(model.earlyEvalNodes)):
 		newValue[model.earlyEvalNodes[node]]=updateNode(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
-	
 	#iterate over number of steps necessary
 	for step in range(0,simulator.simSteps):
 		oldValue=list(newValue)
@@ -413,28 +413,33 @@ def iterateModel(individual, model, simulator, initValues, params):
 			shuffle(seq)
 		for i in range(0,len(model.nodeList)):
 			#find start and finish for each node to update from the individualParse list
-			endTimes=False
-			if seq[i]==len(model.nodeList)-1:
-				end= model.size
-				endTimes=True
+			if i in knockouts:
+				temp=0
+			elif i in knockins:
+				temp=1
 			else:
-				end=model.individualParse[seq[i]+1]	 
-			#sum up number of nodes in rule... useful if you want an information criterion
-			# if i==0:
-			# 	for bit in range(model.individualParse[seq[i]],end):
-			# 		if individual[bit]==1:
-			# 			totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
-			#update based on sync or async assumptions
-			if endTimes:
-				if params.async:
-					temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:],  model,simulator)
+				endTimes=False
+				if seq[i]==len(model.nodeList)-1:
+					end= model.size
+					endTimes=True
 				else:
-					temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:], model,simulator)
-			else:
-				if params.async:
-					temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
+					end=model.individualParse[seq[i]+1]	 
+				#sum up number of nodes in rule... useful if you want an information criterion
+				# if i==0:
+				# 	for bit in range(model.individualParse[seq[i]],end):
+				# 		if individual[bit]==1:
+				# 			totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
+				#update based on sync or async assumptions
+				if endTimes:
+					if params.async:
+						temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:],  model,simulator)
+					else:
+						temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:], model,simulator)
 				else:
-					temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:end], model,simulator)
+					if params.async:
+						temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
+					else:
+						temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:end], model,simulator)
 			newValue[seq[i]]=temp
 
 		simData.append(list(newValue))

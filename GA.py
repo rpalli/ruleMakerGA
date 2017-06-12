@@ -107,10 +107,10 @@ def buildToolbox( individualLength, bitFlipProb, model):
 	toolbox.register("similar", numpy.array_equal)
 	return toolbox, stats
 			
-def evaluate(individual, cells, model,  sss, params):
+def evaluate(individual, cells, model,  sss, params, KOlist, KIlist):
 	SSEs=[]
 	for j in range(0,len(sss)):
-		boolValues=iterateBooleanModel(individual, model, cells, model.initValueList[j], params)
+		boolValues=iterateBooleanModel(individual, model, cells, model.initValueList[j], params,KOlist[i], KIlist[i])
 		SSE=numpy.sum([(boolValues[model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for i in range(0, len(model.evaluateNodes))])
 		SSEs.append(SSE)
 	summer=1.*numpy.sum(SSEs)/len(SSEs)
@@ -128,10 +128,10 @@ def evaluate(individual, cells, model,  sss, params):
 					summer+=1000
 	return summer,
 	
-def evaluateByNode(individual, cells, model,  sss, params):
+def evaluateByNode(individual, cells, model,  sss, params, KOlist, KIlist):
 	# SSEs=[]
 	#boolValues=Parallel(n_jobs=min(6,len(sss)))(delayed(iterateBooleanModel)(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss)))
-	boolValues=[iterateBooleanModel(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss))]
+	boolValues=[iterateBooleanModel(list(individual), model, cells, model.initValueList[i], params, KOlist[i], KIlist[i]) for i in range(len(sss))]
 	# for i in range(0, len(model.evaluateNodes)):
 	# 	SSEs= numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))])
 	# 	SSEs.append(SSE)
@@ -139,12 +139,12 @@ def evaluateByNode(individual, cells, model,  sss, params):
 	return tuple(SSEs)
 # generates a random set of samples made up of cells by using parameteris from probInit seq
 # to set up then iterating using strict Boolean modeling. 
-def runProbabilityBooleanSims(individual, model, sampleNum, cells, params):
+def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlist, KIlist):
 	samples=[]
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random())
-	samples=Parallel(n_jobs=min(24,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params) for i in range(sampleNum))
+	samples=Parallel(n_jobs=min(24,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i]) for i in range(sampleNum))
 	# counter=0
 	# for sample in range(len(samples)):
 	# 	if sum(samples(sample))==0:
@@ -153,7 +153,7 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells, params):
 	# print(samples)
 	return samples
 	
-def sampler(individual, model, cells, seeder, params):
+def sampler(individual, model, cells, seeder, params, KOs, KIs):
 	seed(seeder)
 	cellArray=[]
 	sampleProbs=[]
@@ -161,9 +161,9 @@ def sampler(individual, model, cells, seeder, params):
 	# generate random proportions for each node to start
 	for j in range(0,len(model.nodeList)):
 		sampleProbs.append(random())
-	return iterateBooleanModel(individual, model, cells, sampleProbs, params)
+	return iterateBooleanModel(individual, model, cells, sampleProbs, params, KOs, KIs)
 
-def iterateBooleanModel(individual, model, cells, initProbs, params):
+def iterateBooleanModel(individual, model, cells, initProbs, params, KOs, KIs):
 	cellArray=[]
 	simulator=sim.simulatorClass('bool')
 	simulator.simSteps=3*len(model.nodeList)
@@ -173,7 +173,7 @@ def iterateBooleanModel(individual, model, cells, initProbs, params):
 		#get initial values for all nodes
 		initValues=genPBNInitValues(individual, model,initProbs)
 		# run Boolean simulation with initial values and append
-		vals=sim.runModel(individual, model, simulator, initValues, params)
+		vals=sim.runModel(individual, model, simulator, initValues, params, KOs, KIs)
 		cellArray.append(vals)
 	return [1.*numpy.sum(col) / float(cells) for col in zip(*cellArray)]
 
@@ -444,14 +444,14 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 			break
 	return population, logbook
 
-def GAautoSolver(model, sss, params):
+def GAautoSolver(model, sss, params, KOlist, KIlist):
 	# set up toolbox and run GA with or without adaptive mutations turned on
 	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model)
 
 	if params.adaptive:
-		toolbox.register("evaluate", evaluateByNode, cells=params.cells,model=model,sss=sss, params=params)
+		toolbox.register("evaluate", evaluateByNode, cells=params.cells,model=model,sss=sss, params=params, KOlist=KOlist, KIlist=KIlist)
 	else:
-		toolbox.register("evaluate", evaluate, cells=params.cells,model=model,sss=sss)
+		toolbox.register("evaluate", evaluate, cells=params.cells,model=model,sss=sss, KOlist=KOlist, KIlist=KIlist)
 	population=toolbox.population(n=params.popSize)
 	hof = tools.HallOfFame(params.hofSize, similar=numpy.array_equal)
 	
@@ -461,8 +461,8 @@ def GAautoSolver(model, sss, params):
 		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose, halloffame=hof)
 	return output
 
-def GAsearchModel(model, newSSS,params):
-	population, logbook=GAautoSolver(model, newSSS, params)
+def GAsearchModel(model, newSSS,params, KOlist, KIlist):
+	population, logbook=GAautoSolver(model, newSSS, params, KOlist, KIlist)
 	minny=1000000
 	saveVal=-1
 	for i in range(len(population)):
@@ -517,7 +517,7 @@ def GAsearchModel(model, newSSS,params):
 			invalid_ind.append(tempultimate)
 		# see which rule is the best
 		if end-start>1:
-			fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params) for indy in invalid_ind)
+			fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params, KOlist, KIlist) for indy in invalid_ind)
 			minny=1000
 			mini=100
 			for i in range(len(fitnesses)):
@@ -546,7 +546,7 @@ def deltaTester(ultimate, i, model,  newSSS, params, minny):
 		start=model.individualParse[node]
 		if model.andLenList[node]>0:
 			if sum(copied[start:end])>0:
-				newtot=numpy.sum(evaluateByNode(copied, params.cells, model,  newSSS, params))
+				newtot=numpy.sum(evaluateByNode(copied, params.cells, model,  newSSS, params, KOlist, KIlist))
 				if newtot<minny:
 					modifyFlag=True
 	return modifyFlag
@@ -599,6 +599,16 @@ def simTester(graph, name):
 	testList =[]
 	devList=[]
 
+
+	knockoutLists=[]
+	knockinLists=[]
+
+	for q in range(samples):
+		temRand=rand.randint(0,len(model.nodeList))
+		knockoutLists.append([])
+		knockinLists.append([])
+
+
 	# loop over number of times we want to generate fake data and perform sequence of events
 	for i in range(0,params.trials):
 		#generate random set of logic rules to start with
@@ -613,7 +623,7 @@ def simTester(graph, name):
 					individual[model.individualParse[node]]=1
 
 		# generate Boolean model for this trial
-		output=runProbabilityBooleanSims(individual, model, samples, params.cells, params)
+		output=runProbabilityBooleanSims(individual, model, samples, params.cells, params, knockoutLists, knockinLists)
 		# copy new output into newSSS and initial values
 		newSSS=[]
 		for k in range(0,samples):
@@ -633,7 +643,7 @@ def simTester(graph, name):
 					newInitValueList[k].append(0.5)
 		model.initValueList=newInitValueList
 		#perform GA run
-		dev, bruteOut=GAsearchModel(model, newSSS, params)
+		dev, bruteOut=GAsearchModel(model, newSSS, params, knockoutLists, knockinLists)
 		# add output of this trial to lists
 		truthList.append(individual)
 		testList.append(list(bruteOut))
