@@ -1,6 +1,6 @@
 
 GADIR=/home/rpalli/ruleMakerGA/
-OUTDIR=/home/rpalli/data/cut_motifs1/
+OUTDIR=/home/rpalli/data/KOruns/
 mkdir -p $OUTDIR
 cp -r $GADIR $OUTDIR
 cd $OUTDIR
