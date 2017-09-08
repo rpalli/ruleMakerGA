@@ -13,11 +13,19 @@ import math as math
 from sets import Set
 from joblib import Parallel, delayed
 import argparse as argparse
+import scipy.stats as stat
+from sets import Set
+import matplotlib.pyplot as plt
+import requests
 
+import sklearn.mixture as mix
 # import other pieces of our software
 import networkConstructor as nc
 import utils as utils
 import simulation as sim
+import murphyReader as mr
+import motif_cutter as mc
+
 def genBits(model):
 	startInd=list(utils.genRandBits(model.size))
 	counter=0
@@ -84,7 +92,7 @@ def buildToolbox( individualLength, bitFlipProb, model):
 	weightTup=(-1.0,)
 	params=sim.paramClass()
 	if params.adaptive:
-		for i in range(len(model.evaluateNodes)-1):
+		for i in range(len(model.nodeList)-1):
 			weightTup+=(-1.0,)
 	creator.create("FitnessMin", base.Fitness, weights=weightTup) # make a fitness minimization function
 	creator.create("Individual", list, fitness=creator.FitnessMin)	# create a class of individuals that are lists
@@ -111,7 +119,7 @@ def evaluate(individual, cells, model,  sss, params, KOlist, KIlist):
 	SSEs=[]
 	for j in range(0,len(sss)):
 		boolValues=iterateBooleanModel(individual, model, cells, model.initValueList[j], params,KOlist[i], KIlist[i])
-		SSE=numpy.sum([(boolValues[model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for i in range(0, len(model.evaluateNodes))])
+		SSE=numpy.sum([(boolValues[i]-sss[j][model.nodeList[i]])**2 for i in range(0, len(model.nodeList))])
 		SSEs.append(SSE)
 	summer=1.*numpy.sum(SSEs)/len(SSEs)
 	for j in range(len(model.nodeList)):
@@ -132,10 +140,7 @@ def evaluateByNode(individual, cells, model,  sss, params, KOlist, KIlist):
 	# SSEs=[]
 	#boolValues=Parallel(n_jobs=min(6,len(sss)))(delayed(iterateBooleanModel)(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss)))
 	boolValues=[iterateBooleanModel(list(individual), model, cells, model.initValueList[i], params, KOlist[i], KIlist[i]) for i in range(len(sss))]
-	# for i in range(0, len(model.evaluateNodes)):
-	# 	SSEs= numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))])
-	# 	SSEs.append(SSE)
-	SSEs= [numpy.sum([(boolValues[j][model.evaluateNodes[i]]-sss[j][model.nodeList[model.evaluateNodes[i]]])**2 for j in range(0,len(sss))]) for i in range(0, len(model.evaluateNodes))]
+	SSEs= [numpy.sum([(boolValues[j][i]-sss[j][model.nodeList[i]])**2 for j in range(0,len(sss))]) for i in range(0, len(model.nodeList))]
 	return tuple(SSEs)
 # generates a random set of samples made up of cells by using parameteris from probInit seq
 # to set up then iterating using strict Boolean modeling. 
@@ -212,25 +217,27 @@ def mutFlipBitAdapt(individual, indpb, model, genfrac):
 
 	# get rid of errors in nodes that can't be changed
 	for j in xrange(len(errors)):
-		if model.andLenList[model.evaluateNodes[j]]<2:
-			errors[model.evaluateNodes[j]]=0
-
+		if model.andLenList[j]<2:
+			errors[j]=0
+	# print(errors)
 	# if error is relatively low, do a totally random mutation
-	if numpy.sum(errors)<.05:
+	if numpy.sum(errors)<.05*len(model.nodeList):
 		focusNode=int(math.floor(random()*len(model.andLenList)))
 	else:
 		# if errors are relatively high, focus on nodes that fit the worst
 		normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
 		probs=numpy.cumsum(normerrors)
+		# print(probs)
 		randy=random()# randomly select a node to mutate
-		focusNode=next(i for i in xrange(len(probs)) if probs[i]>randy)
-	if model.andLenList[model.evaluateNodes[focusNode]]>1:
+		focusNode=next(i for i in range(len(probs)) if probs[i]>randy)
+	# print(focusNode)
+	if model.andLenList[focusNode]>1:
 		# find ends of the node of interest in the individual
-		start=model.individualParse[model.evaluateNodes[focusNode]]
-		if model.evaluateNodes[focusNode]==len(model.nodeList)-1:
+		start=model.individualParse[focusNode]
+		if focusNode==len(model.nodeList)-1:
 			end= model.size
 		else:
-			end=model.individualParse[model.evaluateNodes[focusNode]+1]
+			end=model.individualParse[focusNode+1]
 		for i in range(start,end):
 			if random()< 2/(end-start+1):
 				individual[i] = 1
@@ -461,8 +468,55 @@ def GAautoSolver(model, sss, params, KOlist, KIlist):
 		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose, halloffame=hof)
 	return output
 
-def GAsearchModel(model, newSSS,params, KOlist, KIlist):
-	population, logbook=GAautoSolver(model, newSSS, params, KOlist, KIlist)
+def GAsearchModel(model, sss,params, KOlist, KIlist):
+
+	newSSS=[]
+	newSSS.append({})
+	newSSS.append({})
+	newSSS.append({})
+	newSSS.append({})
+	newSSS.append({})
+	newSSS.append({})
+	for key in sss[0].keys():
+		newSSS[0][key]=numpy.mean([sss[i][key] for i in range(4)])
+		newSSS[1][key]=numpy.mean([sss[4+i][key] for i in range(3)])
+		newSSS[2][key]=numpy.mean([sss[7+i][key] for i in range(4)])
+		newSSS[3][key]=numpy.mean([sss[11+i][key] for i in range(4)])
+		newSSS[4][key]=numpy.mean([sss[15+i][key] for i in range(4)])
+		newSSS[5][key]=numpy.mean([sss[19+i][key] for i in range(4)])
+	newInitValueList=[]
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(len(sss)):
+		knockoutLists.append([])
+		knockinLists.append([])
+	for j in range(0,len(sss)):
+		newInitValueList.append([])
+	for j in range(0,len(model.nodeList)):
+		for k in range(0,len(sss)):
+			ss=sss[k]
+			if  model.nodeList[j] in sss[0].keys():
+				newInitValueList[k].append(ss[model.nodeList[j]])
+			else:
+				newInitValueList[k].append(0.5)
+	
+	newInitValueList=[]
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(len(sss)):
+		knockoutLists.append([])
+		knockinLists.append([])
+	for j in range(0,len(sss)):
+		newInitValueList.append([])
+	for j in range(0,len(model.nodeList)):
+		for k in range(0,len(sss)):
+			ss=sss[k]
+			if  model.nodeList[j] in sss[0].keys():
+				newInitValueList[k].append(ss[model.nodeList[j]])
+			else:
+				newInitValueList[k].append(0.5)
+	model.initValueList=newInitValueList
+	population, logbook=GAautoSolver(model, newSSS, params, knockoutLists, knockinLists)
 	minny=1000000
 	saveVal=-1
 	for i in range(len(population)):
@@ -530,7 +584,6 @@ def GAsearchModel(model, newSSS,params, KOlist, KIlist):
 
 	return minvals, ultimate
 
-
 def deltaTester(ultimate, i, model,  newSSS, params, minny):
 	print(i)
 	modifyFlag=False
@@ -550,7 +603,6 @@ def deltaTester(ultimate, i, model,  newSSS, params, minny):
 				if newtot<minny:
 					modifyFlag=True
 	return modifyFlag
-
 
 def simTester(graph, name):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
@@ -649,19 +701,274 @@ def simTester(graph, name):
 		testList.append(list(bruteOut))
 		devList.append(dev)
 	# set up output and save as a pickle
-	outputList=[truthList,testList, devList,model.size, model.evaluateNodes, model.individualParse,model.andNodeList ,model.andNodeInvertList, model.andLenList,model.earlyEvalNodes,	model.nodeList, model.nodeDict, model.initValueList]
+	outputList=[truthList,testList, devList,model.size, model.nodeList, model.individualParse,model.andNodeList ,model.andNodeInvertList, model.andLenList,	model.nodeList, model.nodeDict, model.initValueList]
 	pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
+
+def partitionTester(graph,name):
+	# first trim the graph to just what is in the dataset and the dataset to just what is in the graph
+
+	if len(graph.nodes())>1:	
+		# dev1, bruteOut1, model1= partitionTest(graph, False, False) # complicated method with max included
+		# dev2, bruteOut2, model2= partitionTest(graph, True, False) # complicated method after throwing out max
+		dev3, bruteOut3, model3= partitionTest(graph, False, True) # divide by max
+		dev4, bruteOut4, model4= partitionTest(graph, True, True) # divide by second highest
+		# set up output and save as a pickle
+		# outputList=[[dev1,dev2,dev3,dev4],[bruteOut1,bruteOut2,bruteOut3, bruteOut4],[model1,model2,model3,model4]]
+		outputList=[[dev3,dev4],[bruteOut3,bruteOut4],[model3,model4]]
+
+		pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
+	else:
+		print('not enough overlap')
+
+def indDistFind(name):
+	ssDict=pickle.Unpickler(open( 'data_F_T.pickle', "rb" )).load()
+	[[dev1,dev3],[bruteOut1,bruteOut3],[model1,model3]]=pickle.Unpickler(open( 'pickles/'+name+"_output.pickle", "rb" )).load()
+	# generate SSS which is a list of SSs where SS is a dict pointing to some values
+	keyList=ssDict.keys()
+	sss=[{} for i in range(len(ssDict[keyList[0]]))]
+	newInitValueList=[[] for i in range(len(ssDict[keyList[0]]))]
+	for i in range(len(sss)):
+		for key in keyList:
+			if key in graph.nodes():
+				sss[i][key]=ssDict[key][i]
+	params=sim.paramClass()
+
+	simulator=sim.simulatorClass('bool')
+	importanceScores=sim.calcImportance(bruteOut1,params,model1,simulator, sss)
+
+	pickle.dump( importanceScores, open( name+"_scores.pickle", "wb" ) )
+
+def partitionTest(graph, maxRem, divider):
+	
+	# first construct the input -omics dataset
+	if maxRem:
+		if divider:
+			fileName='data_T_T.pickle'
+		else:
+			fileName='data_T_F.pickle'
+	else:
+		if divider:
+			fileName='data_F_T.pickle'
+		else:
+			fileName='data_F_F.pickle'
+	ssDict=pickle.Unpickler(open( fileName, "rb" )).load()
+	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, maxRem, divider)
+	params=sim.paramClass()
+	
+	graph=nc.simplifyNetwork(graph, ssDict) # simplify the graph
+	graph=mc.cutMotifs(graph)
+	print(graph.nodes())
+	keyList=ssDict.keys()
+	# generate SSS which is a list of SSs where SS is a dict pointing to some values
+	sss=[{} for i in range(len(ssDict[keyList[0]]))]
+	newInitValueList=[[] for i in range(len(ssDict[keyList[0]]))]
+	for i in range(len(sss)):
+		for key in keyList:
+			if key in graph.nodes():
+				sss[i][key]=ssDict[key][i]
+	
+	model=sim.modelClass(graph,sss)
+	# generate empty knockout and knockin lists for support
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(len(sss)):
+		knockoutLists.append([])
+		knockinLists.append([])
+
+	# generate a set of initial values which are just the values from the SS in order. 
+	newInitValueList=[]
+	for j in range(0,len(sss)):
+		newInitValueList.append([])
+	for j in range(0,len(model.nodeList)):
+		for k in range(0,len(sss)):
+			ss=sss[k]
+			if  model.nodeList[j] in sss[0].keys():
+				newInitValueList[k].append(ss[model.nodeList[j]])
+			else:
+				newInitValueList[k].append(0.5)
+	model.initValueList=newInitValueList
+	print('setup successful')
+	#perform GA run
+	dev, bruteOut= GAsearchModel(model, sss, params, knockoutLists, knockinLists)
+	return dev, bruteOut, model
+
+def read_gmt(filename):
+	gmt_dict={}
+	inputfile = open(filename, 'r')
+	lines = inputfile.readlines()
+	for line in lines:
+		newline=line.split('\t')
+		gmt_dict[newline[0]]=Set(newline[2:])
+	return gmt_dict
+
+def find_overlaps(filename,geneDict):
+	overlapsets=[]
+	genes=Set(geneDict.keys())
+	keggDict=read_gmt(filename)
+	for key in keggDict.keys():
+		if len(genes.intersection(keggDict[key]))>4:
+			overlapsets.append(key)
+			print(key)
+			print(len(genes.intersection(keggDict[key])))
+	return overlapsets
+
+def retrieveGraph(name,aliasDict,dict1,dict2, geneDict):
+	print(name)
+	namelist=name.split('_')
+	namelist.pop(0)
+	requester='http://rest.kegg.jp/find/pathway/'+namelist.pop(0)
+	for item in namelist:
+		requester=requester+'+'+item
+
+	# print(requester)
+
+	r=requests.get(requester)
+	genes=Set(geneDict.keys())
+
+	lines=r.text
+	print(lines)
+	if len(lines.split('\n')[0].split(':'))>1:
+
+		code=lines.split('\n')[0].split(':')[1][3:8] # KEGG number of overlapped pathway
+		graph=nx.DiGraph()
+		coder=str('ko'+code) 
+		nc.uploadKEGGcodes([coder], graph, dict2)
+		coder=str('hsa'+code)
+		nc.uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
+		if len(list(nx.connected_component_subgraphs(graph.to_undirected() )))>0:
+			newgraph = max(nx.connected_component_subgraphs(graph.to_undirected()), key=len)
+			newOverlap=genes.intersection(set(newgraph.nodes()))
+			print(len(newOverlap))
+			graphLen= nx.average_shortest_path_length(newgraph, weight=None)
+			graph=nc.simplifyNetwork(graph, geneDict)
+			print('nodes, edges')
+			print(len(graph.nodes()))
+			print(len(graph.edges()))
+			if len(newOverlap)>4:
+				nx.write_graphml(graph,coder+'.graphml')
+				nx.write_gpickle(graph,coder+'.gpickle')
+		else:
+			graphLen=0
+		print('graphlen:')
+		print(graphLen)
+		#check is average path length is sufficiently long
+
+
+		
+	else:
+		print('not found:')
+		print(requester)
+		print(lines)
+
+
+def findPathways():
+	geneDict=mr.readData() # get -omics data
+	
+	aliasDict={}
+	dict1={}
+	nc.parseKEGGdicthsa('inputData/hsa00001.keg',aliasDict,dict1)
+	dict2={}
+	nc.parseKEGGdict('inputData/ko00001.keg',aliasDict,dict2)
+	namelist=find_overlaps('filtered.c2.cp.kegg.v3.0.symbols.gmt',geneDict)
+	print('num of overlap nodes')
+	print(len(namelist))
+	for name in namelist:
+		retrieveGraph(name,aliasDict,dict1,dict2, geneDict)
+	# # read in list of codes then load them into network
+	# #inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
+	# for code in lines:
+		
+	# 	# if(len(graph.edges())>1):
+	# 	# 	graph=simplifyNetwork(graph, data)
+		
+	# 	#graph = utils.simpleNetBuild()
+	# 	#coder='unrolled'
+
+	# 	#graph=utils.LiuNetwork1Builder()
+	# 	# coder='liu'
+
+	# 	# if the code has an interesting logic rule to find, run the algorithm... 
+	# 	checker=False
+	# 	for x in graph.in_degree():
+	# 		if x>1:
+	# 			checker=True
+	# 	if(checker):
+	# 		print(coder)
+	# 		codelist.append(coder)			
+	# 		nx.write_graphml(graph,coder+'_unsimplified.graphml')
+	# 		nx.write_gpickle(graph,coder+'_unsimplified.gpickle')
+
+
+def findClustDiff(lister):
+	mixer= mix.GaussianMixture(n_components=2, covariance_type='full').fit([[a] for a in lister])
+	return abs(mixer.means_[0]-mixer.means_[1])
+
+
+def testDiscretizationSetup():
+
+	findPathways()
+
+	# geneDict=mr.readData() # get -omics data
+
+	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, True)
+	# pickle.dump( ssDict, open( "data_T_T.pickle", "wb" ) )
+
+
+	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, True)
+	# pickle.dump( ssDict, open( "data_F_T.pickle", "wb" ) )
+
+	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, False)
+	# pickle.dump( ssDict, open( "data_T_F.pickle", "wb" ) )
+
+
+	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, False)
+	# pickle.dump( ssDict, open( "data_F_F.pickle", "wb" ) )
+
 
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
 	parser = argparse.ArgumentParser()
 	parser.add_argument("graph")
-	parser.add_argument("iterNum")
 	results = parser.parse_args()
 	graphName=results.graph
-	iterNum=int(results.iterNum)
-	name=graphName[:-8]+'_'+results.iterNum
+	name=graphName[:-8]+'_1'
+
 	graph = nx.read_gpickle(graphName)
-	simTester(graph, name)
-	print("--- %s seconds ---" % (time.time() - start_time))
+	indDistFind(name)
+
+
+	# testDiscretizationSetup()
+
+
+	# for numgraph in ['04066','04350','04380','04612','04630','04650','04657','04659','04660']:
+	# valueList=[]
+	# for key in geneDict.keys():
+	# 	print(key)
+	# 	valueList.append(findClustDiff(geneDict[key]))
+	
+	# pickle.dump( valueList, open( "distance_data.pickle", "wb" ) )
+	# valueList=pickle.Unpickler(open( "distance_data.pickle", "rb" )).load()
+	# print(len(valueList))
+	# valueList=[valueList[i] for i in range(0,len(valueList),50)]
+	# print(len(valueList))
+	# bins = numpy.linspace(0,6000, 500)
+	# n, bins, patches = plt.hist(valueList, 20, range=(0,20),  normed=0, facecolor='green')
+
+	# plt.xlabel('distance between clusters')
+	# plt.ylabel('Probability Density')
+	# plt.title('Histogram of cluster distances')
+	# # plt.axis([40, 160, 0, 0.03])
+	# plt.grid(True)
+
+	# plt.savefig('histogram_cluster_dist_1.png', bbox_inches='tight')
+
+
+
+
+	# for numgraph in ['04657','04659','04660']:
+	# 	graphName='hsa'+numgraph+'_unsimplified.gpickle'
+	# 	name=graphName[:-8]+'_1'
+	# 	graph = nx.read_gpickle(graphName)
+	# 	partitionTester(graph, name, geneDict)
+	# 	print("--- %s seconds ---" % (time.time() - start_time))

@@ -38,12 +38,38 @@ def rewireNetwork(graph):
 
 def simplifyNetwork(graph, ss):
 	#network simplification algorithm. 
-	# # 1. remove nodes which are neither part of input nor have input to them...
-	# # 2. remove straigth paths. 
-	# # 3. 
+	# # 1. remove nodes with no input data
+	# # 2. remove edges to nodes from complexes they are a part of 
+	# # 3. remove straigth paths. 
+	# # 4. remove nodes with only 1 input
+	# # 5. remove nodes with only 1 output
+	# # 6. remove self edges
 
 
-	#collapse complexes of nodes already in the list
+
+	# 1. remove nodes with no input data
+
+	removeNodeList= [x for x in graph.nodes() if  not x  in ss.keys()]
+
+	for rm in removeNodeList:
+		for start in graph.predecessors(rm):
+			for finish in graph.successors(rm):
+				edge1=graph.get_edge_data(start,rm)['signal']
+				edge2=graph.get_edge_data(rm,finish)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(start,finish,signal='i')
+				else:
+					graph.add_edge(start,finish,signal='a')
+		graph.remove_node(rm)
+	#print(graph.nodes())
+	flag=True
+
+	# 2. remove dependence of nodes on complexes that include that node
 	for node in graph.nodes():
 		predlist=graph.predecessors(node)
 		for pred in predlist:
@@ -58,18 +84,8 @@ def simplifyNetwork(graph, ss):
 					graph.remove_edge(pred,node)
 	flag=True
 	
-	# remove nodes with no predecessors or value in given steady state data
-	while(flag):
-		flag=False	
-		# # print(len(graph.nodes()))
-		newNodes = [x for x in graph.nodes() if not (len(graph.predecessors(x))==0 and (not (x in ss.keys())))]
-		if(len(newNodes)<len(graph.nodes())):
-			flag=True
-		graph=graph.subgraph(newNodes)
-		
-		#print(len(graph.nodes()))
 			
-	#  collapse straight lines
+	# 3. collapse straight lines
 	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1))]
 	for rm in removeNodeList:
 		before=graph.predecessors(rm)[0]
@@ -88,7 +104,7 @@ def simplifyNetwork(graph, ss):
 		graph.remove_node(rm)
 	flag=True
 
-	#rewire nodes that have only one upstream node
+	# 4. rewire nodes that have only one upstream node
 	#print(len(graph.nodes()))
 	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1) ]
 	for rm in removeNodeList:
@@ -109,9 +125,13 @@ def simplifyNetwork(graph, ss):
 			graph.remove_node(rm)
 	flag=True
 
-	#rewire nodes that have only one downstream node
+	# 5. rewire nodes that have only one downstream node
 	#print(len(graph.nodes()))
+	
 	removeNodeList= [x for x in graph.nodes() if (len(graph.successors(x))==1) ]
+	# for x in range(remove) :
+	# 	if not graph.successors(removeNodeList[x])[0] in ss.keys():
+	# 		removeNodeList.remove(removeNodeList[x])
 	for rm in removeNodeList:
 		if len(graph.successors(x))==1:
 			for start in graph.predecessors(rm):
@@ -131,7 +151,7 @@ def simplifyNetwork(graph, ss):
 	#print(graph.nodes())
 	flag=True
 
-	# remove self edges
+	# 6. remove self edges
 	for edge in graph.edges():
 		if edge[0]==edge[1]:
 			graph.remove_edge(edge[0],edge[1])

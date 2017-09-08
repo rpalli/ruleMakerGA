@@ -1,17 +1,13 @@
 #!/bin/sh
 #SBATCH --partition=standard 
-#SBATCH -a 1-10
 #SBATCH -J GArun
 #SBATCH -o GA_out_%A_%a.txt
-#SBATCH --mem-per-cpu=100MB
-#SBATCH -t 4:00:00
+#SBATCH -t 48:00:00
 #SBATCH -n 1
-#SBATCH -c 24
+#SBATCH -c 2
 export OMP_NUM_THREADS=24
 
 module load intelpython/2.7.12
-srun python GA.py $1 $SLURM_ARRAY_TASK_ID
+srun python GA.py $1
 echo "ran GA"
-for fileName in *.pickle; do
-	cp $fileName /home/rpalli/data/5-16-17/$fileName
-done
+

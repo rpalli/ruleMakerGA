@@ -21,9 +21,7 @@ class modelClass:
 					graph.remove_edge(node,node)
 					repeat=True
 		#set up empty lists and dicts for later
-		evaluateNodes=[] #list of nodes that need to be compared to the steady state values (sss)
 		individualParse=[] # list of the number of shadow and nodes that contribute to each node, in order by index num
-		earlyEvalNodes=[] # nodes that don't have initial value and need to be re-evaluated early on in the simulation.. 
 		andNodeList=[] #a list of the shadow nodes that represent and relations between incoming edge
 		andNodeInvertList=[] # keeps track of which incoming nodes for each node need to be inverted
 		andLenList=[] # keeps track of how many nodes are coming into each shadow AND node
@@ -73,18 +71,12 @@ class modelClass:
 			# construct the list of lengths of possibilties for each node, add to the counter that keeps track of how many bits are necessary
 			individualParse.append(counter)
 			counter=counter+len(possibilities)
-			if  nodeList[i] in sss[0].keys():
-				evaluateNodes.append(i)
-			else:
-				earlyEvalNodes.append(i)
 		self.size=counter
 		individualParse.append(counter)
-		self.evaluateNodes=evaluateNodes #list of nodes that need to be compared to the steady state values (sss)
 		self.individualParse=individualParse #index of start value of current node on the individual
 		self.andNodeList=andNodeList # shadow and node inputs
 		self.andNodeInvertList=andNodeInvertList # keeps track of which incoming nodes for each node need to be inverted
 		self.andLenList=andLenList # keeps track of length of above inputOrderList for each node
-		self.earlyEvalNodes=earlyEvalNodes
 		self.nodeList=nodeList #define the node list simply as the nodes in the graph. 
 		self.nodeDict=nodeDict #identifies names of nodes with their index in the node list.. provide name, get index
 		self.initValueList=initValueList #puts an empty and correctly structured initValueList together for later population. 
@@ -94,10 +86,10 @@ class paramClass:
 		self.bioReplicates=1
 		self.cells=1000
 		self.samples=10
-		self.generations=1 # generations to run
-		self.popSize=4 #size of population
-		self.mu= 4 #individuals selected
-		self.lambd= 4 #children produced
+		self.generations=40 # generations to run
+		self.popSize=24 #size of population
+		self.mu= 24 #individuals selected
+		self.lambd= 24 #children produced
 		self.iters=100 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.simSteps=100 # number of steps each individual is run when evaluating
@@ -403,13 +395,11 @@ def iterateModel(individual, model, simulator, initValues, params, knockouts, kn
 
 	# set up the sequence of nodes to be updated
 	seq=range(0,len(model.nodeList))
-	for node in range(0,len(model.earlyEvalNodes)):
-		newValue[model.earlyEvalNodes[node]]=updateNode(model.earlyEvalNodes[node],newValue,individual,individualParse[seq[i]], model,simulator)
 	#iterate over number of steps necessary
 	for step in range(0,simulator.simSteps):
 		oldValue=list(newValue)
 
-		if params.async: #shuffle if async
+		if params.async: #shuffle if async 
 			shuffle(seq)
 		for i in range(0,len(model.nodeList)):
 			#find start and finish for each node to update from the individualParse list
@@ -466,6 +456,11 @@ def iterateModel(individual, model, simulator, initValues, params, knockouts, kn
 #calculate average induced change by node
 def calcImportance(individual,params,model,simulator, sss):
 	importanceScores=[]
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(len(sss)):
+		knockoutLists.append([])
+		knockinLists.append([])
 	for node in range(len(model.nodeList)):
 		tempImp=0
 		SSEs=[]
@@ -477,18 +472,18 @@ def calcImportance(individual,params,model,simulator, sss):
 			else:
 				initValues[node]=initValues[node]+.1
 			SSE1=0
-			boolValues, addnodeNums=runModel(individual, model,simulator, model.initValueList[j])
-			for i in range(0, len(model.evaluateNodes)):
-				SSE1+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+			boolValues =runModel(individual, model,simulator, model.initValueList[j], params, knockoutLists, knockinLists)
+			for i in range(0, len(model.nodeList)):
+				SSE1+=(boolValues[i]-ss[model.nodeList[i]])**2
 				initValues=model.initValueList[j]
 			if initValues[node]>.9:
 				SSE2=SSE1
 			else:
 				initValues[node]=initValues[node]+.1
 				SSE2=0
-				boolValues, addnodeNums=runModel(individual, model,simulator, model.initValueList[j])
-				for i in range(0, len(model.evaluateNodes)):
-					SSE2+=(boolValues[model.evaluateNodes[i]]-ss[model.nodeList[model.evaluateNodes[i]]])**2
+				boolValues=runModel(individual, model,simulator, model.initValueList[j], params, knockoutLists, knockinLists)
+				for i in range(0, len(model.nodeList)):
+					SSE2+=(boolValues[i]-ss[model.nodeList[i]])**2
 					initValues=model.initValueList[j]
 			SSEs.append(SSE1+SSE2)
 		importanceScores.append(sum(SSEs))
