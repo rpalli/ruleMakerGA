@@ -214,21 +214,21 @@ def testDiscretizationSetup():
 
 	findPathways()
 
-	# geneDict=mr.readData() # get -omics data
+	geneDict=mr.readData() # get -omics data
 
-	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, True)
-	# pickle.dump( ssDict, open( "data_T_T.pickle", "wb" ) )
-
-
-	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, True)
-	# pickle.dump( ssDict, open( "data_F_T.pickle", "wb" ) )
-
-	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, False)
-	# pickle.dump( ssDict, open( "data_T_F.pickle", "wb" ) )
+	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, True)
+	pickle.dump( ssDict, open( "data_T_T.pickle", "wb" ) )
 
 
-	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, False)
-	# pickle.dump( ssDict, open( "data_F_F.pickle", "wb" ) )
+	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, True)
+	pickle.dump( ssDict, open( "data_F_T.pickle", "wb" ) )
+
+	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, False)
+	pickle.dump( ssDict, open( "data_T_F.pickle", "wb" ) )
+
+
+	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, False)
+	pickle.dump( ssDict, open( "data_F_F.pickle", "wb" ) )
 
 if __name__ == '__main__':
 	import time
