@@ -17,8 +17,6 @@ def printMotifsClusters(motifs, clusters):
 	for i in motifs.keys():
 		print('motif '+str(i)+' has '+str(len(motifs[i]))+' elements')
 
-#need to write algorithm to eliminate duplicated neighbors... can't have an in and an out as the same node. 
-
 # generate a hash table to use to search 3 node motifs
 def fillHashTable(num, dict):
 	picklefile=open('motifs/clusters.pkl','rb')
@@ -50,7 +48,6 @@ def fillHashTable(num, dict):
 		dict[tuple(hashvalue)].append([graph,clusters[i],i])
 	# print(clusters)
 	return clustering, motifs
-
 
 # generate a hash table to use to search 3 node motifs
 def fillHashTable3node(dict):
@@ -96,10 +93,6 @@ def fillHashTable3node(dict):
 			# print(graph1[0].edges())
 		# print(classification)
 	return classification, motifs
-
-
-
-
 
 # generate a hash table to use to search 4 node motifs
 def fillHashTable5node(dict):
@@ -428,8 +421,6 @@ def searchMotifs4plus(givenGraph, hashtable, clusters,motifs):
 		# print('removed node '+str(v))
 	return edgeDict
 
-	
-
 # better way of searching 3 node motifs
 def searchMotifs3(givenGraph, dicty, clusters,motifs, classList):
 	#algorithm taken from Itzhack, Mogilevski, and Louzoun 2007, Physica A (381; 482-490), "An optimal algorithm for countin network motifs" 
@@ -479,7 +470,6 @@ def motifs5(network):
 	edgeDict=searchMotifs4plus(network,hashtable, classifications, motifs)
 	return classifications, motifs, edgeDict
 
-
 def classifyMotifs(motifs):
 	counts={}
 	picklefile=open('classificationDict.pkl','rb')
@@ -491,7 +481,6 @@ def classifyMotifs(motifs):
 		counts[classificationDict[i]]=counts[classificationDict[i]]+len(motifs[i])
 	return counts
 	
-
 def cut_3_motifs(graphName):
 	graph = nx.read_gpickle(graphName+'.gpickle')
 	for node in graph.nodes():

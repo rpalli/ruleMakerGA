@@ -3,6 +3,7 @@ import random as rand
 import scipy.stats as stat
 import sklearn.mixture as mix
 
+# reads in file with counts
 def readCounts(geneDict, filename, samplesAdded):
 	inputfile = open(filename, 'r')
 	lines = inputfile.readlines()
@@ -16,6 +17,7 @@ def readCounts(geneDict, filename, samplesAdded):
 	samplesAdded+=1
 	return samplesAdded
 
+# reads in multiple files, each one with counts for data (Murphy Data)
 def readData():
 	tempGeneDict={}
 	samples=0
@@ -47,35 +49,18 @@ def readData():
 	# return tempGeneDict
 	return geneDict
 
-def constructOmicsInput(geneDict, maxRem, divider):
+# takes a dict of counts across samples and converts it into the ssDict necessary for GA
+def constructOmicsInput(geneDict):
 	ssDict={}
-	ones=[]
-	zeros=[]
-	valueLister=[]
 	for key in geneDict.keys():
 		values=list(geneDict[key])	
-		if maxRem:
-			values.remove(max(values))
 		CAND2= [[entry] for entry in values]
-		if divider:
-			maxVal=max(values)
-			if maxVal>0:
-				props=[max(0,min(1,val/maxVal)) for val in geneDict[key]]
-			else:
-				props=[0 for val in geneDict[key]]
-				print('zeros only found:')
-				print(key)
+		maxVal=max(values)
+		if maxVal>0:
+			props=[max(0,min(1,val/maxVal)) for val in geneDict[key]]
 		else:
-			mixer= mix.GaussianMixture(n_components=2, covariance_type='full').fit(CAND2)
-			if (mixer.means_[0]>mixer.means_[1]):
-				mew1=mixer.means_[0][0]
-				mew2=mixer.means_[1][0]
-			else:
-				mew2=mixer.means_[0][0]
-				mew1=mixer.means_[1][0]
-			props=[max(0,min(1,(val-mew2)/(mew1-mew2))) for val in geneDict[key]]
+			props=[0 for val in geneDict[key]]
+			print('zeros only found:')
+			print(key)
 		ssDict[key]=list(props)
-		valueLister.extend(props)
-		ones.append(props.count(1))
-		zeros.append(props.count(0))
-	return ssDict, valueLister, ones, zeros
+	return ssDict

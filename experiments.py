@@ -1,3 +1,31 @@
+# import python packages
+import pickle
+from deap import base, creator, gp, tools
+from deap import algorithms as algo
+from random import random, seed, shuffle
+import random as rand
+import networkx as nx
+import numpy as numpy
+import copy as copy
+import operator
+import math as math
+from sets import Set
+from joblib import Parallel, delayed
+import argparse as argparse
+import scipy.stats as stat
+from sets import Set
+import matplotlib.pyplot as plt
+import requests
+
+import sklearn.mixture as mix
+# import other pieces of our software
+import networkConstructor as nc
+import utils as utils
+import simulation as sim
+import murphyReader as mr
+import motif_cutter as mc
+import pathway_analysis as pa
+import GA as ga
 def deltaTester(ultimate, i, model,  newSSS, params, minny):
 	print(i)
 	modifyFlag=False
@@ -32,30 +60,6 @@ def simTester(graph, name):
 	if params.rewire:
 		graph=nc.rewireNetwork(graph)
 
-	# # remove two node bunches
-	# i=0
-	# while i < range(len(graph.nodes())):
-	# 	nodes=graph.nodes()
-	# 	node=nodes[i]
-	# 	if len(graph.predecessors(node))==0:
-	# 		successorless=True
-	# 		for successor in graph.successors(node):
-	# 			if graph.successors(successor)>0 or graph.predecessors(successor)>1:
-	# 				successorless=False
-	# 		if successorless:
-	# 			graph.remove_node(node)
-	# 			i=i-1
-	# 	i+=1
-
-	# # remove orphan nodes
-	# for i in range(len(graph.nodes())):
-	# 	nodes=graph.nodes()
-	# 	node=nodes[i]
-	# 	if len(graph.predecessors(node))==0 and len(graph.successors(node))==0:
-	# 		graph.remove_node(node)
-
-
-
 	sss=utils.synthesizeInputs(graph,params.samples)
 	model=sim.modelClass(graph,sss)
 	samples=params.samples
@@ -64,7 +68,6 @@ def simTester(graph, name):
 	truthList= [] 
 	testList =[]
 	devList=[]
-
 
 	knockoutLists=[]
 	knockinLists=[]
@@ -118,36 +121,17 @@ def simTester(graph, name):
 	outputList=[truthList,testList, devList,model.size, model.nodeList, model.individualParse,model.andNodeList ,model.andNodeInvertList, model.andLenList,	model.nodeList, model.nodeDict, model.initValueList]
 	pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
 
-def partitionTester(graph,name):
+def partitionTester(graph,name,ssDict):
 	# first trim the graph to just what is in the dataset and the dataset to just what is in the graph
 
 	if len(graph.nodes())>1:	
-		# dev1, bruteOut1, model1= partitionTest(graph, False, False) # complicated method with max included
-		# dev2, bruteOut2, model2= partitionTest(graph, True, False) # complicated method after throwing out max
-		dev3, bruteOut3, model3= partitionTest(graph, False, True) # divide by max
-		dev4, bruteOut4, model4= partitionTest(graph, True, True) # divide by second highest
-		# set up output and save as a pickle
-		# outputList=[[dev1,dev2,dev3,dev4],[bruteOut1,bruteOut2,bruteOut3, bruteOut4],[model1,model2,model3,model4]]
-		outputList=[[dev3,dev4],[bruteOut3,bruteOut4],[model3,model4]]
-
-		pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
+		dev3, bruteOut3, model3= partitionTest(graph, ssDict) # divide by max
+		pickle.dump( [[dev3],[bruteOut3],[model3]], open( name+"_output.pickle", "wb" ) )
 	else:
 		print('not enough overlap')
 
-def partitionTest(graph, maxRem, divider):
-	
-	# first construct the input -omics dataset
-	if maxRem:
-		if divider:
-			fileName='data_T_T.pickle'
-		else:
-			fileName='data_T_F.pickle'
-	else:
-		if divider:
-			fileName='data_F_T.pickle'
-		else:
-			fileName='data_F_F.pickle'
-	ssDict=pickle.Unpickler(open( fileName, "rb" )).load()
+def partitionTest(graph,  ssDict):
+
 	# ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, maxRem, divider)
 	params=sim.paramClass()
 	
@@ -185,95 +169,34 @@ def partitionTest(graph, maxRem, divider):
 	model.initValueList=newInitValueList
 	print('setup successful')
 	#perform GA run
-	dev, bruteOut= GAsearchModel(model, sss, params, knockoutLists, knockinLists)
+	dev, bruteOut= ga.GAsearchModel(model, sss, params, knockoutLists, knockinLists)
 	return dev, bruteOut, model
 
-def indDistFind(name):
-	ssDict=pickle.Unpickler(open( 'data_F_T.pickle', "rb" )).load()
-	[[dev1,dev3],[bruteOut1,bruteOut3],[model1,model3]]=pickle.Unpickler(open( 'pickles/'+name+"_output.pickle", "rb" )).load()
-	# generate SSS which is a list of SSs where SS is a dict pointing to some values
-	keyList=ssDict.keys()
-	sss=[{} for i in range(len(ssDict[keyList[0]]))]
-	newInitValueList=[[] for i in range(len(ssDict[keyList[0]]))]
-	for i in range(len(sss)):
-		for key in keyList:
-			if key in graph.nodes():
-				sss[i][key]=ssDict[key][i]
-	params=sim.paramClass()
-
-	simulator=sim.simulatorClass('bool')
-	importanceScores=sim.calcImportance(bruteOut1,params,model1,simulator, sss)
-
-	pickle.dump( importanceScores, open( name+"_scores.pickle", "wb" ) )
-
-def findClustDiff(lister):
-	mixer= mix.GaussianMixture(n_components=2, covariance_type='full').fit([[a] for a in lister])
-	return abs(mixer.means_[0]-mixer.means_[1])
-
-def testDiscretizationSetup():
-
-	findPathways()
-
-	geneDict=mr.readData() # get -omics data
-
-	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, True)
-	pickle.dump( ssDict, open( "data_T_T.pickle", "wb" ) )
-
-
-	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, True)
-	pickle.dump( ssDict, open( "data_F_T.pickle", "wb" ) )
-
-	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, True, False)
-	pickle.dump( ssDict, open( "data_T_F.pickle", "wb" ) )
-
-
-	ssDict, valueLister, ones, zeros= mr.constructOmicsInput(geneDict, False, False)
-	pickle.dump( ssDict, open( "data_F_F.pickle", "wb" ) )
+def findPathways(geneDict):
+	returnerlist=[]
+	aliasDict={}
+	dict1={}
+	nc.parseKEGGdicthsa('inputData/hsa00001.keg',aliasDict,dict1)
+	dict2={}
+	nc.parseKEGGdict('inputData/ko00001.keg',aliasDict,dict2)
+	namelist=pa.find_overlaps('filtered.c2.cp.kegg.v3.0.symbols.gmt',geneDict)
+	print('num of overlap nodes')
+	print(len(namelist))
+	for name in namelist:
+		returnerlist.append(pa.retrieveGraph(name,aliasDict,dict1,dict2, geneDict))
+	return returnerlist
 
 if __name__ == '__main__':
 	import time
 	start_time = time.time()
-	parser = argparse.ArgumentParser()
-	parser.add_argument("graph")
-	results = parser.parse_args()
-	graphName=results.graph
-	name=graphName[:-8]+'_1'
-
-	graph = nx.read_gpickle(graphName)
-	indDistFind(name)
-
-
-	# testDiscretizationSetup()
-
-
-	# for numgraph in ['04066','04350','04380','04612','04630','04650','04657','04659','04660']:
-	# valueList=[]
-	# for key in geneDict.keys():
-	# 	print(key)
-	# 	valueList.append(findClustDiff(geneDict[key]))
-	
-	# pickle.dump( valueList, open( "distance_data.pickle", "wb" ) )
-	# valueList=pickle.Unpickler(open( "distance_data.pickle", "rb" )).load()
-	# print(len(valueList))
-	# valueList=[valueList[i] for i in range(0,len(valueList),50)]
-	# print(len(valueList))
-	# bins = numpy.linspace(0,6000, 500)
-	# n, bins, patches = plt.hist(valueList, 20, range=(0,20),  normed=0, facecolor='green')
-
-	# plt.xlabel('distance between clusters')
-	# plt.ylabel('Probability Density')
-	# plt.title('Histogram of cluster distances')
-	# # plt.axis([40, 160, 0, 0.03])
-	# plt.grid(True)
-
-	# plt.savefig('histogram_cluster_dist_1.png', bbox_inches='tight')
-
-
-
-
-	# for numgraph in ['04657','04659','04660']:
-	# 	graphName='hsa'+numgraph+'_unsimplified.gpickle'
-	# 	name=graphName[:-8]+'_1'
-	# 	graph = nx.read_gpickle(graphName)
-	# 	partitionTester(graph, name, geneDict)
-	# 	print("--- %s seconds ---" % (time.time() - start_time))
+	geneDict=mr.readData() # get -omics data
+	lister=findPathways(geneDict)
+	ssDict= mr.constructOmicsInput(geneDict)
+	for item in lister:
+		if not item=='':
+			name=item
+			break
+	print(name)
+	graph = nx.read_gpickle(name)
+	partitionTester(graph,name,ssDict)
+	print("--- %s seconds ---" % (time.time() - start_time))

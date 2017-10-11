@@ -1,9 +1,7 @@
 #import from other parts of ruleMaker
 import utils as utils
 #import python modules
-from random import random
-from random import shuffle
-import random as rand
+from random import random, shuffle, randint
 import operator
 import networkx as nx
 import itertools as itertool
@@ -38,7 +36,7 @@ class modelClass:
 		for i in range(0,len(nodeList)):
 			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
 			while len(preds)>3: #handle case where there are too many predecessors by truncation
-				preds.pop(rand.randint(0, len(preds)-1))
+				preds.pop(randint(0, len(preds)-1))
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -86,10 +84,10 @@ class paramClass:
 		self.bioReplicates=1
 		self.cells=1000
 		self.samples=10
-		self.generations=40 # generations to run
-		self.popSize=24 #size of population
-		self.mu= 24 #individuals selected
-		self.lambd= 24 #children produced
+		self.generations=5 # generations to run
+		self.popSize=8 #size of population
+		self.mu= 8 #individuals selected
+		self.lambd= 8 #children produced
 		self.iters=100 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.simSteps=100 # number of steps each individual is run when evaluating
@@ -106,385 +104,275 @@ class paramClass:
 		self.trials=1
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 		
-def boolAnd(num1, num2):
-	return num1 and num2
-def boolOr(num1, num2):
-	return num1 or num2
-def boolInv(x, inverter): #inverts if necessary for Boolean values
-	if inverter:
-		return not x
-	else:
-		return x
-def fuzzyAnd(num1, num2):
-	return min(num1,num2)
-def fuzzyOr(num1, num2):
-	return max(num1, num2)
-def naiveAnd(num1, num2):
-	return num1*num2	
-def naiveOr(num1, num2):
-	return (num1+num2-(num1*num2))
-def propOr(A,B,AgivenB, BgivenA):
-	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
-def propAnd(A,B,AgivenB, BgivenA):
-	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
-
-def propOr2(A,B,AgivenB, BgivenA):
-	return max(0,min(1,A+B-((B*AgivenB+A*BgivenA)/2)))
-def propAnd2(A,B,AgivenB, BgivenA):
-	return max(0,min(1,(A*BgivenA+B*AgivenB)/2))
-def adjOr(A,B,AgivenB, BgivenA,rsquare):
-	if rsquare>.25:
-		return propOr(A,B,AgivenB, BgivenA)
-	else:
-		return naiveOr(A,B)
-	#return rsquare*propAnd(A,B,AgivenB, BgivenA)+ (1-rsquare)*naiveAnd(A,B)
-def adjAnd(A,B,AgivenB, BgivenA,rsquare):
-	if rsquare>.25:
-		return propAnd(A,B,AgivenB, BgivenA)
-	else:
-		return naiveAnd(A,B)
-	#return rsquare*propOr(A,B,AgivenB, BgivenA)+ (1-rsquare)*naiveOr(A,B)
-def Inv(x, inverter): #inverts if necessary then applies hill fun
-	if inverter:
-		return (1-x)
-	else:
-		return (x)
-
-class simulatorClass:
-	#class for simulations.... the simType gives the formalism to be used
-	# if statements below map 'and' and 'or' to the correct functions for the simtype
-	def __init__(self,simTyping):
-		self.simType=simTyping
-		self.trainingData=[]
-		if simTyping=='prop':
-			self.And=propAnd
-			self.Or=propOr
-			self.Inv=Inv
-			self.corrMat={}
-			self.switch=1			
-			self.simSteps=1
-			self.adj=0
-		if simTyping=='propAdj':
-			self.And=adjAnd
-			self.Or=adjOr
-			self.Inv=Inv
-			self.corrMat={}
-			self.switch=1			
-			self.simSteps=1
-			self.adj=1
-		if simTyping=='fuzzy':
-			self.And=fuzzyAnd
-			self.Inv=Inv
-			self.Or=fuzzyOr
-			self.corrMat=0
-			self.switch=0
-			params=paramClass()
-			self.simSteps= params.simSteps
-		if simTyping=='bool':
-			self.And=boolAnd
-			self.Or=boolOr
-			self.Inv=boolInv
-			self.corrMat=0
-			self.switch=0
-			params=paramClass()
-			self.simSteps= params.simSteps
-		if simTyping=='propNaive':
-			self.And=naiveAnd
-			self.Or=naiveOr
-			self.Inv=Inv
-			self.corrMat=0
-			self.switch=0
-			params=paramClass()
-			self.simSteps= params.simSteps
-	def train(self, model):
-		#self.trainingData
-		self.andTrainer=[]
-		self.orDicts=[]
-		# saved as [m,b,m,b],....[m, b, m, b], [train]
-		for currentNode in range(0,len(model.nodeList)):
-			newdict={}
-			self.orDicts.append(newdict) # add a blank dictionary for the or regressions on each node...
-			andNodes=model.andNodeList[currentNode] # find the list of shadow and nodes we must compute before computing value of current nodes
-			andNodeInvertList=model.andNodeInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
-			if model.andLenList[currentNode]==0:
-				self.andTrainer.append([]) #if no inputs, no and nodes
-			elif len(andNodes)==1 : 
-				#if only one input, still don't need shadow and nodes
-				self.andTrainer.append([])
-			else:
-				#if more than one input, we need to train and nodes
-				tempTrainer=[] # store all and nodes for a particular node
-
-				#go through and nodes and produce solutions for each
-				for andindex in range(0,len(andNodes)):
-					temp=[] #store values for a particular and node
-					if not len(andNodes[andindex])==1:
-						#do iterative calculation on AND nodes storing as you go.... 
-						for nodeIn in range(len(andNodes[andindex])):
-							#set up initial vars with first node in the set of nodes to be connnected by AND
-								if nodeIn==0:
-									node1index=andNodes[andindex][0]
-									node1=[]
-									for sample in self.trainingData:
-										node1.append(sample[node1index])
-									tempdata=node1
-								else:
-									# update training data and value using AND rule
-									node1index=andNodes[andindex][nodeIn]
-									node1=[]
-									for sample in self.trainingData:
-										node1.append(sample[node1index])
-									slope1, intercept1, r_value1, p_value, std_err = regress.linregress(tempdata,node1)
-									slope2, intercept2, r_value2, p_value, std_err = regress.linregress(node1,tempdata)
-									# if(p_value<.1):
-									# 	print(model.nodeList[currentNode])
-									# 	print(model.nodeList[node1index])
-									#store relevant linreg results
-									temp.append([slope1,intercept1, slope2, intercept2,(r_value1**2+r_value2**2)/2])
-									for sample in range(len(self.trainingData)):
-										if self.adj:
-											tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],tempdata[sample]*slope1+intercept1,self.trainingData[sample][node1index]*slope2+intercept2,(r_value1**2+r_value2**2)/2)
-										else:
-											tempdata[sample]=self.And(self.trainingData[sample][node1index],tempdata[sample],tempdata[sample]*slope1+intercept1,self.trainingData[sample][node1index]*slope2+intercept2)
-						# append the tempdata to do or calculations....
-						temp.append(tempdata)
-					tempTrainer.append(temp)
-				self.andTrainer.append(tempTrainer)
-
-def updateNode(currentNode,oldValue,nodeIndividual, model,simulator):
+def updateBool(currentNode,oldValue,nodeIndividual, model):
 	# we update node by updating shadow and nodes then combining them to update or nodes. 
 	andNodes=model.andNodeList[currentNode] # find the list of shadow and nodes we must compute before computing value of current nodes
 	andNodeInvertList=model.andNodeInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
-	if model.andLenList[currentNode]==0:
-		return oldValue[currentNode] #if no inputs, maintain value
-	elif len(andNodes)==1 or sum(nodeIndividual)==0: 
-		#if only one input, then can either affect or not affect the node. so either keep the value or update to the single input's value
-		if nodeIndividual[0]==1:
-			#if only one input, then set to that number
-			value=simulator.Inv(oldValue[andNodes[0][0]],andNodeInvertList[0][0])
-		else:
-			value=oldValue[currentNode] #if no inputs, maintain value
-		return value
-	else:
-		#update nodes with more than one input
+	#update nodes with more than one input
+	# first deal with case of simple logic without need of linear regression
+	counter =0
+	orset=[]
+	# go through list of possible shadow and nodes to see which ones actually contribute
+	for andindex in range(len(nodeIndividual)):
+		if nodeIndividual[andindex]==1:
+			# if a shadow and contributes, compute its value using its upstream nodes
+			# calculate value of first then use and to append rest in list of predecessors
+			newval=oldValue[andNodes[andindex][0]]^andNodeInvertList[andindex][0]
+			for addnode in range(1,len(andNodes[andindex])):
+				newval=newval&(oldValue[andNodes[andindex][addnode]]^andNodeInvertList[andindex][addnode])
+			orset.append(newval)
+	#combine the shadow and nodes with or operations
+	newval=orset.pop()
+	for val in orset:
+		newval= newval | val
+	return newval
 
-		# first deal with case of simple logic without need of linear regression
-		if simulator.switch==0:
-			counter =0
-			orset=[]
-			# go through list of possible shadow and nodes to see which ones actually contribute
-			for andindex in range(len(nodeIndividual)):
-				if nodeIndividual[andindex]==1:
-					# if a shadow and contributes, compute its value using its upstream nodes
-					# calculate value of first then use and to append rest in list of predecessors
-					newval=Inv(oldValue[andNodes[andindex][0]],andNodeInvertList[andindex][0])
-					for addnode in range(1,len(andNodes[andindex])):
-						newval=simulator.And(newval,simulator.Inv(oldValue[andNodes[andindex][addnode]],andNodeInvertList[andindex][addnode]))
-					orset.append(newval)
-			#combine the shadow and nodes with or operations
-			newval=orset.pop()
-			for val in orset:
-				newval=simulator.Or(newval,val)
-			return newval
-		else:
-			#now we have the case of a proportional boolean network to solve. 
-			ortraininglist=[]
-			orset=[]
-			incNodes=[] # and nodes included
-			orDict=simulator.orDicts[currentNode]
-			for andindex in range(len(nodeIndividual)):
-				if nodeIndividual[andindex]==1:
-					incNodes.append(andindex)
-					# if a shadow and contributes, compute its value using its upstream nodes
-					# first for special case of only a single node as pred to shadow and node
-					if len(andNodes[andindex])==1:
-						node1index=andNodes[andindex][0]
-						# add value of that pred to list of shadow and node values
-						orset.append(oldValue[andNodes[andindex][0]])
-						node1=[]
-						# compute value of this shadow and across the training data
-						for sample in simulator.trainingData:
-							node1.append(sample[node1index])
-						ortraininglist.append(node1)
-					else:
-						#calculate values across AND nodes
-						for nodeIn in range(len(andNodes[andindex])):
-							#set up initial vars with first node in the set of nodes to be connnected by AND
-							
-							if nodeIn==0:
-								node1index=andNodes[andindex][0]
-								node1=[]
-								for sample in simulator.trainingData:
-									node1.append(sample[node1index])
-								temptraining=node1
-								tempVal=oldValue[node1index]
-							else:
-								# update training data and value using AND rule
-								node1index=andNodes[andindex][nodeIn]
-								slope1=simulator.andTrainer[currentNode][andindex][nodeIn][0]
-								intercept1=simulator.andTrainer[currentNode][andindex][nodeIn][1]
-								slope2=simulator.andTrainer[currentNode][andindex][nodeIn][2]
-								intercept2=simulator.andTrainer[currentNode][andindex][nodeIn][3]
-								if simulator.adj: # case where we adjust by the r value
-									rval=simulator.andTrainer[currentNode][andindex][nodeIn][4]
-									tempVal=simulator.And(oldValue[node1index],tempVal,tempVal*slope1+intercept1,oldValue[node1index]*slope2+intercept2,rval)
-								else:
-									tempVal=simulator.And(oldValue[node1index],tempVal,tempVal*slope1+intercept1,oldValue[node1index]*slope2+intercept2)
-							# append calculated values of training and test 
-							ortraininglist.append(simulator.andTrainer[currentNode][andindex][-1])
-							orset.append(tempVal)
-			# combine or nodes below
-			currentrain=[]
-			for i in range(len(orset)):
-				if i==0:
-					#set up initial or value
-					currentval=orset[0]
-					if len(orset)>1:
-						currentrain=ortraininglist[0]
+def updateFuzzy(currentNode,oldValue,nodeIndividual, model):
+	# we update node by updating shadow and nodes then combining them to update or nodes. 
+	andNodes=model.andNodeList[currentNode] # find the list of shadow and nodes we must compute before computing value of current nodes
+	andNodeInvertList=model.andNodeInvertList[currentNode] #find list of lists of whether input nodes need to be inverted (corresponds to inputOrder)
+	#update nodes with more than one input
+	# first deal with case of simple logic without need of linear regression
+	counter = 0
+	orset=[]
+	# go through list of possible shadow and nodes to see which ones actually contribute
+	for andindex in range(len(nodeIndividual)):
+		if nodeIndividual[andindex]==1:
+			# if a shadow and contributes, compute its value using its upstream nodes
+			# calculate value of first then use and to append rest in list of predecessors
+			if andNodeInvertList[andindex][0]:
+				newval=1-oldValue[andNodes[andindex][0]]
+			else:
+				newval=oldValue[andNodes[andindex][0]]
+			for addnode in range(1,len(andNodes[andindex])):
+				if oldValue[andNodes[andindex][addnode]]:
+					newval=min(newval,1-andNodeInvertList[andindex][addnode])
 				else:
-					# update with OR values
-					if tuple(incNodes[0:i]) in orDict.keys():
-						slope1=orDict[tuple(incNodes[0:i])][0]
-						intercept1=orDict[tuple(incNodes[0:i])][1]
-						slope2=orDict[tuple(incNodes[0:i])][2]
-						intercept2=orDict[tuple(incNodes[0:i])][3]
-						currentrain=orDict[tuple(incNodes[0:i])][4]
-						rvalue=orDict[tuple(incNodes[0:i])][5]
-					else:
-						slope1, intercept1, r_value1, p_value, std_err = regress.linregress(currentrain,ortraininglist[i])
-						slope2, intercept2, r_value2, p_value, std_err = regress.linregress(ortraininglist[i],currentrain)
-						for j in range(len(ortraininglist[i])):
-							if simulator.adj:
-								currentrain[j]=simulator.Or(ortraininglist[i][j],currentrain[j],currentrain[j]*slope1+intercept1,ortraininglist[i][j]*slope2+intercept2,(r_value1**2+r_value2**2)/2)
-							else:
-								currentrain[j]=simulator.Or(ortraininglist[i][j],currentrain[j],currentrain[j]*slope1+intercept1,ortraininglist[i][j]*slope2+intercept2)
-						orDict[tuple(incNodes[0:i])]=[slope1,intercept1,slope2, intercept2,currentrain,(r_value1**2+r_value2**2)/2 ]
-						rvalue=(r_value1**2+r_value2**2)/2
-					if simulator.adj:
-						currentval=simulator.Or(orset[i],currentval,slope1*currentval+intercept1,slope2*orset[i]+intercept2, rvalue)
-					else:
-						currentval=simulator.Or(orset[i],currentval,slope1*currentval+intercept1,slope2*orset[i]+intercept2)
-			return currentval
+					newval=min(newval,andNodeInvertList[andindex][addnode])
+			orset.append(newval)
+	#combine the shadow and nodes with or operations
+	newval=orset.pop()
+	for val in orset:
+		newval= max(newval , val)
+	return newval
 
 #run a simulation given a starting state
-def runModel(individual, model, simulator, initValues, params, knockouts, knockins):
+def runBool(individual, model,  simSteps, initValues, params, knockouts, knockins):
 	if params.async:
-		return averageResultModelSim(individual, model, simulator, initValues, params, knockouts, knockins)
+		return asyncBool(individual, model, simSteps, initValues, params.iters, knockouts, knockins)
 	else:
-		return iterateModel(individual, model, simulator, initValues, params, knockouts, knockins)
+		return syncBool(individual, model, simSteps, initValues, knockouts, knockins)
 
-#run a simulation and average it over iters trials
-def averageResultModelSim(individual, model, simulator, initValues, params, knockouts, knockins):
-	sum=[0 for x in range(0,len(initValues))]
-	for i in range(0,params.iters):
-		avg=iterateModel(individual, model, simulator, initValues, params, knockouts, knockins)
-		for j in range(0,len(sum)):
-			sum[j]=sum[j]+avg[j]
-	avgs=list(sum)
-	for i in range(0,len(sum)):
-		avgs[i]=sum[i]/float(params.iters)
-	return avgs
+def runFuzzy(individual, model,  simSteps, initValues, params, knockouts, knockins):
+	if params.async:
+		return asyncFuzzy(individual, model,  initValues, params.iters, knockouts, knockins)
+	else:
+		return syncFuzzy(individual, model, initValues, knockouts, knockins)
 
-def iterateModel(individual, model, simulator, initValues, params, knockouts, knockins):
+def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	# set up data storage for simulation, add step 0
 	newValue=list(initValues)
 	simData=[]
 	simData.append(list(newValue))
-	# totalNodes=0... turn this on for information criterion
 
-	# set up the sequence of nodes to be updated
-	seq=range(0,len(model.nodeList))
 	#iterate over number of steps necessary
-	for step in range(0,simulator.simSteps):
+	for step in range(0,simSteps):
 		oldValue=list(newValue)
-
-		if params.async: #shuffle if async 
-			shuffle(seq)
 		for i in range(0,len(model.nodeList)):
 			#find start and finish for each node to update from the individualParse list
 			if i in knockouts:
 				temp=0
 			elif i in knockins:
 				temp=1
+			elif model.andLenList[i]==1:
+				temp=   oldValue[i]^model.andNodeInvertList[i][0][0]
+			elif model.andLenList[i]==0:
+				temp=oldValue[i]
 			else:
-				endTimes=False
-				if seq[i]==len(model.nodeList)-1:
+				if i==len(model.nodeList)-1:
 					end= model.size
-					endTimes=True
 				else:
-					end=model.individualParse[seq[i]+1]	 
-				#sum up number of nodes in rule... useful if you want an information criterion
-				# if i==0:
-				# 	for bit in range(model.individualParse[seq[i]],end):
-				# 		if individual[bit]==1:
-				# 			totalNodes=totalNodes+len(model.andNodeInvertList[seq[i]][bit-model.individualParse[seq[i]]])
-				#update based on sync or async assumptions
-				if endTimes:
-					if params.async:
-						temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:],  model,simulator)
-					else:
-						temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:], model,simulator)
-				else:
-					if params.async:
-						temp=updateNode(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model,simulator)
-					else:
-						temp=updateNode(seq[i],oldValue,individual[model.individualParse[seq[i]]:end], model,simulator)
-			newValue[seq[i]]=temp
-
+					end=model.individualParse[i+1]	 
+				temp=updateBool(i,oldValue,individual[model.individualParse[i]:end], model)
+			newValue[i]=temp
 		simData.append(list(newValue))
-	if not params.async:
-		avgs= [[] for x in range(0,len(newValue))]
-		#stdev= [0 for x in range(0,len(newValue))]
-		# for step in range(0,len(simData)):
-		# 	for element in range(0,len(avg)):
-		# 		simData[step][element]=simData[step][element]+params.sigmaNetwork*random()
-		for element in range(0,len(avgs)):
-			avgs[element]=[simData[step][element] for step in range(len(simData)-10,len(simData)) ]
-		# for step in range(len(simData)-10,len(simData)):
-		# 	for element in range(0,len(avg)):
-		# 		avg[element]=avg[element]+simData[step][element]
-		avg= [1.*np.sum(element)/len(element) for element in avgs]
-		#for step in range(len(simData)-10,len(simData)):
-			#for element in range(0,len(avg)):
-				#stdev[element]=stdev[element]+(simData[step][element]-avg[element])^2
-		#return (avg, stdev)
-		return avg
-	else:
-		return simData.pop()
+	avgs= [[] for x in range(0,len(newValue))]
+	for element in range(0,len(avgs)):
+		avgs[element]=[simData[step][element] for step in range(len(simData)-10,len(simData)) ]
+	avg= [1.0*np.sum(element)/len(element) for element in avgs]
+	return avg
 
-#calculate average induced change by node
-def calcImportance(individual,params,model,simulator, sss):
-	importanceScores=[]
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(len(sss)):
-		knockoutLists.append([])
-		knockinLists.append([])
-	for node in range(len(model.nodeList)):
-		tempImp=0
-		SSEs=[]
-		for j in range(0,len(sss)):
-			ss=sss[j]
-			initValues=model.initValueList[j]
-			if initValues[node]>.1:
-				initValues[node]=initValues[node]-.1
+def syncFuzzy(individual, model, simSteps, initValues, knockouts, knockins):
+	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
+	# set up data storage for simulation, add step 0
+	newValue=list(initValues)
+	simData=[]
+	simData.append(list(newValue))
+	#iterate over number of steps necessary
+	for step in range(0,simSteps):
+		oldValue=list(newValue)
+		for i in range(0,len(model.nodeList)):
+			#find start and finish for each node to update from the individualParse list
+			if i in knockouts:
+				temp=0
+			elif i in knockins:
+				temp=1
+			elif model.andLenList[i]==1:
+				temp=   oldValue[i]^model.andNodeInvertList[i][0][0]
+			elif model.andLenList[i]==0:
+				temp=oldValue[i]
 			else:
-				initValues[node]=initValues[node]+.1
-			SSE1=0
-			boolValues =runModel(individual, model,simulator, model.initValueList[j], params, knockoutLists, knockinLists)
-			for i in range(0, len(model.nodeList)):
-				SSE1+=(boolValues[i]-ss[model.nodeList[i]])**2
-				initValues=model.initValueList[j]
-			if initValues[node]>.9:
-				SSE2=SSE1
-			else:
-				initValues[node]=initValues[node]+.1
-				SSE2=0
-				boolValues=runModel(individual, model,simulator, model.initValueList[j], params, knockoutLists, knockinLists)
-				for i in range(0, len(model.nodeList)):
-					SSE2+=(boolValues[i]-ss[model.nodeList[i]])**2
-					initValues=model.initValueList[j]
-			SSEs.append(SSE1+SSE2)
-		importanceScores.append(sum(SSEs))
-	return importanceScores
+				if i==len(model.nodeList)-1:
+					end= model.size
+				else:
+					end=model.individualParse[i+1]	 
+				temp=updateFuzzy(i,oldValue,individual[model.individualParse[i]:end], model)
+			newValue[i]=temp
+		simData.append(list(newValue))
+	avgs= [[] for x in range(0,len(newValue))]
+	for element in range(0,len(avgs)):
+		avgs[element]=[simData[step][element] for step in range(len(simData)-10,len(simData)) ]
+	avg= [1.*np.sum(element)/len(element) for element in avgs]
+	return avgs
+
+#run asyncrhnonoyus simulation and average it over iters trials
+def asyncBool(individual, model, simSteps, initValues, iters, knockouts, knockins):
+	sum1=[0 for x in range(0,len(initValues))]
+	# run iterations with different orderings
+	for i in range(0,params.iters):
+		# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
+		# set up data storage for simulation, add step 0
+		newValue=list(initValues)
+		# totalNodes=0... turn this on for information criterion
+
+		# set up the sequence of nodes to be updated
+		seq=range(0,len(model.nodeList))
+		#iterate over number of steps necessary
+		for step in range(0,simSteps):
+			oldValue=list(newValue)
+			#shuffle- async 
+			shuffle(seq)
+			for seq[i] in range(0,len(model.nodeList)):
+				#find start and finish for each node to update from the individualParse list
+				if seq[i] in knockouts:
+					temp=0
+				elif seq[i] in knockins:
+					temp=1
+				elif model.andLenList[seq[i]]==1:
+					if model.andNodeInvertList[seq[i]][0][0]:
+						temp=   1- oldValue[seq[i]]
+					else:
+						temp=  oldValue[seq[i]]
+				elif model.andLenList[seq[i]]==0:
+					temp=oldValue[seq[i]]
+				else:
+					if seq[i]==len(model.nodeList)-1:
+						end= model.size
+					else:
+						end=model.individualParse[i+1]	 
+					temp=updateBool(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model)
+				newValue[seq[i]]=temp
+		for j in range(0,len(sum1)):
+			sum1[j]=sum1[j]+newValue[j]
+	avgs=list(sum1)
+	for i in range(0,len(sum1)):
+		avgs[i]=sum1[i]/float(params.iters)
+	return avgs
+
+#run asyncrhnonoyus simulation and average it over iters trials
+def asyncFuzzy(individual, model, simSteps, initValues, iters, knockouts, knockins):
+	sum1=[0 for x in range(0,len(initValues))]
+	# run iterations with different orderings
+	for i in range(0,params.iters):
+		# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
+		# set up data storage for simulation, add step 0
+		newValue=list(initValues)
+		# totalNodes=0... turn this on for information criterion
+
+		# set up the sequence of nodes to be updated
+		seq=range(0,len(model.nodeList))
+		#iterate over number of steps necessary
+		for step in range(0,simSteps):
+			oldValue=list(newValue)
+			#shuffle- async 
+			shuffle(seq)
+			for i in range(0,len(model.nodeList)):
+				#find start and finish for each node to update from the individualParse list
+				if seq[i] in knockouts:
+					temp=0
+				elif seq[i] in knockins:
+					temp=1
+				elif model.andLenList[seq[i]]==1:
+					if model.andNodeInvertList[seq[i]][0][0]:
+						temp=   1- oldValue[seq[i]]
+					else:
+						temp=  oldValue[seq[i]]
+				elif model.andLenList[seq[i]]==0:
+					temp=oldValue[seq[i]]
+				else:
+					if seq[i]==len(model.nodeList)-1:
+						end= model.size
+					else:
+						end=model.individualParse[seq[i]+1]	 
+					temp=updateFuzzy(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model)
+				newValue[seq[i]]=temp
+		for j in range(0,len(sum1)):
+			sum1[j]=sum1[j]+newValue[j]
+	avgs=list(sum1)
+	for i in range(0,len(sum1)):
+		avgs[i]=sum1[i]/float(params.iters)
+	return avgs
+
+# init value generator for EBNs
+def genEBNInitValues(individual, model,sampleProbs):
+	#return [True if (random()<sampleProbs[node]) else False for node in range(0,len(sampleProbs))]
+	initValues=[False for x in range(0,len(model.nodeList))]
+	for node in range(0,len(sampleProbs)):
+		if random()<sampleProbs[node]:
+			initValues[node]=True
+	return initValues
+
+# main EBN simulation code. Runs an EBN
+def EBNbool(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict):
+	cellArray=[]
+	simSteps=3*len(model.nodeList)
+	if not str(individual) in iteratorDict:
+		iteratorDict[str(individual)]={}
+	valueDict=iteratorDict[str(individual)]
+
+	for j in range(0,cells):
+		# shuffle nodes to be initially called.... 
+		#simulations that are truly random starting states should have all nodes added to this list
+		#get initial values for all nodes
+		initValues=genEBNInitValues(individual, model,initProbs)
+		if str(initValues) in valueDict.keys():
+			vals=valueDict[str(initValues)]
+		else:
+			# run Boolean simulation with initial values and append
+			vals=runBool(individual, model,simSteps, initValues, params, KOs, KIs)
+			valueDict[str(initValues)]=vals
+		cellArray.append(vals)
+	return [1.*np.sum(col) / float(cells) for col in zip(*cellArray)]
+
+
+def EBNfuzzy(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict):
+	cellArray=[]
+	simSteps=3*len(model.nodeList)
+	if not str(individual) in iteratorDict:
+		iteratorDict[str(individual)]={}
+	valueDict=iteratorDict[str(individual)]
+
+	for j in range(0,cells):
+		# shuffle nodes to be initially called.... 
+		#simulations that are truly random starting states should have all nodes added to this list
+		#get initial values for all nodes
+		initValues=genEBNInitFuzzies(individual, model,initProbs)
+		if str(initValues) in valueDict.keys():
+			vals=valueDict[str(initValues)]
+		else:
+			# run Boolean simulation with initial values and append
+			vals=runFuzzy(individual, model,simSteps, initValues, params, KOs, KIs)
+			valueDict[initValues]=vals
+		cellArray.append(vals)
+	return [1.*np.sum(col) / float(cells) for col in zip(*cellArray)]

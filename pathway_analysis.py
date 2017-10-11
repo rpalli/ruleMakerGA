@@ -1,3 +1,14 @@
+#import python packages
+import networkx as nx
+import operator
+from sets import Set
+import scipy.stats as stat
+import matplotlib.pyplot as plt
+import requests
+
+# import other pieces of our software
+import networkConstructor as nc
+import murphyReader as mr
 
 def read_gmt(filename):
 	gmt_dict={}
@@ -54,6 +65,7 @@ def retrieveGraph(name,aliasDict,dict1,dict2, geneDict):
 			if len(newOverlap)>4:
 				nx.write_graphml(graph,coder+'.graphml')
 				nx.write_gpickle(graph,coder+'.gpickle')
+				return coder+'.gpickle'
 		else:
 			graphLen=0
 		print('graphlen:')
@@ -66,6 +78,7 @@ def retrieveGraph(name,aliasDict,dict1,dict2, geneDict):
 		print('not found:')
 		print(requester)
 		print(lines)
+	return ''
 
 def findPathways():
 	geneDict=mr.readData() # get -omics data
@@ -103,7 +116,6 @@ def findPathways():
 	# 		codelist.append(coder)			
 	# 		nx.write_graphml(graph,coder+'_unsimplified.graphml')
 	# 		nx.write_gpickle(graph,coder+'_unsimplified.gpickle')
-
 
 def simplifyNetworkpathwayAnalysis(graph, ss):
 	#network simplification algorithm. 
@@ -213,3 +225,62 @@ def simplifyNetworkpathwayAnalysis(graph, ss):
 		if edge[0]==edge[1]:
 			graph.remove_edge(edge[0],edge[1])
 	return graph
+
+
+def findClustDiff(lister):
+	mixer= mix.GaussianMixture(n_components=2, covariance_type='full').fit([[a] for a in lister])
+	return abs(mixer.means_[0]-mixer.means_[1])
+
+
+def indDistFind(name, ssDict):
+	[[dev1,dev3],[bruteOut1,bruteOut3],[model1,model3]]=pickle.Unpickler(open( 'pickles/'+name+"_output.pickle", "rb" )).load()
+	# generate SSS which is a list of SSs where SS is a dict pointing to some values
+	keyList=ssDict.keys()
+	sss=[{} for i in range(len(ssDict[keyList[0]]))]
+	newInitValueList=[[] for i in range(len(ssDict[keyList[0]]))]
+	for i in range(len(sss)):
+		for key in keyList:
+			if key in graph.nodes():
+				sss[i][key]=ssDict[key][i]
+	params=sim.paramClass()
+
+	simulator=sim.simulatorClass('bool')
+	importanceScores=sim.calcImportance(bruteOut1,params,model1,simulator, sss)
+
+	pickle.dump( importanceScores, open( name+"_scores.pickle", "wb" ) )
+
+#calculate average induced change by node
+def calcImportance(individual,params,model,simulator, sss):
+	importanceScores=[]
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(len(sss)):
+		knockoutLists.append([])
+		knockinLists.append([])
+	for node in range(len(model.nodeList)):
+		tempImp=0
+		SSEs=[]
+		for j in range(0,len(sss)):
+			ss=sss[j]
+			initValues=model.initValueList[j]
+			if initValues[node]>.1:
+				initValues[node]=initValues[node]-.1
+			else:
+				initValues[node]=initValues[node]+.1
+			SSE1=0
+			boolValues =runModel(individual, model,simulator, model.initValueList[j], params, knockoutLists, knockinLists)
+			for i in range(0, len(model.nodeList)):
+				SSE1+=(boolValues[i]-ss[model.nodeList[i]])**2
+				initValues=model.initValueList[j]
+			if initValues[node]>.9:
+				SSE2=SSE1
+			else:
+				initValues[node]=initValues[node]+.1
+				SSE2=0
+				boolValues=runModel(individual, model,simulator, model.initValueList[j], params, knockoutLists, knockinLists)
+				for i in range(0, len(model.nodeList)):
+					SSE2+=(boolValues[i]-ss[model.nodeList[i]])**2
+					initValues=model.initValueList[j]
+			SSEs.append(SSE1+SSE2)
+		importanceScores.append(sum(SSEs))
+	return importanceScores

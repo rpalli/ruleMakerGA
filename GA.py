@@ -3,29 +3,18 @@
 import pickle
 from deap import base, creator, gp, tools
 from deap import algorithms as algo
-from random import random, seed, shuffle
-import random as rand
-import networkx as nx
+from random import random, seed, shuffle, randint, sample, choice
 import numpy as numpy
-import copy as copy
 import operator
 import math as math
 from sets import Set
 from joblib import Parallel, delayed
-import argparse as argparse
-import scipy.stats as stat
-from sets import Set
-import matplotlib.pyplot as plt
-import requests
 
-import sklearn.mixture as mix
 # import other pieces of our software
-import networkConstructor as nc
 import utils as utils
-import simulation as sim
-import murphyReader as mr
-import motif_cutter as mc
+from simulation import paramClass, EBNbool
 
+# generates random bitstring with at least one value for each node
 def genBits(model):
 	startInd=list(utils.genRandBits(model.size))
 	counter=0
@@ -51,6 +40,7 @@ def genBits(model):
 			startInd[start]=1
 	return startInd
 
+# executes two point crossover at node junctions
 def cxTwoPointNode(ind1, ind2, model):
 	"""Executes a two-point crossover on the input :term:`sequence`
     individuals. The two individuals are modified in place and both keep
@@ -64,8 +54,8 @@ def cxTwoPointNode(ind1, ind2, model):
     base :mod:`random` module.
     """
 	size = len(model.nodeList)
-	cxpoint1 = rand.randint(1, size)
-	cxpoint2 = rand.randint(1, size - 1)
+	cxpoint1 = randint(1, size)
+	cxpoint2 = randint(1, size - 1)
 	if cxpoint2 >= cxpoint1:
 		cxpoint2 += 1
 	else: # Swap the two cx points
@@ -81,6 +71,8 @@ def cxTwoPointNode(ind1, ind2, model):
 		return ind1, ind2
 	else:
 		return ind2, ind1
+
+# sets up GA toolbox for deap/adaptive
 def buildToolbox( individualLength, bitFlipProb, model):
 	# # #setup toolbox
 	toolbox = base.Toolbox()
@@ -90,7 +82,7 @@ def buildToolbox( individualLength, bitFlipProb, model):
 	pset.addPrimitive(operator.sub, 2)
 	pset.addPrimitive(operator.mul, 2)
 	weightTup=(-1.0,)
-	params=sim.paramClass()
+	params=paramClass()
 	if params.adaptive:
 		for i in range(len(model.nodeList)-1):
 			weightTup+=(-1.0,)
@@ -114,34 +106,22 @@ def buildToolbox( individualLength, bitFlipProb, model):
 	toolbox.register("select", tools.selNSGA2)
 	toolbox.register("similar", numpy.array_equal)
 	return toolbox, stats
-			
+
+# fitness calculation based on simulation			
 def evaluate(individual, cells, model,  sss, params, KOlist, KIlist,iteratorDict):
 	SSEs=[]
 	for j in range(0,len(sss)):
-		boolValues=iterateBooleanModel(individual, model, cells, model.initValueList[j], params,KOlist[i], KIlist[i], iteratorDict)
+		boolValues=EBNbool(individual, model, cells, model.initValueList[j], params,KOlist[i], KIlist[i], iteratorDict)
 		SSE=numpy.sum([(boolValues[i]-sss[j][model.nodeList[i]])**2 for i in range(0, len(model.nodeList))])
 		SSEs.append(SSE)
 	summer=1.*numpy.sum(SSEs)/len(SSEs)
-	for j in range(len(model.nodeList)):
-		if model.andLenList[j]>0:
-			if j==len(model.nodeList)-1:
-				end= model.size
-			else:
-				end=model.individualParse[j+1]
-			temptruther=individual[model.individualParse[j]:end]
-			if len(temptruther)==1:
-				individual[model.individualParse[j]:end]=[1]
-			elif len(temptruther)>1:
-				if numpy.sum(temptruther)==0:
-					summer+=1000
 	return summer,
-	
+
+# calculate node-wise fitness
 def evaluateByNode(individual, cells, model,  sss, params, KOlist, KIlist,iteratorDict):
-	# SSEs=[]
-	#boolValues=Parallel(n_jobs=min(6,len(sss)))(delayed(iterateBooleanModel)(list(individual), model, cells, model.initValueList[i], params) for i in range(len(sss)))
-	boolValues=[iterateBooleanModel(list(individual), model, cells, model.initValueList[i], params, KOlist[i], KIlist[i],iteratorDict) for i in range(len(sss))]
-	SSEs= [numpy.sum([(boolValues[j][i]-sss[j][model.nodeList[i]])**2 for j in range(0,len(sss))]) for i in range(0, len(model.nodeList))]
-	return tuple(SSEs)
+	boolValues=[EBNbool(list(individual), model, cells, model.initValueList[i], params, KOlist[i], KIlist[i],iteratorDict) for i in range(len(sss))]
+	return tuple([numpy.sum([(boolValues[j][i]-sss[j][model.nodeList[i]])**2 for j in range(0,len(sss))]) for i in range(0, len(model.nodeList))])
+
 # generates a random set of samples made up of cells by using parameteris from probInit seq
 # to set up then iterating using strict Boolean modeling. 
 def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlist, KIlist,iteratorDict):
@@ -149,54 +129,18 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlis
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random())
-	samples=Parallel(n_jobs=min(24,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i],iteratorDict) for i in range(sampleNum))
-	# counter=0
-	# for sample in range(len(samples)):
-	# 	if sum(samples(sample))==0:
-	# 		temp=samples.pop(sample) 
-	# newSamples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i]) for i in range(sampleNum))
-	# print(samples)
+	samples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i],iteratorDict) for i in range(sampleNum))
 	return samples
-	
+
+# generates random seed samples... i.e. generates random starting states then runs EBN
 def sampler(individual, model, cells, seeder, params, KOs, KIs,iteratorDict):
 	seed(seeder)
 	cellArray=[]
 	sampleProbs=[]
-	simulator=sim.simulatorClass('bool')
 	# generate random proportions for each node to start
 	for j in range(0,len(model.nodeList)):
 		sampleProbs.append(random())
 	return iterateBooleanModel(individual, model, cells, sampleProbs, params, KOs, KIs,iteratorDict)
-
-def iterateBooleanModel(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict):
-	cellArray=[]
-	simulator=sim.simulatorClass('bool')
-	simulator.simSteps=3*len(model.nodeList)
-	if not individual in iteratorDict:
-		iteratorDict[individual]={}
-	valueDict=iteratorDict[individual]
-
-	for j in range(0,cells):
-		# shuffle nodes to be initially called.... 
-		#simulations that are truly random starting states should have all nodes added to this list
-		#get initial values for all nodes
-		initValues=genPBNInitValues(individual, model,initProbs)
-		if initValues in valueDict.keys():
-			vals=valueDict[initValues]
-		else:
-			# run Boolean simulation with initial values and append
-			vals=sim.runModel(individual, model, simulator, initValues, params, KOs, KIs)
-			valueDict[initValues]=vals
-		cellArray.append(vals)
-	return [1.*numpy.sum(col) / float(cells) for col in zip(*cellArray)]
-
-def genPBNInitValues(individual, model,sampleProbs):
-	#return [True if (random()<sampleProbs[node]) else False for node in range(0,len(sampleProbs))]
-	initValues=[False for x in range(0,len(model.nodeList))]
-	for node in range(0,len(sampleProbs)):
-		if random()<sampleProbs[node]:
-			initValues[node]=True
-	return initValues
 
 def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac):
 	# algorithm for generating a list of offspring... copied and pasted from DEAP with modification for adaptive mutation
@@ -206,17 +150,17 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac):
 	for _ in xrange(lambda_):
 		op_choice = random()
 		if op_choice < cxpb:            # Apply crossover
-			ind1, ind2 = map(toolbox.clone, rand.sample(population, 2))
+			ind1, ind2 = map(toolbox.clone, sample(population, 2))
 			ind1, ind2 = cxTwoPointNode(ind1, ind2, model)
 			del ind1.fitness.values
 			offspring.append(ind1)
 		elif op_choice < cxpb + mutpb:  # Apply mutation
-			ind = toolbox.clone(rand.choice(population))
+			ind = toolbox.clone(choice(population))
 			ind, = mutFlipBitAdapt(ind,  .5, model, genfrac)
 			del ind.fitness.values
 			offspring.append(ind)
 		else:                           # Apply reproduction
-			offspring.append(rand.choice(population))
+			offspring.append(choice(population))
 	return offspring
 
 def mutFlipBitAdapt(individual, indpb, model, genfrac):
@@ -401,7 +345,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
 	# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+	fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
@@ -428,7 +372,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
 		#fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+		fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
 
@@ -579,7 +523,7 @@ def GAsearchModel(model, sss,params, KOlist, KIlist):
 			invalid_ind.append(tempultimate)
 		# see which rule is the best
 		if end-start>1:
-			fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params, KOlist, KIlist,iteratorDict) for indy in invalid_ind)
+			fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params, KOlist, KIlist,iteratorDict) for indy in invalid_ind)
 			minny=1000
 			mini=100
 			for i in range(len(fitnesses)):
