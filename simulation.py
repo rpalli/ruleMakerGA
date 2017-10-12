@@ -173,13 +173,12 @@ def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	# set up data storage for simulation, add step 0
 	newValue=list(initValues)
-	simData=[]
-	simData.append(list(newValue))
-
+	nodeNum=len(model.nodeList)
+	simData=np.zeros((nodeNum, simSteps))
 	#iterate over number of steps necessary
 	for step in range(0,simSteps):
 		oldValue=list(newValue)
-		for i in range(0,len(model.nodeList)):
+		for i in range(0,nodeNum):
 			#find start and finish for each node to update from the individualParse list
 			if i in knockouts:
 				temp=0
@@ -196,11 +195,8 @@ def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 					end=model.individualParse[i+1]	 
 				temp=updateBool(i,oldValue,individual[model.individualParse[i]:end], model)
 			newValue[i]=temp
-		simData.append(list(newValue))
-	avgs= [[] for x in range(0,len(newValue))]
-	for element in range(0,len(avgs)):
-		avgs[element]=[simData[step][element] for step in range(len(simData)-10,len(simData)) ]
-	avg= [1.0*np.sum(element)/len(element) for element in avgs]
+			simData[i,step]=temp
+	avg=[.1*np.count_nonzero(simData[i,simSteps-10:simSteps],axis=2) for i in range(nodeNum)]
 	return avg
 
 def syncFuzzy(individual, model, simSteps, initValues, knockouts, knockins):
@@ -337,18 +333,21 @@ def genEBNInitValues(individual, model,sampleProbs):
 def EBNbool(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict):
 	cellArray=[]
 	simSteps=3*len(model.nodeList)
-	if not str(individual) in iteratorDict:
+	try: 
+		valueDict=iteratorDict[str(individual)]
+	except KeyError:
 		iteratorDict[str(individual)]={}
-	valueDict=iteratorDict[str(individual)]
+		valueDict=iteratorDict[str(individual)]
 
 	for j in range(0,cells):
 		# shuffle nodes to be initially called.... 
 		#simulations that are truly random starting states should have all nodes added to this list
 		#get initial values for all nodes
 		initValues=genEBNInitValues(individual, model,initProbs)
-		if str(initValues) in valueDict.keys():
+		# work on integrating in the try catch rather than the if else below
+		try:
 			vals=valueDict[str(initValues)]
-		else:
+		except KeyError:
 			# run Boolean simulation with initial values and append
 			vals=runBool(individual, model,simSteps, initValues, params, KOs, KIs)
 			valueDict[str(initValues)]=vals
@@ -368,11 +367,11 @@ def EBNfuzzy(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict
 		#simulations that are truly random starting states should have all nodes added to this list
 		#get initial values for all nodes
 		initValues=genEBNInitFuzzies(individual, model,initProbs)
-		if str(initValues) in valueDict.keys():
+		if str(initValues) in valueDict:
 			vals=valueDict[str(initValues)]
 		else:
 			# run Boolean simulation with initial values and append
-			vals=runFuzzy(individual, model,simSteps, initValues, params, KOs, KIs)
+			vals=syncBool(individual, model,simSteps, initValues, params, KOs, KIs)
 			valueDict[initValues]=vals
 		cellArray.append(vals)
 	return [1.*np.sum(col) / float(cells) for col in zip(*cellArray)]

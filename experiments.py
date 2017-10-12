@@ -106,7 +106,7 @@ def simTester(graph, name):
 		for j in range(0,len(model.nodeList)):
 			for k in range(0,len(sss)):
 				ss=newSSS[k]
-				if  model.nodeList[j] in sss[0].keys():
+				if  model.nodeList[j] in sss[0]:
 					newInitValueList[k].append(ss[model.nodeList[j]])
 				else:
 					newInitValueList[k].append(0.5)
@@ -162,7 +162,7 @@ def partitionTest(graph,  ssDict):
 	for j in range(0,len(model.nodeList)):
 		for k in range(0,len(sss)):
 			ss=sss[k]
-			if  model.nodeList[j] in sss[0].keys():
+			if  model.nodeList[j] in sss[0]:
 				newInitValueList[k].append(ss[model.nodeList[j]])
 			else:
 				newInitValueList[k].append(0.5)

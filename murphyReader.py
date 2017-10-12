@@ -9,7 +9,7 @@ def readCounts(geneDict, filename, samplesAdded):
 	lines = inputfile.readlines()
 	for line in lines:
 		newline=line.split('\t')
-		if newline[0] not in geneDict.keys():
+		if newline[0] not in geneDict:
 			geneDict[newline[0]]=[]
 			for i in range(samplesAdded):
 				geneDict[newline[0]].append(-1)
@@ -38,7 +38,7 @@ def readData():
 	keyList=[]
 
 
-	for key in tempGeneDict.keys():
+	for key in tempGeneDict:
 		mixer= mix.GaussianMixture(n_components=2, covariance_type='full').fit([[a] for a in tempGeneDict[key]])
 		difference=abs(mixer.means_[0]-mixer.means_[1])
 		if difference>50 and np.mean(tempGeneDict[key])>100:
@@ -52,7 +52,7 @@ def readData():
 # takes a dict of counts across samples and converts it into the ssDict necessary for GA
 def constructOmicsInput(geneDict):
 	ssDict={}
-	for key in geneDict.keys():
+	for key in geneDict:
 		values=list(geneDict[key])	
 		CAND2= [[entry] for entry in values]
 		maxVal=max(values)
