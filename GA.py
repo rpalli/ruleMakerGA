@@ -371,7 +371,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-		#fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+		# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
 		fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
