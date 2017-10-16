@@ -188,15 +188,42 @@ def findPathways(geneDict):
 
 if __name__ == '__main__':
 	import time
+
+
+
+
 	start_time = time.time()
-	geneDict=mr.readData() # get -omics data
-	lister=findPathways(geneDict)
-	ssDict= mr.constructOmicsInput(geneDict)
-	for item in lister:
-		if not item=='':
-			name=item
-			break
+
+	# use the command line to input the file that you want
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument("graph")
+	parser.add_argument("datafile")
+	parser.add_argument("iterNum")
+
+	results = parser.parse_args()
+	graphName=results.graph
+	fileName=results.datafile
+	iterNum=int(results.iterNum)
+	
+	name=graphName[:-8]+'_'+results.iterNum
+
+	# insert your code to get a ssDict here. 
+	# use fileName to read in the discretized file... you want to standardize the format
+	# edit the below name to include the pertinent piece of the filename of discretized data
+	outname=graphName[:-8]+'_'+results.iterNum
+	ssDict= SOMETHING
+
+
+
+
+
+
+
+
+
 	print(name)
 	graph = nx.read_gpickle(name)
-	partitionTester(graph,name,ssDict)
+	print(len(graph.nodes()))
+	partitionTester(graph,outname,ssDict)
 	print("--- %s seconds ---" % (time.time() - start_time))

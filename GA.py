@@ -129,7 +129,7 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlis
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random())
-	samples=Parallel(n_jobs=min(8,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i],iteratorDict) for i in range(sampleNum))
+	samples=Parallel(n_jobs=min(24,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i],iteratorDict) for i in range(sampleNum))
 	return samples
 
 # generates random seed samples... i.e. generates random starting states then runs EBN
@@ -345,7 +345,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
 	# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-	fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
@@ -372,7 +372,7 @@ def eaMuPlusLambdaAdaptive(population, toolbox, model, mu, lambda_, cxpb, mutpb,
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
 		# fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-		fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
+		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(toolbox.evaluate)(list(indy)) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
 
@@ -523,7 +523,7 @@ def GAsearchModel(model, sss,params, KOlist, KIlist):
 			invalid_ind.append(tempultimate)
 		# see which rule is the best
 		if end-start>1:
-			fitnesses=Parallel(n_jobs=min(8,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params, KOlist, KIlist,iteratorDict) for indy in invalid_ind)
+			fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy, params.cells, model,  newSSS, params, KOlist, KIlist,iteratorDict) for indy in invalid_ind)
 			minny=1000
 			mini=100
 			for i in range(len(fitnesses)):
