@@ -436,6 +436,7 @@ def GAsearchModel(model, sss,params, KOlist, KIlist):
 		newSSS[3][key]=numpy.mean([sss[11+i][key] for i in range(4)])
 		newSSS[4][key]=numpy.mean([sss[15+i][key] for i in range(4)])
 		newSSS[5][key]=numpy.mean([sss[19+i][key] for i in range(4)])
+
 	newInitValueList=[]
 	knockoutLists=[]
 	knockinLists=[]

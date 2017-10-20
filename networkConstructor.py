@@ -6,7 +6,6 @@ import urllib2
 import csv 
 import itertools as it
 import sys
-from bs4 import BeautifulSoup
 from random import randint 
 # import our code
 import simulation as sim
@@ -168,6 +167,7 @@ def uploadKEGGcodes_hsa(codelist, graph, hsaDict, KEGGdict):
 		#print(graph.nodes())
 
 def readKEGGhsa(lines, graph, hsaDict, KEGGdict):
+	from bs4 import BeautifulSoup
 	#read all lines into a bs4 object using libXML parser
 	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
@@ -355,6 +355,7 @@ def parseKEGGdict(filename, aliasDict, dict1):
 	return dict1
 
 def readKEGG(lines, graph, KEGGdict):
+	from bs4 import BeautifulSoup
 	#read all lines into a bs4 object using libXML parser
 	soup = BeautifulSoup(''.join(lines), 'xml')
 	groups = {} # store group IDs and list of sub-ids
