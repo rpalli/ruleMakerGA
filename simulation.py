@@ -84,10 +84,10 @@ class paramClass:
 		self.bioReplicates=1
 		self.cells=1000
 		self.samples=10
-		self.generations=5 # generations to run
-		self.popSize=8 #size of population
-		self.mu= 8 #individuals selected
-		self.lambd= 8 #children produced
+		self.generations=40 # generations to run
+		self.popSize=24 #size of population
+		self.mu= 24 #individuals selected
+		self.lambd= 24 #children produced
 		self.iters=100 #number of simulations to try in asynchronous mode
 		self.genSteps=100 # steps to find steady state with fake data
 		self.simSteps=100 # number of steps each individual is run when evaluating

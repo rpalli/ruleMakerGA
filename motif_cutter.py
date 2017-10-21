@@ -17,37 +17,6 @@ def printMotifsClusters(motifs, clusters):
 	for i in motifs.keys():
 		print('motif '+str(i)+' has '+str(len(motifs[i]))+' elements')
 
-# generate a hash table to use to search 3 node motifs
-def fillHashTable(num, dict):
-	picklefile=open('motifs/clusters.pkl','rb')
-	clusters=pickle.load(picklefile)
-	picklefile.close()
-	clustering=[]
-	motifs=[]
-	for i in range(0,num):
-		newnum=[]
-		newmotif=[]
-		clustering.append(newnum)
-		motifs.append(newmotif)
-		graph = nx.read_gpickle('motifs/pickles/model'+str(i)+'.pkl')
-		
-		#code here adds signal property to each edge. this property is either a for activation or i for inhibition
-		#we continue this notation when we load from the KEGG files and then use that information to compare the edges
-		for currentEdge in graph.edges():
-			coloring= graph.get_edge_data(currentEdge[0],currentEdge[1])['color']
-			if coloring=='green':
-				graph.edge[currentEdge[0]][currentEdge[1]]['signal'] = 'a'
-			elif coloring=='blue':
-				graph.edge[currentEdge[0]][currentEdge[1]]['signal'] = 'a'
-			elif coloring=='signal' or coloring=='Signal':
-				graph.edge[currentEdge[0]][currentEdge[1]]['signal'] = 'a'
-			else:
-				graph.edge[currentEdge[0]][currentEdge[1]]['signal'] = 'i'
-		hashvalue= hashGraph(graph)
-		#print(graph.edges())
-		dict[tuple(hashvalue)].append([graph,clusters[i],i])
-	# print(clusters)
-	return clustering, motifs
 
 # generate a hash table to use to search 3 node motifs
 def fillHashTable3node(dict):
@@ -58,9 +27,9 @@ def fillHashTable3node(dict):
 	motifs={}
 	for folder in folderlist:
 		classificationDict=[8,8, 7, 9, 8, 2, 1, 1, 7, 5, 2, 4, 1, 1, 6, 9, 2, 3, 1, 1, 7, 9 ,3, 3]
-		filelist= [ f for f in os.listdir('motif_library/'+folder+'/pickles') ]
+		filelist= [ f for f in os.listdir('/home/rpalli/motif_library/'+folder+'/pickles') ]
 		for i in range(0,len(filelist)):
-			graph = nx.read_gpickle('motif_library/'+folder+'/pickles/model'+str(i)+'.pkl')
+			graph = nx.read_gpickle('/home/rpalli/motif_library/'+folder+'/pickles/model'+str(i)+'.pkl')
 			#code here adds signal property to each edge. this property is either a for activation or i for inhibition
 			#we continue this notation when we load from the KEGG files and then use that information to compare the edges
 
@@ -102,12 +71,12 @@ def fillHashTable5node(dict):
 	classification={}
 	motifs={}
 	for folder in folderlist:
-		picklefile=open('motif_library/'+folder+'/classificationDict.pkl','rb')
+		picklefile=open('/home/rpalli/motif_library/'+folder+'/classificationDict.pkl','rb')
 		classificationDict=pickle.load(picklefile)
 		picklefile.close()
-		filelist= [ f for f in os.listdir('motif_library/'+folder+'/FF/pickles') ]
+		filelist= [ f for f in os.listdir('/home/rpalli/motif_library/'+folder+'/FF/pickles') ]
 		for i in range(0,len(filelist)):
-			graph = nx.read_gpickle('motif_library/'+folder+'/FF/pickles/model'+str(i)+'.pkl')
+			graph = nx.read_gpickle('/home/rpalli/motif_library/'+folder+'/FF/pickles/model'+str(i)+'.pkl')
 			#code here adds signal property to each edge. this property is either a for activation or i for inhibition
 			#we continue this notation when we load from the KEGG files and then use that information to compare the edges
 
