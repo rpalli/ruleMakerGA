@@ -7,6 +7,7 @@ import networkx as nx
 import itertools as itertool
 import scipy.stats as regress
 import numpy as np
+import sklearn.feature_selection as selecter
 
 class modelClass:
 	def __init__(self,graph, sss): 
@@ -34,9 +35,24 @@ class modelClass:
 		
 		#find all possible combinations of upstream contributors for each node. These become the shadow And nodes
 		for i in range(0,len(nodeList)):
-			preds=graph.predecessors(nodeList[i]) # get predecessors of node. 
-			while len(preds)>3: #handle case where there are too many predecessors by truncation
-				preds.pop(randint(0, len(preds)-1))
+			predtemp=graph.predecessors(nodeList[i]) # get predecessors of node. 
+			preds=[]
+			if len(predtemp)>3:
+				# select the best predecessors by linear regression		
+				slopetemp=[]
+				jarray=[ss[nodeList[i]] for ss in sss]
+				for k in range(len(predtemp)):
+					karray=[ss[predtemp[k]] for ss in sss]
+					mi = regress.spearmanr(jarray,karray)
+					slopetemp.append(mi)
+				# slopetemp2=[abs(temper) for temper in slopetemp]
+				while len(preds)<3 and len(slopetemp)>0:
+					max1=slopetemp.index(max(slopetemp))
+					r=slopetemp.pop(max1)
+					preds.append(predtemp.pop(max1))
+				print('preds')
+				print(nodeList[i])
+				print(preds)
 			for j in range(0,len(preds)):
 				preds[j]=nodeDict[preds[j]]
 			# the followign section constructs a list of possible node orders
@@ -83,7 +99,7 @@ class paramClass:
 	def __init__(self,):    
 		self.bioReplicates=1
 		self.cells=1000
-		self.samples=10
+		self.samples=5
 		self.generations=40 # generations to run
 		self.popSize=24 #size of population
 		self.mu= 24 #individuals selected
@@ -101,7 +117,7 @@ class paramClass:
 		self.sigmaNetwork=0
 		self.sigmaNode=0
 		self.hofSize=10
-		self.trials=1
+		self.trials=10
 		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
 		
 def updateBool(currentNode,oldValue,nodeIndividual, model):
@@ -193,7 +209,10 @@ def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 					end= model.size
 				else:
 					end=model.individualParse[i+1]	 
-				temp=updateBool(i,oldValue,individual[model.individualParse[i]:end], model)
+				if sum(individual[model.individualParse[i]:end])==0:
+					temp=oldValue[i]
+				else:
+					temp=updateBool(i,oldValue,individual[model.individualParse[i]:end], model)
 			newValue[i]=temp
 			simData[i,step]=temp
 	avg=[.1*np.count_nonzero(simData[i,simSteps-10:simSteps]) for i in range(nodeNum)]
@@ -334,10 +353,10 @@ def EBNbool(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict)
 	cellArray=[]
 	simSteps=3*len(model.nodeList)
 	try: 
-		valueDict=iteratorDict[str(individual)]
+		valueDict=iteratorDict[tuple(individual)]
 	except KeyError:
-		iteratorDict[str(individual)]={}
-		valueDict=iteratorDict[str(individual)]
+		iteratorDict[tuple(individual)]={}
+		valueDict=iteratorDict[tuple(individual)]
 
 	for j in range(0,cells):
 		# shuffle nodes to be initially called.... 
@@ -346,11 +365,11 @@ def EBNbool(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict)
 		initValues=genEBNInitValues(individual, model,initProbs)
 		# work on integrating in the try catch rather than the if else below
 		try:
-			vals=valueDict[str(initValues)]
+			vals=valueDict[tuple(initValues)]
 		except KeyError:
 			# run Boolean simulation with initial values and append
 			vals=runBool(individual, model,simSteps, initValues, params, KOs, KIs)
-			valueDict[str(initValues)]=vals
+			valueDict[tuple(initValues)]=vals
 		cellArray.append(vals)
 	return [1.*np.sum(col) / float(cells) for col in zip(*cellArray)]
 
@@ -358,17 +377,17 @@ def EBNbool(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict)
 def EBNfuzzy(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict):
 	cellArray=[]
 	simSteps=3*len(model.nodeList)
-	if not str(individual) in iteratorDict:
-		iteratorDict[str(individual)]={}
-	valueDict=iteratorDict[str(individual)]
+	if not tuple(individual) in iteratorDict:
+		iteratorDict[tuple(individual)]={}
+	valueDict=iteratorDict[tuple(individual)]
 
 	for j in range(0,cells):
 		# shuffle nodes to be initially called.... 
 		#simulations that are truly random starting states should have all nodes added to this list
 		#get initial values for all nodes
 		initValues=genEBNInitFuzzies(individual, model,initProbs)
-		if str(initValues) in valueDict:
-			vals=valueDict[str(initValues)]
+		if tuple(initValues) in valueDict:
+			vals=valueDict[tuple(initValues)]
 		else:
 			# run Boolean simulation with initial values and append
 			vals=syncBool(individual, model,simSteps, initValues, params, KOs, KIs)
