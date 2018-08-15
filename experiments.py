@@ -1,22 +1,15 @@
-# import python packages
+# import python packages needed in this file
 import pickle
 from deap import base, creator, gp, tools
 from deap import algorithms as algo
-from random import random, seed, shuffle
-import random as rand
+from random import random, seed, shuffle, randint
 import networkx as nx
 import numpy as numpy
 import copy as copy
 import operator
-import math as math
-from sets import Set
 import argparse as argparse
-import scipy.stats as stat
-from sets import Set
-import matplotlib.pyplot as plt
-import requests
+import gc as gc
 
-import sklearn.mixture as mix
 # import other pieces of our software
 #import networkConstructor as nc
 import utils as utils
@@ -25,7 +18,77 @@ import simulation as sim
 import motif_cutter as mc
 # import pathway_analysis as pa
 import GA as ga
-import gc as gc
+
+def setupEmptyKOKI(samples):
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(samples):
+		knockoutLists.append([])
+		knockinLists.append([])
+	return knockoutLists, knockinLists
+
+def genSampleList(output, sampleDict, samples):
+	newSampleList=[]
+	for k in range(0,samples):
+		newSample=copy.deepcopy(sampleDict[k])
+		for j in range(0,len(model.nodeList)):
+			newSample[model.nodeList[j]]=output[k][j]
+		newSampleList.append(newSample)
+	return newSampleList
+
+def genInitValueList(newSampleList,model)
+	newInitValueList=[]
+	for j in range(0,len(newSampleList)):
+		newInitValueList.append([])
+	for j in range(0,len(model.nodeList)):
+		for k in range(0,len(newSampleList)):
+			ss=newSampleList[k]
+			if  model.nodeList[j] in newSampleList[0]:
+				newInitValueList[k].append(ss[model.nodeList[j]])
+			else:
+				newInitValueList[k].append(0.5)
+	return newInitValueList
+
+def paramExperiment(graph, name, samples, noise):
+	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
+	#samples is the number of different initial conditions to provide per trial
+	#graph specifies the network we are testing. 
+
+	params=sim.paramClass() # load in parameters
+	sampleList=utils.synthesizeInputs(graph,samples) # get empty list of inputs
+	model=sim.modelClass(graph,sampleList, True) # generate empty model
+
+	iteratorDict={} # dummy variable passed around
+	storeModel=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
+	knockoutLists, knockinLists= setupEmptyKOKI(samples)
+	
+	#generate random set of logic rules to start with
+	individual=ga.genBits(model)
+	truthList.append(list(individual[1]))
+	
+	# generate some simulated samples
+	output=ga.runProbabilityBooleanSims(individual[1], model, samples, params.cells, params, knockoutLists, knockinLists, iteratorDict)
+
+	# output the initial generated data
+	pickle.dump( output, open( name+"_input.pickle", "wb" ) )
+
+	# copy simulated data into right format
+	newSampleList=genSampleDict(output, sampleList, samples)
+	model=[]
+	model=sim.modelClass(graph,newSSS, False)
+
+
+	newInitValueList=
+	model.initValueList=newInitValueList
+	#perform GA run
+	params.adaptive=True
+	model, dev, bruteOut =ga.GAsearchModel(model, newSSS, params, knockoutLists, knockinLists, iteratorDict, name)
+	bruteOut, equivalents = ga.localSearch(model, bruteOut, newSSS, params, knockoutLists, knockinLists)
+	
+	storeModel3=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
+
+	outputList=[individual[1],bruteOut,storeModel, storeModel3, equivalents]
+	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
 
 def sampleTester(graph, name, samples):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
@@ -36,93 +99,70 @@ def sampleTester(graph, name, samples):
 	# set up params, sss, model, samples
 
 	params=sim.paramClass()
-	# rewire graph if necessary
-	#if params.rewire:
-	#graph=nc.rewireNetwork(graph)
-
 	sss=utils.synthesizeInputs(graph,samples)
 	model=sim.modelClass(graph,sss, True)
 
 	# set up necessary lists for output
 	truthList= [] 
-	testListGA =[]
-	devListGA=[]
 	testListAdapt =[]
 	devListAdapt=[]
 	iteratorDict={}
-	knockoutLists=[]
-	knockinLists=[]
-	testListAdaptglobal=[]
-	devListAdaptglobal=[]
-	testListGAglobal=[]
-	devListGAglobal=[]
-	testListLocal1=[]
-	testListLocal2=[]
-
 	storeModel=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
-	for q in range(samples):
-		temRand=rand.randint(0,len(model.nodeList))
-		knockoutLists.append([])
-		knockinLists.append([])
+	knockoutLists, knockinLists= setupEmptyKOKI(samples)
+	#generate random set of logic rules to start with
+	individual=ga.genBits(model)
+	truthList.append(list(individual[1]))
+	# generate Boolean model for this trial
+	output=ga.runProbabilityBooleanSims(individual[1], model, samples, params.cells, params, knockoutLists, knockinLists, iteratorDict)
 
-	# loop over number of times we want to generate fake data and perform sequence of events
-	for i in range(0,params.trials):
-		iteratorDict={}
-		#generate random set of logic rules to start with
-		individual=ga.genBits(model)
-		truthList.append(list(individual[1]))
-		# generate Boolean model for this trial
-		output=ga.runProbabilityBooleanSims(individual[1], model, samples, params.cells, params, knockoutLists, knockinLists, iteratorDict)
+	truthList.append(list(individual[1]))
+	# copy new output into newSSS and initial values
+	pickle.dump( output, open( name+"_input.pickle", "wb" ) )
 
-		truthList.append(list(individual[1]))
-		# copy new output into newSSS and initial values
-		pickle.dump( output, open( name+"_input.pickle", "wb" ) )
-
-		newSSS=[]
-		for k in range(0,samples):
-			newSS=copy.deepcopy(sss[k])
-			for j in range(0,len(model.nodeList)):
-				newSS[model.nodeList[j]]=output[k][j]
-			newSSS.append(newSS)
-		# print(newSSS)
-		model=[]
-		model=sim.modelClass(graph,newSSS, False)
-
-		newInitValueList=[]
-		for j in range(0,len(sss)):
-			newInitValueList.append([])
+	newSSS=[]
+	for k in range(0,samples):
+		newSS=copy.deepcopy(sss[k])
 		for j in range(0,len(model.nodeList)):
-			for k in range(0,len(sss)):
-				ss=newSSS[k]
-				if  model.nodeList[j] in sss[0]:
-					newInitValueList[k].append(ss[model.nodeList[j]])
-				else:
-					newInitValueList[k].append(0.5)
-		model.initValueList=newInitValueList
-		#perform GA run
-		params.adaptive=True
-		model, dev, bruteOut =ga.GAsearchModel(model, newSSS, params, knockoutLists, knockinLists, iteratorDict, name)
-		bruteOut, equivalents = ga.localSearch(model, bruteOut, newSSS, params, knockoutLists, knockinLists)
-		
-		storeModel3=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
+			newSS[model.nodeList[j]]=output[k][j]
+		newSSS.append(newSS)
+	# print(newSSS)
+	model=[]
+	model=sim.modelClass(graph,newSSS, False)
 
-		outputList=[[individual[1]],[bruteOut],storeModel, storeModel3, equivalents]
-		pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
+	newInitValueList=[]
+	for j in range(0,len(sss)):
+		newInitValueList.append([])
+	for j in range(0,len(model.nodeList)):
+		for k in range(0,len(sss)):
+			ss=newSSS[k]
+			if  model.nodeList[j] in sss[0]:
+				newInitValueList[k].append(ss[model.nodeList[j]])
+			else:
+				newInitValueList[k].append(0.5)
+	model.initValueList=newInitValueList
+	#perform GA run
+	params.adaptive=True
+	model, dev, bruteOut =ga.GAsearchModel(model, newSSS, params, knockoutLists, knockinLists, iteratorDict, name)
+	bruteOut, equivalents = ga.localSearch(model, bruteOut, newSSS, params, knockoutLists, knockinLists)
+	
+	storeModel3=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 
-		model, dev, bruteOut = ga.GASearchModel2(model, newSSS, params, knockoutLists, knockinLists, bruteOut, name)
-		bruteOut, equivs2 = ga.localSearch(model, bruteOut, newSSS, params, knockoutLists, knockinLists)
-		testListAdapt.append(list(bruteOut))
-		devListAdapt.append(dev)
-		iteratorDict={}
-		# params.adaptive=False
-		gc.collect()
+	outputList=[[individual[1]],[bruteOut],storeModel, storeModel3, equivalents]
+	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
+
+	model, dev, bruteOut = ga.GASearchModel2(model, newSSS, params, knockoutLists, knockinLists, bruteOut, name)
+	bruteOut, equivs2 = ga.localSearch(model, bruteOut, newSSS, params, knockoutLists, knockinLists)
+	testListAdapt.append(list(bruteOut))
+	devListAdapt.append(dev)
+	iteratorDict={}
+	# params.adaptive=False
+	gc.collect()
 
 	# # set up output and save as a pickle
 	storeModel2=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 
 	outputList=[truthList,testListAdapt,storeModel, storeModel2, equivs2]
 	pickle.dump( outputList, open( name+"_output.pickle", "wb" ) )
-
 
 def liuTester(graph, name, noiseEdges):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
@@ -159,7 +199,7 @@ def liuTester(graph, name, noiseEdges):
 
 	storeModel=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 	for q in range(samples):
-		temRand=rand.randint(0,len(model.nodeList))
+		temRand=randint(0,len(model.nodeList))
 		knockoutLists.append([])
 		knockinLists.append([])
 
@@ -181,8 +221,8 @@ def liuTester(graph, name, noiseEdges):
 			edger=newgraph.edges()
 			edger=edger[0]
 			while edger in edgelist or edger[0]==edger[1]:
-				rand1=rand.randint(0,len(nodelist)-1)
-				rand2=rand.randint(0,len(nodelist)-1)
+				rand1=randint(0,len(nodelist)-1)
+				rand2=randint(0,len(nodelist)-1)
 				edger=(nodelist[rand1],nodelist[rand2])
 			if random()<.5:
 				activity1='a'
