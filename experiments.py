@@ -302,15 +302,15 @@ def partitionTest(graph,  ssDict, name):
 	#perform GA run
 	# dev, bruteOut= ga.GAsearchModel(model, sss, params, knockoutLists, knockinLists)
 	iteratorDict={}
-	model, dev, bruteOut =ga.GAsearchModel(model, sss, params, knockoutLists, knockinLists, iteratorDict, name)
-	bruteOut, equivalents, dev = ga.localSearch(model, bruteOut, sss, params, knockoutLists, knockinLists)
+	model, dev1, bruteOut =ga.GAsearchModel(model, sss, params, knockoutLists, knockinLists, iteratorDict, name)
+	bruteOut, equivalents, dev2 = ga.localSearch(model, bruteOut, sss, params, knockoutLists, knockinLists)
 	# storeModel3=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 	# outputList=[[individual[1]],[bruteOut],storeModel, storeModel3, equivalents]
 	# pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
 	#model, dev, bruteOut = ga.GASearchModel2(model, sss, params, knockoutLists, knockinLists, bruteOut, name)
 	#bruteOut, equivs2 = ga.localSearch(model, bruteOut, sss, params, knockoutLists, knockinLists)
 
-	pickle.dump( [[dev],[bruteOut],[model]], open( name+"_output.pickle", "wb" ) )
+	pickle.dump( [[dev1],[dev2],[bruteOut],[model]], open( name+"_output.pickle", "wb" ) )
 
 def findPathways(geneDict):
 	returnerlist=[]
