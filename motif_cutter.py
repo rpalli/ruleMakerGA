@@ -58,9 +58,9 @@ def fillHashTable3node(dict):
 	motifs={}
 	for folder in folderlist:
 		classificationDict=[8,8, 7, 9, 8, 2, 1, 1, 7, 5, 2, 4, 1, 1, 6, 9, 2, 3, 1, 1, 7, 9 ,3, 3]
-		filelist= [ f for f in os.listdir('motif_library/'+folder+'/pickles') ]
+		filelist= [ f for f in os.listdir('C:/Users/Rohith/Documents/Rohith_data/ruleMaker_GA/motif_library/'+folder+'/pickles') ]
 		for i in range(0,len(filelist)):
-			graph = nx.read_gpickle('motif_library/'+folder+'/pickles/model'+str(i)+'.pkl')
+			graph = nx.read_gpickle('C:/Users/Rohith/Documents/Rohith_data/ruleMaker_GA/motif_library/'+folder+'/pickles/model'+str(i)+'.pkl')
 			#code here adds signal property to each edge. this property is either a for activation or i for inhibition
 			#we continue this notation when we load from the KEGG files and then use that information to compare the edges
 
@@ -102,12 +102,12 @@ def fillHashTable5node(dict):
 	classification={}
 	motifs={}
 	for folder in folderlist:
-		picklefile=open('motif_library/'+folder+'/classificationDict.pkl','rb')
+		picklefile=open('C:/Users/Rohith/Documents/Rohith_data/ruleMaker_GA/motif_library/'+folder+'/classificationDict.pkl','rb')
 		classificationDict=pickle.load(picklefile)
 		picklefile.close()
-		filelist= [ f for f in os.listdir('motif_library/'+folder+'/FF/pickles') ]
+		filelist= [ f for f in os.listdir('C:/Users/Rohith/Documents/Rohith_data/ruleMaker_GA/motif_library/'+folder+'/FF/pickles') ]
 		for i in range(0,len(filelist)):
-			graph = nx.read_gpickle('motif_library/'+folder+'/FF/pickles/model'+str(i)+'.pkl')
+			graph = nx.read_gpickle('C:/Users/Rohith/Documents/Rohith_data/ruleMaker_GA/motif_library/'+folder+'/FF/pickles/model'+str(i)+'.pkl')
 			#code here adds signal property to each edge. this property is either a for activation or i for inhibition
 			#we continue this notation when we load from the KEGG files and then use that information to compare the edges
 
