@@ -6,12 +6,13 @@ import urllib2
 import csv 
 import itertools as it
 import sys
-from bs4 import BeautifulSoup
+#from bs4 import BeautifulSoup
 from random import randint 
 # import our code
 import simulation as sim
 import utils as utils
-
+import pathway_analysis as pa
+import motif_cutter as mc
 #definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
 #these biopax classes are iteracted over in the biopax methods
 edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction', 'Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation', 'Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']
@@ -915,6 +916,103 @@ def download_PC_codes(codelist, graph):
 		print(code)
 	simplify_biopax_graph(graph)
 
+def simplifyNetworkMod(graph):
+	#network simplification algorithm. 
+	# # 1. remove nodes with no input data
+	# # 2. remove edges to nodes from complexes they are a part of 
+	# # 3. remove straigth paths. 
+	# # 4. remove nodes with only 1 input
+	# # 5. remove nodes with only 1 output
+	# # 6. remove self edges
+
+
+	# 2. remove dependence of nodes on complexes that include that node
+	for node in graph.nodes():
+		predlist=graph.predecessors(node)
+		for pred in predlist:
+			if '-' in pred:
+				# # print(pred)
+				genes=pred.split('-')
+				flag=True
+				for gene in genes:
+					if not gene in predlist:
+						flag=False
+				if flag:
+					graph.remove_edge(pred,node)
+	flag=True
+	
+			
+	# 3. collapse straight lines
+	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1 and (len(graph.successors(x))==1))]
+	for rm in removeNodeList:
+		before=graph.predecessors(rm)[0]
+		after=graph.successors(rm)[0]
+		edge1=graph.get_edge_data(before,rm)['signal']
+		edge2=graph.get_edge_data(rm,after)['signal']
+		inhCount=0
+		if edge1=='i':
+			inhCount=inhCount+1
+		if edge2=='i':
+			inhCount=inhCount+1
+		if inhCount==1:
+			graph.add_edge(before,after,signal='i')
+		else:
+			graph.add_edge(before,after,signal='a')
+		graph.remove_node(rm)
+	flag=True
+
+	# 4. rewire nodes that have only one upstream node
+	#print(len(graph.nodes()))
+	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1) ]
+	for rm in removeNodeList:
+		if len(graph.predecessors(rm))==1:
+			for after in graph.successors(rm):
+				before=graph.predecessors(rm)[0]
+				edge1=graph.get_edge_data(before,rm)['signal']
+				edge2=graph.get_edge_data(rm,after)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(before,after,signal='i')
+				else:
+					graph.add_edge(before,after,signal='a')
+			graph.remove_node(rm)
+	flag=True
+
+	# 5. rewire nodes that have only one downstream node
+	#print(len(graph.nodes()))
+	
+	removeNodeList= [x for x in graph.nodes() if (len(graph.successors(x))==1) ]
+	# for x in range(remove) :
+	# 	if not graph.successors(removeNodeList[x])[0] in ss.keys():
+	# 		removeNodeList.remove(removeNodeList[x])
+	for rm in removeNodeList:
+		if len(graph.successors(x))==1:
+			for start in graph.predecessors(rm):
+				finish=graph.successors(rm)[0]
+				edge1=graph.get_edge_data(start,rm)['signal']
+				edge2=graph.get_edge_data(rm,finish)['signal']
+				inhCount=0
+				if edge1=='i':
+					inhCount=inhCount+1
+				if edge2=='i':
+					inhCount=inhCount+1
+				if inhCount==1:
+					graph.add_edge(start,finish,signal='i')
+				else:
+					graph.add_edge(start,finish,signal='a')
+			graph.remove_node(rm)
+	#print(graph.nodes())
+	flag=True
+
+	# 6. remove self edges
+	for edge in graph.edges():
+		if edge[0]==edge[1]:
+			graph.remove_edge(edge[0],edge[1])
+	return graph
 
 def ifngStimTestSetup(params):
 
@@ -926,13 +1024,12 @@ def ifngStimTestSetup(params):
 
 	# read in list of codes then load them into network
 	#inputfile = open('ID_filtered.c2.cp.kegg.v3.0.symbols.txt', 'r')
-	inputfile = open('inputData/ID_filtered_IFNGpathways.txt', 'r')
+	inputfile = open('inputData/ID_filtered_IFNGpathways2.txt', 'r')
 
 	lines = inputfile.readlines()
 	data=dict(utils.loadFpkms('inputData/Hela-C-1.count'))
 
 
-	lines.pop(0)
 	# lines.pop(0)
 	# lines=[0]
 	# lines=[lines[0]]
@@ -944,25 +1041,24 @@ def ifngStimTestSetup(params):
 		uploadKEGGcodes([coder], graph, dict2)
 		coder=str('hsa'+code[:-1])
 		uploadKEGGcodes_hsa([coder], graph,dict1, dict2)
-		# if(len(graph.edges())>1):
-		# 	graph=simplifyNetwork(graph, data)
-		
-		#graph = utils.simpleNetBuild()
-		#coder='unrolled'
-
-		#graph=utils.LiuNetwork1Builder()
-		# coder='liu'
-
 		# if the code has an interesting logic rule to find, run the algorithm... 
+		print(coder)
 		checker=False
 		for x in graph.in_degree():
 			if x>1:
 				checker=True
 		if(checker):
+			nx.write_graphml(graph,coder+'.graphml')
+			nx.write_gpickle(graph,coder+'.gpickle')
+			graph=simplifyNetworkMod(graph)
+		
+			nx.write_graphml(graph,coder+'_red.graphml')
+			nx.write_gpickle(graph,coder+'_red.gpickle')
+			graph=mc.cutMotifs(graph)
+			nx.write_graphml(graph,coder+'_cut.graphml')
+			nx.write_gpickle(graph,coder+'_cut.gpickle')
 			print(coder)
-			codelist.append(coder)			
-			nx.write_graphml(graph,coder+'_unsimplified.graphml')
-			nx.write_gpickle(graph,coder+'_unsimplified.gpickle')
+			codelist.append(coder)	
 if __name__ == '__main__':
 	params=sim.paramClass()
 	ifngStimTestSetup(params)

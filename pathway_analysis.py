@@ -8,7 +8,7 @@ import requests
 
 # import other pieces of our software
 import networkConstructor as nc
-import murphyReader as mr
+#import murphyReader as mr
 
 def read_gmt(filename):
 	gmt_dict={}
