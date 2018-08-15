@@ -430,7 +430,6 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist,iteratorDict) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
-
 		# Select the next generation population
 		population[:] = toolbox.select(population + offspring, mu)
 		fitnesslist.append([list(ind.fitness.values) for ind in population])
