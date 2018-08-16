@@ -326,9 +326,6 @@ def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 	avg=[.1*np.count_nonzero(simData[i,simSteps-10:simSteps]) for i in range(nodeNum)]
 	return avg
 
-
-
-
 def syncFuzzy(individual, model, simSteps, initValues, knockouts, knockins):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	# set up data storage for simulation, add step 0

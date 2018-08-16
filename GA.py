@@ -15,15 +15,14 @@ from collections import defaultdict, deque
 from itertools import chain
 from operator import attrgetter, itemgetter
 # import other pieces of our software
-import utils as utils
 from simulation import paramClass, EBNbool
-
+from utils import findEnd, genRandBits, bitList
 # generates random bitstring with at least one value for each node
 def genBits(model):
-	startInd=list(utils.genRandBits(model.size))
+	startInd=list(genRandBits(model.size))
 	counter=0
 	while numpy.sum(startInd)==0 and counter < 10000:
-		startInd=list(utils.genRandBits(model.size))
+		startInd=list(genRandBits(model.size))
 		counter+=1
 	for node in range(0,len(model.nodeList)):
 		if node==(len(model.nodeList)-1):
@@ -225,10 +224,7 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 				temppermup.append(upstreamAdders.pop(addNoder))
 				rvals.pop(addNoder)
 			model.update_upstream(focusNode,temppermup )
-		if focusNode==len(model.nodeList)-1:
-			end= model.size
-		else:
-			end=model.individualParse[focusNode+1]
+		end=findEnd(focusNode,model)
 		for i in range(start,end):
 			if random()< 2/(end-start+1):
 				individual[i] = 1
@@ -454,81 +450,6 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 	# pickle.dump( outputList, open( namer+"_pops.pickle", "wb" ) )
 	return population, logbook
 
-def eaMuPlusLambdaAdaptive2( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, namer, newSSS,KOlist, KIlist,seed, params ,stats=None, verbose=__debug__):
-	modelNodes=params.modelNodes
-	# population=[[copy.deepcopy(model),genBits(model)]for i in range(params.popSize)]
-	population=toolbox.population(n=params.popSize)
-	for item in population:
-		for i in range(len(item[1])):
-			item[1][i]=seed[i]
-	mutModel=params.mutModel
-	mutpb=.8
-	cxpb=.2
-	logbook = tools.Logbook()
-	logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
-	lastcheck=[]
-	modellist=[]
-	fitnesslist=[]
-	popList=[]
-	# Evaluate the individuals with an invalid fitness
-	invalid_ind = [ind for ind in population if not ind.fitness.valid]
-	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist) for indy in invalid_ind)
-	for ind, fit in zip(invalid_ind, fitnesses):
-		ind.fitness.values = fit
-	fitnesslist.append([list(ind.fitness.values) for ind in population])
-	popList.append([list(inder[1]) for inder in population])
-	modellist.append([[(modeler[0].size), list(modeler[0].nodeList), list(modeler[0].individualParse), list(modeler[0].andNodeList) , list(modeler[0].andNodeInvertList), list(modeler[0].andLenList),	list(modeler[0].nodeList), dict(modeler[0].nodeDict), list(modeler[0].initValueList)] for modeler in population])
-
-	record = stats.compile(population) if stats is not None else {}
-	logbook.record(gen=0, nevals=len(invalid_ind), **record)
-	if verbose:
-		print(logbook.stream)
-
-	breaker=False
-	for ind in population:
-		if numpy.sum(ind.fitness.values)< .01*len(ind.fitness.values):
-			breaker=True
-	if breaker:
-		# outputList=[fitnesslist, popList, modellist]
-		# pickle.dump( outputList, open( namer+"_pops2.pickle", "wb" ) )
-		return population, logbook
-	# Begin the generational process
-	for gen in range(1, ngen+1):
-		offspring = varOrAdaptive(population, toolbox, model, lambda_,  (.5*gen/ngen),.5+.5*(1.-1.*gen/ngen), (1.*gen/ngen),mutModel)
-		# Evaluate the individuals with an invalid fitness
-		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist) for indy in invalid_ind)
-		for ind, fit in zip(invalid_ind, fitnesses):
-			ind.fitness.values = fit
-
-		# Select the next generation population
-		population[:] = toolbox.select(population + offspring, mu)
-		fitnesslist.append([list(ind.fitness.values) for ind in population])
-		popList.append([list(inder[1]) for inder in population])
-		modellist.append([[(modeler[0].size), list(modeler[0].nodeList), list(modeler[0].individualParse), list(modeler[0].andNodeList) , list(modeler[0].andNodeInvertList), list(modeler[0].andLenList),	list(modeler[0].nodeList), dict(modeler[0].nodeDict), list(modeler[0].initValueList)] for modeler in population])
-
-		# Update the statistics with the new population
-		record = stats.compile(population) if stats is not None else {}
-		logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-		if verbose:
-			print(logbook.stream)
-		breaker=False
-		for ind in population:
-			if numpy.sum(ind.fitness.values)< .01*len(ind.fitness.values):
-				breaker=True
-				saveInd=ind
-		if breaker:
-			errorTemp=saveInd.fitness.values
-			for value in errorTemp:
-				if value> .1:
-					breaker=False
-		if breaker:
-			# outputList=[fitnesslist, popList, modellist]
-			# pickle.dump( outputList, open( namer+"_pops2.pickle", "wb" ) )
-			return population, logbook
-	# outputList=[fitnesslist, popList, modellist]
-	# pickle.dump( outputList, open( namer+"_pops2.pickle", "wb" ) )
-	return population, logbook
 def GAautoSolver(model, sss, params, KOlist, KIlist, namer):
 	# set up toolbox and run GA with or without adaptive mutations turned on
 	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model, params)
@@ -541,80 +462,10 @@ def GAautoSolver(model, sss, params, KOlist, KIlist, namer):
 		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose)
 	return output
 
-def GAsearchModel(model, sss,params, KOlist, KIlist, namer):
-
-	newInitValueList=[]
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(len(sss)):
-		knockoutLists.append([])
-		knockinLists.append([])
-	for j in range(0,len(sss)):
-		newInitValueList.append([])
-	for j in range(0,len(model.nodeList)):
-		for k in range(0,len(sss)):
-			ss=sss[k]
-			if  model.nodeList[j] in sss[0]:
-				newInitValueList[k].append(ss[model.nodeList[j]])
-			else:
-				newInitValueList[k].append(0.5)
-	
-	newInitValueList=[]
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(len(sss)):
-		knockoutLists.append([])
-		knockinLists.append([])
-	for j in range(0,len(sss)):
-		newInitValueList.append([])
-	for j in range(0,len(model.nodeList)):
-		for k in range(0,len(sss)):
-			ss=sss[k]
-			if  model.nodeList[j] in sss[0]:
-				newInitValueList[k].append(ss[model.nodeList[j]])
-			else:
-				newInitValueList[k].append(0.5)
+def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer):
+	newInitValueList= genInitValueList(sampleList,model)
 	model.initValueList=newInitValueList
-	population, logbook=GAautoSolver(model, sss, params, knockoutLists, knockinLists, namer)
-	out1, out2, model  = findPopBest(population)
-	return model,out1,out2
-
-def GASearchModel2(model, sss,params, KOlist, KIlist, seed, namer):
-	
-	newInitValueList=[]
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(len(sss)):
-		knockoutLists.append([])
-		knockinLists.append([])
-	for j in range(0,len(sss)):
-		newInitValueList.append([])
-	for j in range(0,len(model.nodeList)):
-		for k in range(0,len(sss)):
-			ss=sss[k]
-			if  model.nodeList[j] in sss[0]:
-				newInitValueList[k].append(ss[model.nodeList[j]])
-			else:
-				newInitValueList[k].append(0.5)
-	
-	newInitValueList=[]
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(len(sss)):
-		knockoutLists.append([])
-		knockinLists.append([])
-	for j in range(0,len(sss)):
-		newInitValueList.append([])
-	for j in range(0,len(model.nodeList)):
-		for k in range(0,len(sss)):
-			ss=sss[k]
-			if  model.nodeList[j] in sss[0]:
-				newInitValueList[k].append(ss[model.nodeList[j]])
-			else:
-				newInitValueList[k].append(0.5)
-	model.initValueList=newInitValueList
-	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model, params)
-	population, logbook=eaMuPlusLambdaAdaptive2(toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, namer=namer+'_2_', newSSS= sss,KOlist=KOlist, KIlist=KIlist, params=params, seed=seed,  verbose=params.verbose)
+	population, logbook=GAautoSolver(model, sss, params, KOlist, KIlist, namer)
 	out1, out2, model  = findPopBest(population)
 	return model,out1,out2
 
@@ -631,10 +482,7 @@ def localSearch(model, indy, newSSS, params, KOlist, KIlist):
 
 def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KIlist ):
 	tol=.01*len(newSSS)
-	if node==(len(model.nodeList)-1):
-		end=len(indy)
-	else:
-		end=model.individualParse[node+1]
+	end=findEnd(node,model)
 	start=model.individualParse[node]
 	truth=list(indy[start:end])
 	equivs=[truth] 	#add if
@@ -644,18 +492,17 @@ def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KI
 	indErrors=[]
 	for i in range(1,2**(end-start)):
 		tempultimate=list(indy)
-		tempInd=utils.bitList(i, len(truth))
+		tempInd=bitList(i, len(truth))
 		tempultimate[start:end]=tempInd
-		truth=list(tempInd)
 		currentsumtemp=evaluateByNode(tempultimate, cellNum, model,  newSSS, params,KOlist, KIlist )
 		currentsum=currentsumtemp[node]
-		indOptions.append(truth)
+		indOptions.append(tempultimate)
 		indErrors.append(currentsum)
-		# devListGA.append(dev)
 		gc.collect()
 	minny= min(indErrors)
 	equivs=[]
 	for i in range(len(indOptions)):
 		if indErrors[i]< minny+tol:
 			equivs.append(indOptions[i])
+	truth=equivs[0]
 	return truth, equivs, minny

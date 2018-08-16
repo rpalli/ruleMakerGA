@@ -3,6 +3,28 @@ import numpy as numpy
 from random import random
 import csv as csv
 
+
+
+# use dictionaries of values at each node for each sample to construct initial value list for the model
+def genInitValueList(newSampleList,model)
+	newInitValueList=[]
+	for j in range(0,len(newSampleList)):
+		newInitValueList.append([])
+	for j in range(0,len(model.nodeList)):
+		for k in range(0,len(newSampleList)):
+			ss=newSampleList[k]
+			if  model.nodeList[j] in newSampleList[0]:
+				newInitValueList[k].append(ss[model.nodeList[j]])
+			else:
+				newInitValueList[k].append(0.5)
+	return newInitValueList
+
+def findEnd(node,model):
+	if node==len(model.nodeList)-1:
+		end= model.size
+	else:
+		end=model.individualParse[node+1]
+
 def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
 	return list(arr) 

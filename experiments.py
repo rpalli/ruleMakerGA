@@ -12,13 +12,9 @@ import gc as gc
 
 # import other pieces of our software
 #import networkConstructor as nc
-import utils as utils
 import simulation as sim
-# import murphyReader as mr
-import motif_cutter as mc
-# import pathway_analysis as pa
 import GA as ga
-
+from utils import genInitValueList, synthesizeInputs
 # make empty list representing no knockouts or knockins
 def setupEmptyKOKI(samples):
 	knockoutLists=[]
@@ -38,19 +34,6 @@ def genSampleList(output, sampleDict, samples):
 		newSampleList.append(newSample)
 	return newSampleList
 
-# use dictionaries of values at each node for each sample to construct initial value list for the model
-def genInitValueList(newSampleList,model)
-	newInitValueList=[]
-	for j in range(0,len(newSampleList)):
-		newInitValueList.append([])
-	for j in range(0,len(model.nodeList)):
-		for k in range(0,len(newSampleList)):
-			ss=newSampleList[k]
-			if  model.nodeList[j] in newSampleList[0]:
-				newInitValueList[k].append(ss[model.nodeList[j]])
-			else:
-				newInitValueList[k].append(0.5)
-	return newInitValueList
 
 # run an experiment comparing 
 def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
@@ -59,7 +42,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
 	#graph specifies the network we are testing. 
 	# does everything except select the initial random bitstring and setup parameters
 
-	sampleList=utils.synthesizeInputs(graph,samples) # get empty list of inputs
+	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
 	model=sim.modelClass(graph,sampleList, True) # generate empty model
 
 	initModel=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
