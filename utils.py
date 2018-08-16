@@ -3,10 +3,8 @@ import numpy as numpy
 from random import random
 import csv as csv
 
-
-
 # use dictionaries of values at each node for each sample to construct initial value list for the model
-def genInitValueList(newSampleList,model)
+def genInitValueList(newSampleList,model):
 	newInitValueList=[]
 	for j in range(0,len(newSampleList)):
 		newInitValueList.append([])
