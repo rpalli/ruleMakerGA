@@ -15,20 +15,20 @@ from collections import defaultdict, deque
 from itertools import chain
 from operator import attrgetter, itemgetter
 # import other pieces of our software
-from simulation import paramClass, EBNbool
+from simulation import paramClass, NP
 from utils import findEnd, genRandBits, bitList
 # generates random bitstring with at least one value for each node
 def genBits(model):
+	# generate random bitlist
 	startInd=list(genRandBits(model.size))
 	counter=0
+	# make sure bitlist isn't zero
 	while numpy.sum(startInd)==0 and counter < 10000:
-		startInd=list(genRandBits(model.size))
+		startInd=list(genRandBits(model.size)) 
 		counter+=1
+	# go through nodes and make sure that there are 1-5 ones in the random list
 	for node in range(0,len(model.nodeList)):
-		if node==(len(model.nodeList)-1):
-			end= model.size
-		else:
-			end=model.individualParse[node+1]
+		end=findEnd(node,model)
 		start=model.individualParse[node]
 		if (end-start)>1:
 			counter=0
@@ -58,6 +58,8 @@ def findPopBest(population):
 
 # executes two point crossover at node junctions
 def cxTwoPointNode(ind1, ind2):
+	# copied and modified from deap
+	# needed to account for bistring only being one of two components of individual
 	"""Executes a two-point crossover on the input :term:`sequence`
     individuals. The two individuals are modified in place and both keep
     their original length. 
@@ -72,27 +74,29 @@ def cxTwoPointNode(ind1, ind2):
 	size = len(ind1[0].nodeList)
 	cxpointer1 = randint(1, size)
 	cxpointer2 = randint(1, size - 1)
+	# make sure pointers are in right order
 	if cxpointer2 >= cxpointer1:
 		cxpointer2 += 1
 	else: # Swap the two cx points
 		cxpointer1, cxpointer2 = cxpointer2, cxpointer1
 	cxpoint1=ind1[0].individualParse[cxpointer1]
 	cxpoint2=ind1[0].individualParse[cxpointer2]
+	# cross over both bitlists and the andNodeLists (as well as andNodeInvertLists)
 	ind1[1][cxpoint1:cxpoint2], ind2[1][cxpoint1:cxpoint2] = ind2[1][cxpoint1:cxpoint2], ind1[1][cxpoint1:cxpoint2]
 	ind1[0].andNodeList[cxpointer1:cxpointer2], ind2[0].andNodeList[cxpointer1:cxpointer2] = ind2[0].andNodeList[cxpointer1:cxpointer2], ind1[0].andNodeList[cxpointer1:cxpointer2]
 	ind1[0].andNodeInvertList[cxpointer1:cxpointer2], ind2[0].andNodeInvertList[cxpointer1:cxpointer2] = ind2[0].andNodeInvertList[cxpointer1:cxpointer2], ind1[0].andNodeInvertList[cxpointer1:cxpointer2]
 	return ind1, ind2
 
-# sets up GA toolbox for deap/adaptive
+# sets up GA toolbox from deap
 def buildToolbox( individualLength, bitFlipProb, model, params):
-	# # #setup toolbox
-	toolbox = base.Toolbox()
 	
-	pset = gp.PrimitiveSet("MAIN", arity=1)
-	pset.addPrimitive(operator.add, 2)
-	pset.addPrimitive(operator.sub, 2)
-	pset.addPrimitive(operator.mul, 2)
-	weightTup=(-1.0,)
+	toolbox = base.Toolbox() # build baseline toolbox
+	
+	# pset = gp.PrimitiveSet("MAIN", arity=1)
+	# pset.addPrimitive(operator.add, 2)
+	# pset.addPrimitive(operator.sub, 2)
+	# pset.addPrimitive(operator.mul, 2)
+	weightTup=(-1.0,) # specify weight
 	if params.adaptive:
 		for i in range(len(model.nodeList)-1):
 			weightTup+=(-1.0,)
@@ -117,42 +121,32 @@ def buildToolbox( individualLength, bitFlipProb, model, params):
 	toolbox.register("similar", numpy.array_equal)
 	return toolbox, stats
 
-def evaluator(individual, cells, model,  sss, params, KOlist, KIlist, j):
-	boolValues=EBNbool(individual, model, cells, model.initValueList[j], params,KOlist[j], KIlist[j])
-	return numpy.sum([(boolValues[i]-sss[j][model.nodeList[i]])**2 for i in range(0, len(model.nodeList))])	
-
-# fitness calculation based on simulation			
-def evaluate(individual, cells, model,  sss, params, KOlist, KIlist):
-	SSEs=[]
-	SSEs=Parallel(n_jobs=min(24,len(sss)))(delayed(evaluator)(list(individual), cells, model,  sss, params, KOlist, KIlist, j) for j in range(len(sss)))
-	summer=1.*numpy.sum(SSEs)/len(SSEs)
-	return summer,
-
-# calculate node-wise fitness
-def evaluateByNode(individual, cells, model,  sss, params, KOlist, KIlist):
-	boolValues=[EBNbool(list(individual), model, cells, model.initValueList[i], params, KOlist[i], KIlist[i]) for i in range(len(sss))]
+# calculate  fitness for an individual
+def evaluateByNode(individual, cells, model,  sss, params, KOlist, KIlist, boolC):
+	boolValues=[NP(list(individual), model, cells, model.initValueList[i], params, KOlist[i], KIlist[i], boolC) for i in range(len(sss))]
 	return tuple([numpy.sum([(boolValues[j][i]-sss[j][model.nodeList[i]])**2 for j in range(0,len(sss))]) for i in range(0, len(model.nodeList))])
 
 # generates a random set of samples made up of cells by using parameteris from probInit seq
 # to set up then iterating using strict Boolean modeling. 
-def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlist, KIlist):
-	samples=[]
+def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlist, KIlist, boolC):
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random())
-	samples=[sampler(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i]) for i in range(sampleNum)]
+	samples=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i], boolC) for i in range(sampleNum))
+	# samples=[sampler(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i]) for i in range(sampleNum)]
 	return samples
 
 # generates random seed samples... i.e. generates random starting states then runs EBN
-def sampler(individual, model, cells, seeder, params, KOs, KIs):
+def sampler(individual, model, cells, seeder, params, KOs, KIs, boolC):
 	seed(seeder)
 	cellArray=[]
 	sampleProbs=[]
 	# generate random proportions for each node to start
 	for j in range(0,len(model.nodeList)):
 		sampleProbs.append(random())
-	return EBNbool(individual, model, cells, sampleProbs, params, KOs, KIs)
+	return NP(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
 
+# generates list of offspring to be compared... decides to do crossover or mutation
 def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac, mutModel):
 	# algorithm for generating a list of offspring... copied and pasted from DEAP with modification for adaptive mutation
 	assert (cxpb + mutpb) <= 1.0, ("The sum of the crossover and mutation "
@@ -170,42 +164,41 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac, mut
 			ind, = mutFlipBitAdapt(ind, genfrac, mutModel)
 			del ind.fitness.values
 			offspring.append(ind)
-		else:                           # Apply reproduction
+		else:                           # shouldn't happen... clone existing individual
 			offspring.append(choice(population))
 	return offspring
 
+# mutation algorithm
 def mutFlipBitAdapt(indyIn, genfrac, mutModel):
-	# get errors
-	errors=list(indyIn.fitness.values)
+	errors=list(indyIn.fitness.values) # get errors
 	individual=indyIn[1]
 	model=indyIn[0]
-	for i in range(len(errors)):
-		temper=model.successorNums[i]
-		if temper==0:
-			errors[i]=errors[i]*len(model.possibilityList[i])
-		else:
-			errors[i]=errors[i]*len(model.possibilityList[i])*temper
-
-	# get rid of errors in nodes that can't be changed
-	for j in xrange(len(errors)):
-		if model.andLenList[j]<2:
-			errors[j]=0
-	# print(errors)
 	# if error is relatively low, do a totally random mutation
-	
 	if numpy.sum(errors)<.05*len(model.nodeList):
 		focusNode=int(math.floor(random()*len(model.andLenList)))
-	else:
-		# if errors are relatively high, focus on nodes that fit the worst
+	else: 
+		# if errors are relatively high, focus on nodes that fit the worst and have highest in-degree
+		# calculate probabilities for mutating each node
+		for i in range(len(errors)):
+			temper=model.successorNums[i]
+			if temper==0:
+				errors[i]=errors[i]*len(model.possibilityList[i])
+			else:
+				errors[i]=errors[i]*len(model.possibilityList[i])*temper
+		# get rid of errors in nodes that can't be changed
+		for j in xrange(len(errors)):
+			if model.andLenList[j]<2:
+				errors[j]=0		
 		normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
 		probs=numpy.cumsum(normerrors)
-		# print(probs)
 		randy=random()# randomly select a node to mutate
 		focusNode=next(i for i in range(len(probs)) if probs[i]>randy)
-	# print(focusNode)
+	# perform mutation
 	if model.andLenList[focusNode]>1:
 		# find ends of the node of interest in the individual
 		start=model.individualParse[focusNode]
+		end=findEnd(focusNode,model)
+		# mutate the inputs some of the time
 		if len(model.possibilityList[focusNode])>3 and random()<mutModel:
 			temppermup=[]
 			upstreamAdders=list(model.possibilityList[focusNode])
@@ -217,14 +210,11 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 					addNoder=int(math.floor(random()*len(upstreamAdders)))
 				else:
 					recalc=numpy.cumsum([1.*rval/tempsum for rval in rvals])
-					# print(sum(recalc))
-					# print(recalc)
-					# print(rvals)
 					addNoder=next(i for i in range(len(recalc)) if recalc[i]>randy)
 				temppermup.append(upstreamAdders.pop(addNoder))
 				rvals.pop(addNoder)
 			model.update_upstream(focusNode,temppermup )
-		end=findEnd(focusNode,model)
+		
 		for i in range(start,end):
 			if random()< 2/(end-start+1):
 				individual[i] = 1
@@ -378,6 +368,7 @@ def assignCrowdingDist(individuals):
 	for i, dist in enumerate(distances):
 		individuals[i].fitness.crowding_dist = dist
 
+# master GA algorithm
 def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, namer, newSSS,KOlist, KIlist, params ,stats=None, verbose=__debug__):
 	modelNodes=params.modelNodes
 	# population=[[copy.deepcopy(model),genBits(model)]for i in range(params.popSize)]
@@ -391,7 +382,7 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 	popList=[]
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
-	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist) for indy in invalid_ind)
+	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
 	fitnesslist.append([list(ind.fitness.values) for ind in population])
@@ -417,7 +408,7 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 		offspring = varOrAdaptive(population, toolbox, model, lambda_, .5+.5*(1.-1.*gen/ngen), (.5*gen/ngen), (1.*gen/ngen),mutModel)
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist) for indy in invalid_ind)
+		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
 		# Select the next generation population
@@ -450,27 +441,29 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 	# pickle.dump( outputList, open( namer+"_pops.pickle", "wb" ) )
 	return population, logbook
 
-def GAautoSolver(model, sss, params, KOlist, KIlist, namer):
+def GAautoSolver(model, sss, params, KOlist, KIlist, namer, boolC):
 	# set up toolbox and run GA with or without adaptive mutations turned on
-	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model, params)
 	if not params.adaptive:
 		toolbox.register("evaluate", evaluate, cells=params.cells,model=model,sss=sss, params=params, KOlist=KOlist, KIlist=KIlist)
 		population=toolbox.population(n=params.popSize)
 	if params.adaptive:
-		output=eaMuPlusLambdaAdaptive(toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, namer=namer, newSSS= sss,KOlist=KOlist, KIlist=KIlist, params=params,  verbose=params.verbose)
 	else:
 		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose)
 	return output
 
-def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer):
-	newInitValueList= genInitValueList(sampleList,model)
-	model.initValueList=newInitValueList
-	population, logbook=GAautoSolver(model, sss, params, KOlist, KIlist, namer)
+# wrapper for GA. eaMuPlusLambdaAdaptive does heavy lifting
+def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer, boolC):
+	newInitValueList= genInitValueList(sampleList,model) # set up initial value list
+	model.initValueList=newInitValueList # append initial value list to model
+	toolbox, stats=buildToolbox(model.size,params.bitFlipProb, model, params) # set up toolbox
+	# run GA, find best in population, return
+	population, logbook=eaMuPlusLambdaAdaptive(toolbox, model, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, namer=namer, newSSS= sampleList,KOlist=KOlist, KIlist=KIlist, params=params,  verbose=params.verbose, boolC=boolC)
 	out1, out2, model  = findPopBest(population)
 	return model,out1,out2
 
-def localSearch(model, indy, newSSS, params, KOlist, KIlist):
-	outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist ) for node in range(len(model.nodeList)))
+# wrapper to do local search in parrallell manner
+def localSearch(model, indy, newSSS, params, KOlist, KIlist, boolC):
+	outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList)))
 	equivs=[]
 	individual=[]
 	devs=[]
@@ -480,7 +473,8 @@ def localSearch(model, indy, newSSS, params, KOlist, KIlist):
 		devs.append(output[2])
 	return individual, equivs, devs
 
-def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KIlist ):
+# local search function
+def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KIlist, boolC ):
 	tol=.01*len(newSSS)
 	end=findEnd(node,model)
 	start=model.individualParse[node]
@@ -494,7 +488,7 @@ def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KI
 		tempultimate=list(indy)
 		tempInd=bitList(i, len(truth))
 		tempultimate[start:end]=tempInd
-		currentsumtemp=evaluateByNode(tempultimate, cellNum, model,  newSSS, params,KOlist, KIlist )
+		currentsumtemp=evaluateByNode(tempultimate, cellNum, model,  newSSS, params,KOlist, KIlist , boolC)
 		currentsum=currentsumtemp[node]
 		indOptions.append(tempultimate)
 		indErrors.append(currentsum)

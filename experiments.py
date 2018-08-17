@@ -42,6 +42,11 @@ def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
 	#graph specifies the network we are testing. 
 	# does everything except select the initial random bitstring and setup parameters
 
+
+	# load in C function
+	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	boolC=updateBooler.syncBool 
+
 	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
 	model=sim.modelClass(graph,sampleList, True) # generate empty model
 
@@ -90,8 +95,8 @@ def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
 	testModel.initValueList=newInitValueList
 	
 	#find rules
-	testModel, dev, bruteOut =ga.GAsearchModel(testModel, newSampleList, params, knockoutLists, knockinLists, name) # run GA
-	bruteOut, equivalents = ga.localSearch(testModel, bruteOut, newSampleList, params, knockoutLists, knockinLists) # run local search
+	testModel, dev, bruteOut =ga.GAsearchModel(testModel, newSampleList, params, knockoutLists, knockinLists, name, boolC) # run GA
+	bruteOut, equivalents = ga.localSearch(testModel, bruteOut, newSampleList, params, knockoutLists, knockinLists, boolC) # run local search
 	storeModel3=[(testModel.size), list(testModel.nodeList), list(testModel.individualParse), list(testModel.andNodeList) , list(testModel.andNodeInvertList), list(testModel.andLenList),	list(testModel.nodeList), dict(testModel.nodeDict), list(testModel.initValueList)]
 
 	outputList=[individual[1],bruteOut,storeModel, storeModel3, equivalents]
@@ -123,13 +128,16 @@ def transformTest(graph,name,filename):
 	if len(graph.nodes())<2:
 		print('not enough overlap')
 		return
+	
+	# load in C function
+	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	boolC=updateBooler.syncBool 
 
 	# load data, params, make empty knockout and knockin lists (no KO or KI in transform tests)
 	sampleDict = constructBinInput(fileName)
 	params=sim.paramClass()
 	print(graph.nodes())
 	knockoutLists, knockinLists= setupEmptyKOKI(samples)
-
 
 	# generate turn sample dict into sample list (list of dicts instead of dict of lists)
 	keyList=sampleDict.keys()
@@ -148,8 +156,8 @@ def transformTest(graph,name,filename):
 	print('setup successful')
 
 	# find the rules
-	model, dev1, bruteOut =ga.GAsearchModel(model, sampleList, params, knockoutLists, knockinLists, name)
-	bruteOut, equivalents, dev2 = ga.localSearch(model, bruteOut, sampleList, params, knockoutLists, knockinLists)
+	model, dev1, bruteOut =ga.GAsearchModel(model, sampleList, params, knockoutLists, knockinLists, name, boolC)
+	bruteOut, equivalents, dev2 = ga.localSearch(model, bruteOut, sampleList, params, knockoutLists, knockinLists, boolC)
 	pickle.dump( [[dev1],[dev2],[bruteOut],[model]], open( name+"_output.pickle", "wb" ) )
 
 def findPathways(geneDict):

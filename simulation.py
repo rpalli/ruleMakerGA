@@ -283,12 +283,6 @@ def runBool(individual, model,  simSteps, initValues, params, knockouts, knockin
 	else:
 		return syncBool(individual, model, simSteps, initValues, knockouts, knockins)
 
-def runFuzzy(individual, model,  simSteps, initValues, params, knockouts, knockins):
-	if params.async:
-		return asyncFuzzy(individual, model,  initValues, params.iters, knockouts, knockins)
-	else:
-		return syncFuzzy(individual, model, initValues, knockouts, knockins)
-
 def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	# set up data storage for simulation, add step 0
@@ -325,39 +319,6 @@ def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 			simData[i,step]=temp
 	avg=[.1*np.count_nonzero(simData[i,simSteps-10:simSteps]) for i in range(nodeNum)]
 	return avg
-
-def syncFuzzy(individual, model, simSteps, initValues, knockouts, knockins):
-	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
-	# set up data storage for simulation, add step 0
-	newValue=list(initValues)
-	simData=[]
-	simData.append(list(newValue))
-	#iterate over number of steps necessary
-	for step in range(0,simSteps):
-		oldValue=list(newValue)
-		for i in range(0,len(model.nodeList)):
-			#find start and finish for each node to update from the individualParse list
-			if i in knockouts:
-				temp=0
-			elif i in knockins:
-				temp=1
-			elif model.andLenList[i]==1:
-				temp=   oldValue[i]^model.andNodeInvertList[i][0][0]
-			elif model.andLenList[i]==0:
-				temp=oldValue[i]
-			else:
-				if i==len(model.nodeList)-1:
-					end= model.size
-				else:
-					end=model.individualParse[i+1]	 
-				temp=updateFuzzy(i,oldValue,individual[model.individualParse[i]:end], model)
-			newValue[i]=temp
-		simData.append(list(newValue))
-	avgs= [[] for x in range(0,len(newValue))]
-	for element in range(0,len(avgs)):
-		avgs[element]=[simData[step][element] for step in range(len(simData)-10,len(simData)) ]
-	avg= [1.*np.sum(element)/len(element) for element in avgs]
-	return avgs
 
 #run asyncrhnonoyus simulation and average it over iters trials
 def asyncBool(individual, model, simSteps, initValues, iters, knockouts, knockins):
@@ -403,50 +364,6 @@ def asyncBool(individual, model, simSteps, initValues, iters, knockouts, knockin
 		avgs[i]=sum1[i]/float(params.iters)
 	return avgs
 
-#run asyncrhnonoyus simulation and average it over iters trials
-def asyncFuzzy(individual, model, simSteps, initValues, iters, knockouts, knockins):
-	sum1=[0 for x in range(0,len(initValues))]
-	# run iterations with different orderings
-	for i in range(0,params.iters):
-		# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
-		# set up data storage for simulation, add step 0
-		newValue=list(initValues)
-		# totalNodes=0... turn this on for information criterion
-
-		# set up the sequence of nodes to be updated
-		seq=range(0,len(model.nodeList))
-		#iterate over number of steps necessary
-		for step in range(0,simSteps):
-			oldValue=list(newValue)
-			#shuffle- async 
-			shuffle(seq)
-			for i in range(0,len(model.nodeList)):
-				#find start and finish for each node to update from the individualParse list
-				if seq[i] in knockouts:
-					temp=0
-				elif seq[i] in knockins:
-					temp=1
-				elif model.andLenList[seq[i]]==1:
-					if model.andNodeInvertList[seq[i]][0][0]:
-						temp=   1- oldValue[seq[i]]
-					else:
-						temp=  oldValue[seq[i]]
-				elif model.andLenList[seq[i]]==0:
-					temp=oldValue[seq[i]]
-				else:
-					if seq[i]==len(model.nodeList)-1:
-						end= model.size
-					else:
-						end=model.individualParse[seq[i]+1]	 
-					temp=updateFuzzy(seq[i],newValue,individual[model.individualParse[seq[i]]:end],  model)
-				newValue[seq[i]]=temp
-		for j in range(0,len(sum1)):
-			sum1[j]=sum1[j]+newValue[j]
-	avgs=list(sum1)
-	for i in range(0,len(sum1)):
-		avgs[i]=sum1[i]/float(params.iters)
-	return avgs
-
 # init value generator for EBNs
 def genEBNInitValues(individual, model,sampleProbs):
 	#return [True if (random()<sampleProbs[node]) else False for node in range(0,len(sampleProbs))]
@@ -456,16 +373,20 @@ def genEBNInitValues(individual, model,sampleProbs):
 			initValues[node]=1
 	return initValues
 
+def NP(individual, model, cells, sampleProbs, params, KOs, KIs, booC):
+	if params.async:
+		NPasync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
+	else:
+		NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
+
 # main EBN simulation code. Runs an EBN
-def EBNbool(individual, model, cells, sampleProbs, params, KOs, KIs):
+def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
 	cellArray=[]
 	# simSteps=3*len(model.nodeList)
 	simSteps= 100
 
 	async=params.async
 	
-	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
-	syncBool2=updateBooler.syncBool 
 	knockins=np.zeros(len(model.nodeList),dtype=np.intc, order='C')
 	knockouts=np.zeros(len(model.nodeList),dtype=np.intc, order='C')
 	for knocker in KOs:
@@ -508,7 +429,7 @@ def EBNbool(individual, model, cells, sampleProbs, params, KOs, KIs):
 	knockouts1=ctypes.c_void_p(knockouts.ctypes.data)
 	knockins1=ctypes.c_void_p(knockins.ctypes.data)
 
-	#syncBool2.argtypes = [ctypes.c_int, ndpointer(ctypes.c_int), ndpointer(ctypes.c_int)]
+	#syncBoolC.argtypes = [ctypes.c_int, ndpointer(ctypes.c_int), ndpointer(ctypes.c_int)]
 	for j in range(0,cells):
 		# shuffle nodes to be initially called.... 
 		#simulations that are truly random starting states should have all nodes added to this list
@@ -526,29 +447,8 @@ def EBNbool(individual, model, cells, sampleProbs, params, KOs, KIs):
 		initValues1=ctypes.c_void_p(initValues.ctypes.data)
 		valsubmit=ctypes.c_void_p(vals.ctypes.data)
 
-		syncBool2(valsubmit,nodeIndividual1, indLen1, nodeNum1, andLenList1, individualParse1, andNodes1, andNodeInvertList1, simSteps1, initValues1, knockouts1, knockins1)
+		syncBoolC(valsubmit,nodeIndividual1, indLen1, nodeNum1, andLenList1, individualParse1, andNodes1, andNodeInvertList1, simSteps1, initValues1, knockouts1, knockins1)
 		
 		# vals=runBool(individual, model,simSteps, initValues, params, KOs, KIs, async)
 		cellArray.append(.1*vals)
 	return [(1.*np.sum(col)) / cells for col in zip(*cellArray)]
-
-def EBNfuzzy(individual, model, cells, initProbs, params, KOs, KIs, iteratorDict):
-	cellArray=[]
-	simSteps=3*len(model.nodeList)
-	if not tuple(individual) in iteratorDict:
-		iteratorDict[tuple(individual)]={}
-	valueDict=iteratorDict[tuple(individual)]
-
-	for j in range(0,cells):
-		# shuffle nodes to be initially called.... 
-		#simulations that are truly random starting states should have all nodes added to this list
-		#get initial values for all nodes
-		initValues=genEBNInitFuzzies(individual, model,initProbs)
-		if tuple(initValues) in valueDict:
-			vals=valueDict[tuple(initValues)]
-		else:
-			# run Boolean simulation with initial values and append
-			vals=syncBool(individual, model,simSteps, initValues, params, KOs, KIs)
-			valueDict[initValues]=vals
-		cellArray.append(vals)
-	return [1.*np.sum(col) / float(cells) for col in zip(*cellArray)]
