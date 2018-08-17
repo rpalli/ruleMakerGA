@@ -36,11 +36,12 @@ def genSampleList(output, sampleDict, samples):
 
 
 # run an experiment comparing 
-def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
+def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	#creates a model, runs simulations, then tests reverse engineering capabilities of models in a single function
 	#samples is the number of different initial conditions to provide per trial
 	#graph specifies the network we are testing. 
-	# does everything except select the initial random bitstring and setup parameters
+	# does everything except params
+
 
 
 	# load in C function
@@ -48,7 +49,15 @@ def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
 	boolC=updateBooler.syncBool 
 
 	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
+
 	model=sim.modelClass(graph,sampleList, True) # generate empty model
+	individual=ga.genBits(model) #generate random set of logic rules to start with
+
+
+	if edgeNoise > 0:
+		individual[1]=	[0,1,1,1,1,1,0,0,1,0,1,1,1]
+
+
 
 	initModel=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 	knockoutLists, knockinLists= setupEmptyKOKI(samples)
@@ -103,25 +112,19 @@ def runExperiment(graph, name, samples, noise, edgeNoise, individual, params):
 	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
 
 def sampleTester(graph, name, samples):
-	individual=ga.genBits(model) #generate random set of logic rules to start with
 	params=sim.paramClass() # load in parameters
-	runExperiment(graph, name, samples, 0., 0,individual, params)
+	runExperiment(graph, name, samples, 0., 0, params)
 
 def omicsNoiseTester(graph, name, noise):
-	individual=ga.genBits(model) #generate random set of logic rules to start with
 	params=sim.paramClass() # load in parameters
-	runExperiment(graph, name, params.samples, noise,0, individual, params)
+	runExperiment(graph, name, params.samples, noise,0, params)
 
 def RPKNnoiseTester(graph, name, noiseEdges):
+	model=sim.modelClass(graph,sampleList, True) # generate empty model
 	# runs experiment using graph and rule from Liu et al. 2016 along with additional false positive edges
 	# loop over number of times we want to generate fake data and perform sequence of events
 	params=sim.paramClass() # load in parameters
-	# set up rule from Liu network
-	individual=ga.genBits(model)
-	individual[1]=	[0,1,1,1,1,1,0,0,1,0,1,1,1]
-	print(individual[1])
-	print(graph.edges())
-	runExperiment(graph, name, params.samples, 0. , noiseEdges, individual, params)
+	runExperiment(graph, name, params.samples, 0. , noiseEdges, params)
 
 def transformTest(graph,name,filename):
 	# can't fit a rule to only one node
