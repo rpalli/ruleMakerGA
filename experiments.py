@@ -109,7 +109,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	bruteOut, equivalents = ga.localSearch(testModel, bruteOut, newSampleList, params, knockoutLists, knockinLists, boolC) # run local search
 	storeModel3=[(testModel.size), list(testModel.nodeList), list(testModel.individualParse), list(testModel.andNodeList) , list(testModel.andNodeInvertList), list(testModel.andLenList),	list(testModel.nodeList), dict(testModel.nodeDict), list(testModel.initValueList)]
 
-	outputList=[individual[1],bruteOut,storeModel, storeModel3, equivalents]
+	outputList=[individual[1],bruteOut,initModel, storeModel3, equivalents]
 	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
 
 def sampleTester(graph, name, samples):
@@ -126,7 +126,7 @@ def RPKNnoiseTester(graph, name, noiseEdges):
 	params=sim.paramClass() # load in parameters
 	runExperiment(graph, name, params.samples, 0. , noiseEdges, params)
 
-def transformTest(graph,name,filename):
+def transformTest(graph,name,fileName):
 	# can't fit a rule to only one node
 	if len(graph.nodes())<2:
 		print('not enough overlap')
@@ -140,7 +140,6 @@ def transformTest(graph,name,filename):
 	sampleDict = constructBinInput(fileName)
 	params=sim.paramClass()
 	print(graph.nodes())
-	knockoutLists, knockinLists= setupEmptyKOKI(samples)
 
 	# generate turn sample dict into sample list (list of dicts instead of dict of lists)
 	keyList=sampleDict.keys()
@@ -150,6 +149,8 @@ def transformTest(graph,name,filename):
 			if key in graph.nodes():
 				sampleList[i][key]=sampleDict[key][i]
 	
+	knockoutLists, knockinLists= setupEmptyKOKI(len(sampleList))
+
 	# generate model encompassing graph and samples to do rule inference on
 	model=sim.modelClass(graph,sampleList, False)
 	model.updateCpointers()
