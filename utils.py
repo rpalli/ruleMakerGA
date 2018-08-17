@@ -22,6 +22,7 @@ def findEnd(node,model):
 		end= model.size
 	else:
 		end=model.individualParse[node+1]
+	return end
 
 def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))

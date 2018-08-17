@@ -16,7 +16,7 @@ from itertools import chain
 from operator import attrgetter, itemgetter
 # import other pieces of our software
 from simulation import paramClass, NP
-from utils import findEnd, genRandBits, bitList
+from utils import findEnd, genRandBits, bitList, genInitValueList
 # generates random bitstring with at least one value for each node
 def genBits(model):
 	# generate random bitlist
@@ -85,6 +85,8 @@ def cxTwoPointNode(ind1, ind2):
 	ind1[1][cxpoint1:cxpoint2], ind2[1][cxpoint1:cxpoint2] = ind2[1][cxpoint1:cxpoint2], ind1[1][cxpoint1:cxpoint2]
 	ind1[0].andNodeList[cxpointer1:cxpointer2], ind2[0].andNodeList[cxpointer1:cxpointer2] = ind2[0].andNodeList[cxpointer1:cxpointer2], ind1[0].andNodeList[cxpointer1:cxpointer2]
 	ind1[0].andNodeInvertList[cxpointer1:cxpointer2], ind2[0].andNodeInvertList[cxpointer1:cxpointer2] = ind2[0].andNodeInvertList[cxpointer1:cxpointer2], ind1[0].andNodeInvertList[cxpointer1:cxpointer2]
+	ind1[0].updateCpointers()
+	ind2[0].updateCpointers()
 	return ind1, ind2
 
 # sets up GA toolbox from deap
@@ -132,8 +134,8 @@ def runProbabilityBooleanSims(individual, model, sampleNum, cells, params, KOlis
 	seeds=[]
 	for i in range(0,sampleNum):
 		seeds.append(random())
-	samples=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i], boolC) for i in range(sampleNum))
-	# samples=[sampler(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i]) for i in range(sampleNum)]
+	# samples=Parallel(n_jobs=min(24,sampleNum))(delayed(sampler)(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i], boolC) for i in range(sampleNum))
+	samples=[sampler(individual, model, sampleNum, seeds[i], params, KOlist[i], KIlist[i], boolC) for i in range(sampleNum)]
 	return samples
 
 # generates random seed samples... i.e. generates random starting states then runs EBN
@@ -213,8 +215,8 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 					addNoder=next(i for i in range(len(recalc)) if recalc[i]>randy)
 				temppermup.append(upstreamAdders.pop(addNoder))
 				rvals.pop(addNoder)
-			model.update_upstream(focusNode,temppermup )
-		
+			model.update_upstream(focusNode,temppermup)
+			model.updateCpointers()
 		for i in range(start,end):
 			if random()< 2/(end-start+1):
 				individual[i] = 1
@@ -369,7 +371,7 @@ def assignCrowdingDist(individuals):
 		individuals[i].fitness.crowding_dist = dist
 
 # master GA algorithm
-def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, namer, newSSS,KOlist, KIlist, params ,stats=None, verbose=__debug__):
+def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, namer, newSSS,KOlist, KIlist, params ,boolC,stats=None, verbose=__debug__):
 	modelNodes=params.modelNodes
 	# population=[[copy.deepcopy(model),genBits(model)]for i in range(params.popSize)]
 	population=toolbox.population(n=params.popSize)
@@ -382,7 +384,9 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 	popList=[]
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
-	fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
+	# fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
+	fitnesses=[evaluateByNode(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind]
+
 	for ind, fit in zip(invalid_ind, fitnesses):
 		ind.fitness.values = fit
 	fitnesslist.append([list(ind.fitness.values) for ind in population])
@@ -408,7 +412,8 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 		offspring = varOrAdaptive(population, toolbox, model, lambda_, .5+.5*(1.-1.*gen/ngen), (.5*gen/ngen), (1.*gen/ngen),mutModel)
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-		fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
+		# fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
+		fitnesses=[evaluateByNode(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind]
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
 		# Select the next generation population
@@ -441,16 +446,6 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 	# pickle.dump( outputList, open( namer+"_pops.pickle", "wb" ) )
 	return population, logbook
 
-def GAautoSolver(model, sss, params, KOlist, KIlist, namer, boolC):
-	# set up toolbox and run GA with or without adaptive mutations turned on
-	if not params.adaptive:
-		toolbox.register("evaluate", evaluate, cells=params.cells,model=model,sss=sss, params=params, KOlist=KOlist, KIlist=KIlist)
-		population=toolbox.population(n=params.popSize)
-	if params.adaptive:
-	else:
-		output=algo.eaMuCommaLambda(population, toolbox, mu=params.mu, lambda_=params.lambd, stats=stats, cxpb=params.crossoverProb, mutpb=params.mutationProb, ngen=params.generations, verbose=params.verbose)
-	return output
-
 # wrapper for GA. eaMuPlusLambdaAdaptive does heavy lifting
 def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer, boolC):
 	newInitValueList= genInitValueList(sampleList,model) # set up initial value list
@@ -463,7 +458,8 @@ def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer, boolC):
 
 # wrapper to do local search in parrallell manner
 def localSearch(model, indy, newSSS, params, KOlist, KIlist, boolC):
-	outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList)))
+	outputs=[checkNodePossibilities(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList))]
+	# outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList)))
 	equivs=[]
 	individual=[]
 	devs=[]
@@ -472,7 +468,6 @@ def localSearch(model, indy, newSSS, params, KOlist, KIlist, boolC):
 		equivs.append(output[1])
 		devs.append(output[2])
 	return individual, equivs, devs
-
 # local search function
 def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KIlist, boolC ):
 	tol=.01*len(newSSS)

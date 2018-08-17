@@ -136,6 +136,7 @@ class modelClass:
 		self.possibilityInverter=possibilityInverter
 		self.permList=permList
 		self.successorNums=succnum
+		self.nodeNum=len(nodeList)
 
 		
 	def update_upstream(self, node, newUpstreams):
@@ -161,6 +162,22 @@ class modelClass:
 			activities.append(activity)
 		self.andNodeList[node]=possibilities
 		self.andNodeInvertList[node]=activities
+	def updateCpointers(self):
+		tempandnoder=[]
+		tempandinverter=[]
+		for currentNode in range(300):
+			tempAndNodes=[]
+			tempandNodeInvertList=[]
+			if currentNode<len(self.nodeList):
+				tempAndNodes=[xi+[-1]*(3-len(xi)) for xi in self.andNodeList[currentNode]]
+				tempandNodeInvertList=[xi+[-1]*(3-len(xi)) for xi in self.andNodeInvertList[currentNode]]
+			while(len(tempAndNodes)<7):
+				tempAndNodes.append([0,0,0])
+				tempandNodeInvertList.append([0,0,0])
+			tempandnoder.append(tempAndNodes)
+			tempandinverter.append(tempandNodeInvertList)
+		self.andNodeInvert=np.array(tempandinverter, dtype=np.intc, order='C')
+		self.andNodes=np.array(tempandnoder, dtype=np.intc, order='C')
 
 class paramClass:
 	def __init__(self,):    
@@ -367,17 +384,17 @@ def asyncBool(individual, model, simSteps, initValues, iters, knockouts, knockin
 # init value generator for EBNs
 def genEBNInitValues(individual, model,sampleProbs):
 	#return [True if (random()<sampleProbs[node]) else False for node in range(0,len(sampleProbs))]
-	initValues=[0 for x in range(0,len(model.nodeList))]
+	initValues=np.zeros(300,dtype=np.intc, order='C')
 	for node in range(0,len(sampleProbs)):
 		if random()<sampleProbs[node]:
 			initValues[node]=1
 	return initValues
 
-def NP(individual, model, cells, sampleProbs, params, KOs, KIs, booC):
+def NP(individual, model, cells, sampleProbs, params, KOs, KIs, boolC):
 	if params.async:
-		NPasync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
+		return NPasync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC )
 	else:
-		NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
+		return NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
 
 # main EBN simulation code. Runs an EBN
 def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
@@ -389,54 +406,42 @@ def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
 	
 	knockins=np.zeros(len(model.nodeList),dtype=np.intc, order='C')
 	knockouts=np.zeros(len(model.nodeList),dtype=np.intc, order='C')
-	for knocker in KOs:
-		knockouts[knocker]=1
-	for knocker in KIs:
-		knockins[knocker]=1
+	# for knocker in KOs:
+	# 	knockouts[knocker]=1
+	# for knocker in KIs:
+	# 	knockins[knocker]=1
 	# put objects in correct format for passing to C
 	nodeIndividual=np.array(individual, dtype=np.intc, order='C')
 	indLen=len(nodeIndividual)
 	nodeNum=len(model.nodeList)
 	individualParse=np.array(model.individualParse, dtype=np.intc, order='C')
-	tempandnoder=[]
-	tempandinverter=[]
-	for currentNode in range(300):
-		tempAndNodes=[]
-		tempandNodeInvertList=[]
-		if currentNode<len(model.nodeList):
-			tempAndNodes=[xi+[-1]*(3-len(xi)) for xi in model.andNodeList[currentNode]]
-			tempandNodeInvertList=[xi+[-1]*(3-len(xi)) for xi in model.andNodeInvertList[currentNode]]
-		while(len(tempAndNodes)<7):
-			tempAndNodes.append([0,0,0])
-			tempandNodeInvertList.append([0,0,0])
-		tempandnoder.append(tempAndNodes)
-		tempandinverter.append(tempandNodeInvertList)
-
-	andNodeInvertList=np.array(tempandinverter, dtype=np.intc, order='C')
-	andNodes=np.array(tempandnoder, dtype=np.intc, order='C')
 	
 	andLenList=np.array(model.andLenList, dtype=np.intc, order='C')
 
 	# convert objects into C pointers
 	nodeIndividual1=ctypes.c_void_p(nodeIndividual.ctypes.data)
 	indLen1=ctypes.c_void_p(indLen)
-	andNodes1=ctypes.c_void_p(andNodes.ctypes.data)
+	andNodes1=ctypes.c_void_p(model.andNodes.ctypes.data)
 	individualParse1=ctypes.c_void_p(individualParse.ctypes.data)
 	andLenList1=ctypes.c_void_p(andLenList.ctypes.data)
-	andNodeInvertList1=ctypes.c_void_p(andNodeInvertList.ctypes.data)
+	andNodeInvertList1=ctypes.c_void_p(model.andNodeInvert.ctypes.data)
 	nodeNum1=ctypes.c_void_p(nodeNum)
 	simSteps1=ctypes.c_void_p(simSteps)
 	knockouts1=ctypes.c_void_p(knockouts.ctypes.data)
 	knockins1=ctypes.c_void_p(knockins.ctypes.data)
+	
+	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	boolC2=updateBooler.syncBool 
 
-	#syncBoolC.argtypes = [ctypes.c_int, ndpointer(ctypes.c_int), ndpointer(ctypes.c_int)]
+	# syncBoolC.argtypes = [ctypes.c_int, ndpointer(ctypes.c_int), ndpointer(ctypes.c_int)]
 	for j in range(0,cells):
 		# shuffle nodes to be initially called.... 
 		#simulations that are truly random starting states should have all nodes added to this list
 		#get initial values for all nodes
 		initValues=genEBNInitValues(individual, model,sampleProbs)
-		while len(initValues)<300:
-			initValues.append(-1)
+		# initValues.extend(np.repeat(-1,300-len(initValues)))
+		# while len(initValues)<300:
+		# 	initValues.append(-1)
 		
 		# work on integrating in the try catch rather than the if else below
 		# for q in range(len(initValues)):

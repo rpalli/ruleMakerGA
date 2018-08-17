@@ -51,6 +51,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
 
 	model=sim.modelClass(graph,sampleList, True) # generate empty model
+	model.updateCpointers()
 	individual=ga.genBits(model) #generate random set of logic rules to start with
 
 
@@ -98,7 +99,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	# copy simulated data into right format
 	newSampleList=genSampleDict(output, sampleList, samples)
 	testModel=sim.modelClass(graph,newSampleList, False)
-
+	testModel.updateCpointers()
 	# put initial values into correct format, add to model
 	newInitValueList=genInitValueList(newSampleList,testModel)
 	testModel.initValueList=newInitValueList
@@ -120,7 +121,6 @@ def omicsNoiseTester(graph, name, noise):
 	runExperiment(graph, name, params.samples, noise,0, params)
 
 def RPKNnoiseTester(graph, name, noiseEdges):
-	model=sim.modelClass(graph,sampleList, True) # generate empty model
 	# runs experiment using graph and rule from Liu et al. 2016 along with additional false positive edges
 	# loop over number of times we want to generate fake data and perform sequence of events
 	params=sim.paramClass() # load in parameters
@@ -152,7 +152,7 @@ def transformTest(graph,name,filename):
 	
 	# generate model encompassing graph and samples to do rule inference on
 	model=sim.modelClass(graph,sampleList, False)
-
+	model.updateCpointers()
 	# cpy data into correct order for simulation 
 	newInitValueList=genInitValueList(sampleList,model)
 	model.initValueList=newInitValueList
