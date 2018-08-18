@@ -9,7 +9,7 @@ import copy as copy
 import operator
 import argparse as argparse
 import gc as gc
-
+from ctypes import *
 # import other pieces of our software
 #import networkConstructor as nc
 import simulation as sim
@@ -45,7 +45,8 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 
 
 	# load in C function
-	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	#updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	updateBooler=cdll.LoadLibrary('./testRun.so')
 	boolC=updateBooler.syncBool 
 
 	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
@@ -133,7 +134,8 @@ def transformTest(graph,name,fileName):
 		return
 	
 	# load in C function
-	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	#updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	updateBooler=cdll.LoadLibrary('./testRun.so')
 	boolC=updateBooler.syncBool 
 
 	# load data, params, make empty knockout and knockin lists (no KO or KI in transform tests)
