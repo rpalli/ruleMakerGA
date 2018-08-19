@@ -176,7 +176,16 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 	individual=indyIn[1]
 	model=indyIn[0]
 	# if error is relatively low, do a totally random mutation
-	if numpy.sum(errors)<.05*len(model.nodeList):
+
+	# get rid of errors in nodes that can't be changed
+	errorNodes=0
+	for j in xrange(len(errors)):
+		if model.andLenList[j]<2:
+			errors[j]=0
+		else:
+			errorNodes=errorNodes+1		
+
+	if numpy.sum(errors)<.05*errorNodes:
 		focusNode=int(math.floor(random()*len(model.andLenList)))
 	else: 
 		# if errors are relatively high, focus on nodes that fit the worst and have highest in-degree
@@ -187,10 +196,6 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 				errors[i]=errors[i]*len(model.possibilityList[i])
 			else:
 				errors[i]=errors[i]*len(model.possibilityList[i])*temper
-		# get rid of errors in nodes that can't be changed
-		for j in xrange(len(errors)):
-			if model.andLenList[j]<2:
-				errors[j]=0		
 		normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
 		probs=numpy.cumsum(normerrors)
 		randy=random()# randomly select a node to mutate
