@@ -436,15 +436,15 @@ def analyzeGraph(stem, replicates):
 	testList=[]
 	varLists=[]
 	equivalents=[]
+	devs=[]
 	for i in range(1,replicates+1):
 		outputList=pickle.Unpickler(open( stem+str(i)+'_output.pickle', "rb" )).load()
-		[truthListtemp, testListtemp, truthmodel, testmodel, equivs]=outputList
+		[truth, test, truthmodel, testmodel, equivs, dev]=outputList
 		equivalents.append(equivs)
 		model1s.append(modelHolder(truthmodel))
 		model2s.append(modelHolder(testmodel))
-		truthListtemp.pop()
-		truthList.extend(truthListtemp)
-		testList.extend(testListtemp)
+		truthList.append(truth)
+		testList.append(test)
 		inputList=pickle.Unpickler(open( stem+str(i)+'_input.pickle', "rb" )).load()
 		varList=[]
 		for j in range(len(inputList[0])):

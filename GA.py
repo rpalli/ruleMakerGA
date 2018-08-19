@@ -485,7 +485,7 @@ def checkNodePossibilities(node, indy, newSSS, cellNum, model,params, KOlist, KI
 		tempultimate[start:end]=tempInd
 		currentsumtemp=evaluateByNode(tempultimate, cellNum, model,  newSSS, params,KOlist, KIlist , boolC)
 		currentsum=currentsumtemp[node]
-		indOptions.append(tempultimate)
+		indOptions.append(tempInd)
 		indErrors.append(currentsum)
 		gc.collect()
 	minny= min(indErrors)
