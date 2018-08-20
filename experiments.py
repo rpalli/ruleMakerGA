@@ -15,6 +15,7 @@ from ctypes import *
 import simulation as sim
 import GA as ga
 from utils import genInitValueList, synthesizeInputs
+
 # make empty list representing no knockouts or knockins
 def setupEmptyKOKI(samples):
 	knockoutLists=[]

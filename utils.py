@@ -28,7 +28,6 @@ def genRandBits(individualLength): #makes a random bitstring
 	arr = numpy.random.randint(2, size=(int(individualLength),))
 	return list(arr) 
 
-
 def bitList(n, x):
 	templist=[1 if digit=='1' else 0 for digit in bin(n)[::-1]]
 	while len(templist)<x:
@@ -128,7 +127,6 @@ def writeNode(currentNode,nodeIndividual, model):
 			writenode = writenode + ' or ' + val
 		return writenode
 
-
 def simpleNetBuild():
 	graph = nx.DiGraph()
 	graph.add_edge('a1','a', signal='a')	
@@ -142,8 +140,6 @@ def simpleNetBuild():
 	graph.add_edge('b','d', signal='a')
 	graph.add_edge('d','e', signal='a')
 	return graph
-
-
 
 def LiuNetwork1Builder():
 	graph = nx.DiGraph()
