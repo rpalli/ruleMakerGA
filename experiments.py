@@ -9,12 +9,13 @@ import copy as copy
 import operator
 import argparse as argparse
 import gc as gc
-
+from ctypes import *
 # import other pieces of our software
 #import networkConstructor as nc
 import simulation as sim
 import GA as ga
 from utils import genInitValueList, synthesizeInputs
+
 # make empty list representing no knockouts or knockins
 def setupEmptyKOKI(samples):
 	knockoutLists=[]
@@ -25,7 +26,7 @@ def setupEmptyKOKI(samples):
 	return knockoutLists, knockinLists
 
 # make a list of dictionaries giving values at each node from list of values across samples and a dictionary structure with random numbers
-def genSampleList(output, sampleDict, samples):
+def genSampleList(output, sampleDict, samples, model):
 	newSampleList=[]
 	for k in range(0,samples):
 		newSample=copy.deepcopy(sampleDict[k])
@@ -45,7 +46,8 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 
 
 	# load in C function
-	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	#updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	updateBooler=cdll.LoadLibrary('./testRun.so')
 	boolC=updateBooler.syncBool 
 
 	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
@@ -59,14 +61,18 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 		individual[1]=	[0,1,1,1,1,1,0,0,1,0,1,1,1]
 
 
-
 	initModel=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 	knockoutLists, knockinLists= setupEmptyKOKI(samples)
 		
 	# generate some simulated samples
 	output=ga.runProbabilityBooleanSims(individual[1], model, samples, params.cells, params, knockoutLists, knockinLists)
-
+	
 	# add noise in omics data
+	if noise>0:
+		for sample in output:
+			for i in range(len(sample)):
+				sample[i]=min(max(0,sample[i]+noise*(random()*2-1)),1)
+
 
 
 	# add noise in RPKN
@@ -97,7 +103,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	pickle.dump( output, open( name+"_input.pickle", "wb" ) )
 
 	# copy simulated data into right format
-	newSampleList=genSampleDict(output, sampleList, samples)
+	newSampleList=genSampleList(output, sampleList, samples, model)
 	testModel=sim.modelClass(graph,newSampleList, False)
 	testModel.updateCpointers()
 	# put initial values into correct format, add to model
@@ -106,10 +112,10 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	
 	#find rules
 	testModel, dev, bruteOut =ga.GAsearchModel(testModel, newSampleList, params, knockoutLists, knockinLists, name, boolC) # run GA
-	bruteOut, equivalents = ga.localSearch(testModel, bruteOut, newSampleList, params, knockoutLists, knockinLists, boolC) # run local search
+	bruteOut, equivalents, dev2 = ga.localSearch(testModel, bruteOut, newSampleList, params, knockoutLists, knockinLists, boolC) # run local search
 	storeModel3=[(testModel.size), list(testModel.nodeList), list(testModel.individualParse), list(testModel.andNodeList) , list(testModel.andNodeInvertList), list(testModel.andLenList),	list(testModel.nodeList), dict(testModel.nodeDict), list(testModel.initValueList)]
 
-	outputList=[individual[1],bruteOut,initModel, storeModel3, equivalents]
+	outputList=[individual[1],bruteOut,initModel, storeModel3, equivalents, dev2]
 	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
 
 def sampleTester(graph, name, samples):
@@ -133,7 +139,8 @@ def transformTest(graph,name,fileName):
 		return
 	
 	# load in C function
-	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	#updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	updateBooler=cdll.LoadLibrary('./testRun.so')
 	boolC=updateBooler.syncBool 
 
 	# load data, params, make empty knockout and knockin lists (no KO or KI in transform tests)
