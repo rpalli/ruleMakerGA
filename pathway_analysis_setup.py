@@ -116,6 +116,7 @@ def findPathways(cvDict,gmtName, geneDict):
 	for name in namelist:
 		retrieveGraph(name,aliasDict,dict1,dict2, cvDict, geneDict) # find and store gpickles for graphs found
 
+# collapse unnecessary nodes for easier rule determination
 def simplifyNetworkpathwayAnalysis(graph, ss):
 	#network simplification algorithm. 
 	# # 1. remove nodes with no input data
