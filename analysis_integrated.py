@@ -32,7 +32,7 @@ def findInEdges(model,node):
 	return inEdges
 
 # find the simplest form of a rule
-def simplifyRule(rule, inEdges)
+def simplifyRule(rule, inEdges):
 	for i in range(len(rule)):
 		if rule[i]==1:
 			for j in range(len(rule)):
@@ -90,7 +90,7 @@ def plotHistScatter(dictlist, xval, yval, title, xlabeler, ylabeler, plotname,xl
 	finishPlot(xlabeler, ylabeler, plotname)
 
 # make a boxplot
-def plotBox(dictlist, xval, yval, title, xlabeler, ylabeler, plotname, hueBool, huer):
+def plotBar(dictlist, xval, yval, title, xlabeler, ylabeler, plotname, hueBool, huer):
 	df= setupPlot(dictlist)
 	if not hueBool:
 		ax=sns.barplot(data=df,x=xval, y=yval, color=sns.color_palette("Greys", 4)[0], ci=68.26, capsize=.07)
@@ -320,7 +320,7 @@ def compareIndividualsNodeWise(truthList, testList, model1s, model2s,covs, equiv
 			negones.append(negonetemp)
 			sumindividual.append(sumindtemp)			
 			# add Rules true first sample-wise then node-wise
-			if len(inEdges1)>1:
+			if len(model1s[i].andNodeList[node])>1:
 				if (truthAnd==testAnd):
 					sampleRTs[i].append(1.)
 				else:
@@ -402,7 +402,7 @@ def analyzeGraph(stem, replicates):
 	model1s, model2s,truthList, testList, varLists, equivalents, devs=[], [],[], [],[], [], [] # set up variables
 	# iterate over replicates
 	for i in range(1,replicates+1):
-		outputList=pickle.Unpickler(open( stem+str(i)+'_output.pickle', "rb" )).load() # load in main data
+		outputList=pickle.Unpickler(open( stem+str(i)+'_local1.pickle', "rb" )).load() # load in main data
 		[truth, test, truthmodel, testmodel, equivs, dev]=outputList
 		equivalents.append(equivs)
 		model1s.append(modelHolder(truthmodel))
@@ -410,15 +410,38 @@ def analyzeGraph(stem, replicates):
 		truthList.append(truth)
 		testList.append(test)
 		inputList=pickle.Unpickler(open( stem+str(i)+'_input.pickle', "rb" )).load() # load in generated data
-		varList=[numpy.std([inputList[k][j] for k in range(len(inputList))]) for j in range(len(inputList[0])) ] # put variances in correct order
+		varLists.append([numpy.std([inputList[k][j] for k in range(len(inputList))]) for j in range(len(inputList[0])) ]) # put variances in correct order
 	return model1s[0],compareIndividualsNodeWise(truthList, testList, model1s,model2s, varLists, equivalents), varLists
 
-def analyzeExperiment(codes, end):
-	degree2dictlist, degree3dictlist, SDs, nodeSDS, nodeNumbers,nodeNumlistcut, nodeNumlistuncut, dfdictlist, sensspeclist=[], [], [], [],[],[],[], [], []
-	nodewiseList=[]
-	nodewiseList3=[]
+# analyze omics noise experiment
+def analyzeOmicsNoiseExperiment(codes, end):
+	noiseLabels=[1,2,3,4,5,6,7,8]		
+	noiseVals=[1,2,3,4,5,6,7,8]
+	analyzeNoiseExperiment(codes, end, noiseLabels, noiseVals)
 
-	nodewiseList2=[]
+# analyze experiment varying noise- in RPKN, omics levels etc. 
+def analyzeNoiseExperiment(codes, end, noiseLabels, noiseVals):
+	sensspeclist=[]
+	for code in codes:
+		print(code)		
+		#FOR EACH RUN WITH THAT GPICKLE
+		for noiseLabel, noiseVal in zip(noiseLabels,noiseVals):
+			truthmodel,result, varList=analyzeGraph('pickles/'+code+str(noiseLabel)+'_',10) # analyze accuracies for this network and noise level
+			# put results into a dataframe
+			sampleEquivRT, equivNodeRTsens,nodePsens,nodepPPV, tempSens, tempPPV, nodeSens, nodePPV, ruleTruth, nodeRuleTruth, edgeSens, edgePPV, SD, nodeSDs, nodeNum, edgeDegree, inCoV = result
+			for i in range(len(tempSens)):
+				sensspeclist.append({'Node_Num':nodeNum,'Sensitivity':tempSens[i],'Equiv RT Sens':sampleEquivRT[i],'PPV':tempPPV[i], 'Proportion Rules True': ruleTruth[i],'GA': 'no Adapt','Noise':noiseVal})
+	# make plots
+	plotBar(sensspeclist,'Node_Num', 'Equiv RT Sens','Rules True by Node Number', 'Node Number', 'Maximum Proportion Rules True','Adapt_GA_Equiv_RT_sens'+end+'.png', True, 'Noise')
+	plotBar(sensspeclist,'Node_Num', 'Proportion Rules True','Rules True by Node Number', 'Node Number', 'Proportion Rules True','Adapt_GA_Rules_True'+end+'.png', True, 'Noise')
+	plotBar(sensspeclist,'Noise', 'Equiv RT Sens','Rules True by Sample Number', 'Sample Number', 'Maximum Proportion Rules True','Noise_GA_Equiv_RT_sens'+end+'.png', False, 'Noise')
+	plotBar(sensspeclist,'Noise', 'Proportion Rules True','Rules True by Sample Number', 'Sample Number', 'Proportion Rules True','Noise_GA_Rules_True'+end+'.png', False, 'Noise')
+
+# analyze accuracy at a granular level when no noise is being used 
+def analyzeAccuracy(codes, end):
+	degree2dictlist, degree3dictlist, SDs, nodeSDS, nodeNumbers,nodeNumlistcut, nodeNumlistuncut, dfdictlist, sensspeclist=[], [], [], [],[],[],[], [], []
+	nodewiseList, nodewiseList2, nodewiseList3=[],[],[] # set up dictionaries for all nodes, in-degree 2 nodes, and in-degree 3 nodes
+	sensspeclist=[] # set up dictionaries for networks as a whole
 	# for each gpickle
 	for code in codes:
 		print(code)		
@@ -428,49 +451,36 @@ def analyzeExperiment(codes, end):
 
 		ruleTruthtots=[]
 		#FOR EACH RUN WITH THAT GPICKLE
-		for noiseNum in range(1,6):
-			if noiseNum==1:
-				noise=2
-			elif noiseNum==2:
-				noise=3
-			elif noiseNum==3:
-				noise=4
-			elif noiseNum==4:
-				noise=5
-			elif noiseNum==5:
-				noise=10	
-			truthmodel,result, varList=analyzeGraph('pickles/'+code+'_'+str(noiseNum)+'_',10)
-			sampleEquivRT, equivNodeRTsens,nodePsens,nodepPPV, tempSens, tempPPV, nodeSens, nodePPV, ruleTruth, nodeRuleTruth, edgeSens, edgePPV, SD, nodeSDs, nodeNum, edgeDegree, inCoV = result
-			upstreamPPV, upstreamSens, upstreamRT, upstreamMaxRT, inDegree=findUpstreamChars('pickles/'+code+'_', nodePPV, nodeSens, nodeRuleTruth, equivNodeRTsens, truthmodel)
-			for i in range(len(nodePPV)):
-				cov=numpy.mean([varList[k][i] for k in range(10)])
-				if not nodePPV[i]==100:
-					nodewiseList.append({'equiv Sens': nodePsens[i],'equiv PPV': nodepPPV[i],'equiv RT':equivNodeRTsens[i], 'Node_Num':nodeNum,'Sensitivity':nodeSens[i],'PPV':nodePPV[i], 'Proportion Rules True': nodeRuleTruth[i],'CoV': cov,'in_CoV': inCoV[i], 'SD':nodeSDs[i], 'in_degree':inDegree[i], 'upstream Max RT': upstreamMaxRT[i], 'upstream RT': upstreamRT[i], 'noise':noise})
-					if edgeDegree[i]==3:
-						nodewiseList3.append({'equiv Sens': nodePsens[i],'equiv PPV': nodepPPV[i],'equiv RT':equivNodeRTsens[i],'Node_Num':nodeNum,'Sensitivity':nodeSens[i],'PPV':nodePPV[i], 'Proportion Rules True': nodeRuleTruth[i],'CoV': cov,'in_CoV': inCoV[i], 'SD':nodeSDs[i], 'in_degree':inDegree[i], 'upstream Max RT': upstreamMaxRT[i], 'upstream RT': upstreamRT[i], 'noise':noise})
-					if edgeDegree[i]==2:
-						nodewiseList2.append({'equiv Sens': nodePsens[i],'equiv PPV': nodepPPV[i],'equiv RT':equivNodeRTsens[i],'Node_Num':nodeNum,'Sensitivity':nodeSens[i],'PPV':nodePPV[i], 'Proportion Rules True': nodeRuleTruth[i],'CoV': cov,'in_CoV': inCoV[i], 'SD':nodeSDs[i], 'in_degree':inDegree[i], 'upstream Max RT': upstreamMaxRT[i], 'upstream RT': upstreamRT[i], 'noise':noise})
-			nodeNumbers.append(nodeNum)
-			if len(ruleTruth)>0:
-				ruleTruthtots.append(numpy.mean(ruleTruth))
-			SDs.append(SD)
-			nodeSensDict={}
-			nodePPVDict={}
-			nodeRTdict={}
-			# assign what the var of interest is
-			for i in range(len(tempSens)):
-				sensspeclist.append({'Node_Num':nodeNum,'Sensitivity':tempSens[i],'Equiv RT Sens':sampleEquivRT[i],'PPV':tempPPV[i], 'Proportion Rules True': ruleTruth[i],'GA': 'no Adapt','Noise':noise})
+		truthmodel,result, varList=analyzeGraph('pickles/'+code+'_',25)
+		sampleEquivRT, equivNodeRTsens,nodePsens,nodepPPV, tempSens, tempPPV, nodeSens, nodePPV, ruleTruth, nodeRuleTruth, edgeSens, edgePPV, SD, nodeSDs, nodeNum, edgeDegree, inCoV = result
+		upstreamPPV, upstreamSens, upstreamRT, upstreamMaxRT, inDegree=findUpstreamChars('pickles/'+code+'_', nodePPV, nodeSens, nodeRuleTruth, equivNodeRTsens, truthmodel)
+		for i in range(len(nodePPV)):
+			cov=numpy.mean([varList[k][i] for k in range(25)])
+			if not nodePPV[i]==100:
+				nodewiseList.append({'equiv Sens': nodePsens[i],'equiv PPV': nodepPPV[i],'equiv RT':equivNodeRTsens[i], 'Node_Num':nodeNum,'Sensitivity':nodeSens[i],'PPV':nodePPV[i], 'Proportion Rules True': nodeRuleTruth[i],'CoV': cov,'in_CoV': inCoV[i], 'SD':nodeSDs[i], 'in_degree':inDegree[i], 'upstream Max RT': upstreamMaxRT[i], 'upstream RT': upstreamRT[i]})
+				if edgeDegree[i]==3:
+					nodewiseList3.append({'equiv Sens': nodePsens[i],'equiv PPV': nodepPPV[i],'equiv RT':equivNodeRTsens[i],'Node_Num':nodeNum,'Sensitivity':nodeSens[i],'PPV':nodePPV[i], 'Proportion Rules True': nodeRuleTruth[i],'CoV': cov,'in_CoV': inCoV[i], 'SD':nodeSDs[i], 'in_degree':inDegree[i], 'upstream Max RT': upstreamMaxRT[i], 'upstream RT': upstreamRT[i]})
+				if edgeDegree[i]==2:
+					nodewiseList2.append({'equiv Sens': nodePsens[i],'equiv PPV': nodepPPV[i],'equiv RT':equivNodeRTsens[i],'Node_Num':nodeNum,'Sensitivity':nodeSens[i],'PPV':nodePPV[i], 'Proportion Rules True': nodeRuleTruth[i],'CoV': cov,'in_CoV': inCoV[i], 'SD':nodeSDs[i], 'in_degree':inDegree[i], 'upstream Max RT': upstreamMaxRT[i], 'upstream RT': upstreamRT[i]})
+		nodeNumbers.append(nodeNum)
+		if len(ruleTruth)>0:
+			ruleTruthtots.append(numpy.mean(ruleTruth))
+		SDs.append(SD)
+		nodeSensDict={}
+		nodePPVDict={}
+		nodeRTdict={}
+		# assign what the var of interest is
+		for i in range(len(tempSens)):
+			sensspeclist.append({'Node_Num':nodeNum,'Sensitivity':tempSens[i],'Equiv RT Sens':sampleEquivRT[i],'PPV':tempPPV[i], 'Proportion Rules True': ruleTruth[i],'GA': 'no Adapt'})
 		print(nodeNumbers[-1])	
-	plot_df01box(sensspeclist,'Node_Num', 'Equiv RT Sens','Rules True by Node Number', 'Node Number', 'Maximum Proportion Rules True','Adapt_GA_Equiv_RT_sens'+end+'.png', True, 'Noise')
-	plot_df01box(sensspeclist,'Node_Num', 'Proportion Rules True','Rules True by Node Number', 'Node Number', 'Proportion Rules True','Adapt_GA_Rules_True'+end+'.png', True, 'Noise')
-	plot_df01box(sensspeclist,'Noise', 'Equiv RT Sens','Rules True by Sample Number', 'Sample Number', 'Maximum Proportion Rules True','Noise_GA_Equiv_RT_sens'+end+'.png', False, 'Noise')
-	plot_df01box(sensspeclist,'Noise', 'Proportion Rules True','Rules True by Sample Number', 'Sample Number', 'Proportion Rules True','Noise_GA_Rules_True'+end+'.png', False, 'Noise')
+	plotBar(sensspeclist,'Node_Num', 'Equiv RT Sens','Rules True by Node Number', 'Node Number', 'Maximum Proportion Rules True','Adapt_GA_Equiv_RT_sens'+end+'.png', False, 'Noise')
+	plotBar(sensspeclist,'Node_Num', 'Proportion Rules True','Rules True by Node Number', 'Node Number', 'Proportion Rules True','Adapt_GA_Rules_True'+end+'.png', False, 'Noise')
 
 	df=pd.DataFrame(sensspeclist)
 	groupedvalues=df.groupby('Node_Num').mean().reset_index()
 	print(groupedvalues)
-	plot_df01box(sensspeclist,'Node_Num', 'Sensitivity','Sensitivity by Node Number', 'Node Number', 'Sensitivity','Adapt_GA_Sensitivity'+end+'.png', False, 'Noise')
-	plot_df01box(sensspeclist,'Node_Num', 'PPV','PPV by Node Number', 'Node Number', 'PPV','Adapt_GA_PPV'+end+'.png', False, 'Noise')
+	plotBar(sensspeclist,'Node_Num', 'Sensitivity','Sensitivity by Node Number', 'Node Number', 'Sensitivity','Adapt_GA_Sensitivity'+end+'.png', False, 'Noise')
+	plotBar(sensspeclist,'Node_Num', 'PPV','PPV by Node Number', 'Node Number', 'PPV','Adapt_GA_PPV'+end+'.png', False, 'Noise')
 
 if __name__ == '__main__':
 	codes=[]
@@ -478,13 +488,4 @@ if __name__ == '__main__':
 		if file.endswith(".gpickle"):
 			codes.append(file[:-8])
 	print(codes)
-
-	analyzeExperiment(codes,'')
-	fitnesses=[]
-	model1s=[]
-	model2s=[]
-	dictmaker=[]
-	dictmaker2=[]
-	dictmaker3, dictmaker4, dictmaker5, dictmaker6, dictmaker7, dictmaker8, dictmaker9, dictmaker10, dictmaker11, dictmaker12= [],[],[],[],[],[],[],[],[],[]
-	
-	dataminer=[]
+	analyzeAccuracy(codes,'')
