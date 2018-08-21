@@ -14,16 +14,9 @@ from ctypes import *
 #import networkConstructor as nc
 import simulation as sim
 import GA as ga
-from utils import genInitValueList, synthesizeInputs
+from utils import genInitValueList, synthesizeInputs, setupEmptyKOKI
 
-# make empty list representing no knockouts or knockins
-def setupEmptyKOKI(samples):
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(samples):
-		knockoutLists.append([])
-		knockinLists.append([])
-	return knockoutLists, knockinLists
+
 
 # make a list of dictionaries giving values at each node from list of values across samples and a dictionary structure with random numbers
 def genSampleList(output, sampleDict, samples, model):
