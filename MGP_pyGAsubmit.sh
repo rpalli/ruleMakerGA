@@ -8,5 +8,5 @@
 #SBATCH -c 1
 
 module load intelpython/2.7.12
-srun python experiments.py $1 $2 $SLURM_ARRAY_TASK_ID
+srun python MGP_experiments.py $1 $2 $SLURM_ARRAY_TASK_ID
 echo "ran GA"
