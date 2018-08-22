@@ -4,13 +4,8 @@ import networkx as nx
 import pickle
 from ctypes import *
 
-<<<<<<< HEAD
 from simulation import paramClass, modelClass, NPsync
 from utils import genInitValueList, setupEmptyKOKI, writeModel
-=======
-from simulation import paramClass, modelClass
-from utils import genInitValueList, setupEmptyKOKI
->>>>>>> b60bcd1d7ec2a98e0a93c5405cec198344d43496
 from GA import GAsearchModel, localSearch
 
 def calcImportance(individual,params,model, sss,knockoutLists, knockinLists, boolC):
