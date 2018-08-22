@@ -185,7 +185,7 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 		else:
 			errorNodes=errorNodes+1		
 
-	if numpy.sum(errors)<.05*errorNodes:
+	if numpy.sum(errors)<.05*errorNodes or errorNodes==0:
 		focusNode=int(math.floor(random()*len(model.andLenList)))
 	else: 
 		# if errors are relatively high, focus on nodes that fit the worst and have highest in-degree

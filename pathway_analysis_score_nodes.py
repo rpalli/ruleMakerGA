@@ -65,22 +65,14 @@ if __name__ == '__main__':
 
 	# find rules
 	model1, dev, bruteOut =GAsearchModel(model, sampleList, params, knockoutLists, knockinLists, name, boolC) # run GA
-<<<<<<< HEAD
 	bruteOut1, equivalents, dev2 = localSearch(model1, bruteOut, sampleList, params, knockoutLists, knockinLists, boolC) # run local search
-=======
-	bruteOut1, equivalents = localSearch(model1, bruteOut, sampleList, params, knockoutLists, knockinLists, boolC) # run local search
->>>>>>> b60bcd1d7ec2a98e0a93c5405cec198344d43496
 	storeModel3=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 	outputList=[bruteOut1,dev,storeModel, storeModel3, equivalents, dev2]
 	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) ) # output rules
 
 	# calculate importance scores and output
 	scores1=calcImportance(bruteOut1,params,model1, sampleList,knockoutLists, knockinLists, boolC)
-<<<<<<< HEAD
 	pickle.dump( scores1, open( name+"_scores1.pickle", "wb" ) )
-=======
-	pickle.dump( scores, open( name+"_scores1.pickle", "wb" ) )
->>>>>>> b60bcd1d7ec2a98e0a93c5405cec198344d43496
 
 	# write rules
 	with open(name+"_rules.txt", "w") as text_file:
