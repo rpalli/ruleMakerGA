@@ -1,4 +1,3 @@
-
 # import python packages
 import pickle
 import copy as copy
@@ -185,7 +184,7 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 		else:
 			errorNodes=errorNodes+1		
 
-	if numpy.sum(errors)<.05*errorNodes:
+	if numpy.sum(errors)<.05*errorNodes or errorNodes == 0:
 		focusNode=int(math.floor(random()*len(model.andLenList)))
 	else: 
 		# if errors are relatively high, focus on nodes that fit the worst and have highest in-degree
@@ -196,7 +195,11 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 				errors[i]=errors[i]*len(model.possibilityList[i])
 			else:
 				errors[i]=errors[i]*len(model.possibilityList[i])*temper
+		#try:
 		normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
+		#except ZeroDivisionError:
+		#	print("All errors are zero. Errors: ".format(errors))
+		#	return indyIn,
 		probs=numpy.cumsum(normerrors)
 		randy=random()# randomly select a node to mutate
 		focusNode=next(i for i in range(len(probs)) if probs[i]>randy)
@@ -461,7 +464,7 @@ def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer, boolC):
 	out1, out2, model  = findPopBest(population)
 	return model,out1,out2
 
-# wrapper to do local search in parrallell manner
+# wrapper to do local search in parallel manner
 def localSearch(model, indy, newSSS, params, KOlist, KIlist, boolC):
 	outputs=[checkNodePossibilities(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList))]
 	# outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList)))
