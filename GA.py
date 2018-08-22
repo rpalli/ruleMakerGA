@@ -66,7 +66,6 @@ def cxTwoPointNode(ind1, ind2):
     :param ind1: The first individual participating in the crossover.
     :param ind2: The second individual participating in the crossover.
     :returns: A tuple of two individuals.
-
     This function uses the :func:`~random.randint` function from the Python 
     base :mod:`random` module.
     """
@@ -170,7 +169,7 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac, mut
 	return offspring
 
 # select node to mutate
-def selectMutNode(errors)
+def selectMutNode(errors):
 	normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
 	probs=numpy.cumsum(normerrors)
 	randy=random()# randomly select a node to mutate
@@ -191,10 +190,6 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 		else:
 			errorNodes=errorNodes+1		
 
-<<<<<<< HEAD
-	if numpy.sum(errors)<.05*errorNodes or errorNodes == 0:
-		focusNode=int(math.floor(random()*len(model.andLenList)))
-=======
 	if numpy.sum(errors)<.05*errorNodes or errorNodes==0:
 		# condition selection on number of incoming edges + downstream edges
 		pseudoerrors=[len(model.possibilityList[i]) if model.successorNums[i]==0 else len(model.possibilityList[i])*temper for i in range(len(model.nodeList))]
@@ -203,7 +198,6 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 			if model.andLenList[j]<2:
 				pseudoerrors[j]=0
 		focusNode=selectMutNode(pseudoerrors)
->>>>>>> upstream/master
 	else: 
 		# if errors are relatively high, focus on nodes that fit the worst and have highest in-degree
 		# calculate probabilities for mutating each node
@@ -213,18 +207,7 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 				errors[i]=errors[i]*len(model.possibilityList[i])
 			else:
 				errors[i]=errors[i]*len(model.possibilityList[i])*temper
-<<<<<<< HEAD
-		#try:
-		normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
-		#except ZeroDivisionError:
-		#	print("All errors are zero. Errors: ".format(errors))
-		#	return indyIn,
-		probs=numpy.cumsum(normerrors)
-		randy=random()# randomly select a node to mutate
-		focusNode=next(i for i in range(len(probs)) if probs[i]>randy)
-=======
 		focusNode=selectMutNode(errors)
->>>>>>> upstream/master
 	# perform mutation
 	if model.andLenList[focusNode]>1:
 		# find ends of the node of interest in the individual
@@ -302,7 +285,6 @@ def sortNondominatedAdapt(individuals, k, first_front_only=False):
 							 exit.
 	:returns: A list of Pareto fronts (lists), the first list includes 
 			  nondominated individuals.
-
 	.. [Deb2002] Deb, Pratab, Agarwal, and Meyarivan, "A fast elitist
 	   non-dominated sorting genetic algorithm for multi-objective
 	   optimization: NSGA-II", 2002.
@@ -359,7 +341,6 @@ def dominated(ind1, ind2):
 	"""Return true if each objective of *self* is not strictly worse than 
 		the corresponding objective of *other* and at least one objective is 
 		strictly better.
-
 		:param obj: Slice indicating on which objectives the domination is 
 					tested. The default value is `slice(None)`, representing
 					every objectives.
@@ -486,7 +467,7 @@ def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer, boolC):
 	out1, out2, model  = findPopBest(population)
 	return model,out1,out2
 
-# wrapper to do local search in parallel manner
+# wrapper to do local search in parrallell manner
 def localSearch(model, indy, newSSS, params, KOlist, KIlist, boolC):
 	outputs=[checkNodePossibilities(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList))]
 	# outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList)))
