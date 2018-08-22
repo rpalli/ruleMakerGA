@@ -192,7 +192,7 @@ def mutFlipBitAdapt(indyIn, genfrac, mutModel):
 
 	if numpy.sum(errors)<.05*errorNodes or errorNodes==0:
 		# condition selection on number of incoming edges + downstream edges
-		pseudoerrors=[len(model.possibilityList[i]) if model.successorNums[i]==0 else len(model.possibilityList[i])*temper for i in range(len(model.nodeList))]
+		pseudoerrors=[len(model.possibilityList[i]) if model.successorNums[i]==0 else len(model.possibilityList[i])*model.successorNums[i] for i in range(len(model.nodeList))]
 		# zero out nodes that can't be changed
 		for j in xrange(len(pseudoerrors)):
 			if model.andLenList[j]<2:
