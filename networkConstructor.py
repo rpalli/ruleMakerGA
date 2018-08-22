@@ -6,13 +6,11 @@ import urllib2
 import csv 
 import itertools as it
 import sys
-#from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 from random import randint 
 # import our code
 import simulation as sim
 import utils as utils
-import pathway_analysis as pa
-import motif_cutter as mc
 #definitions from BioPAX level 3 reference manual (http://www.biopax.org/mediawiki/index.php?title=Specification)
 #these biopax classes are iteracted over in the biopax methods
 edge_classes = ['Interaction', 'GeneticInteraction', 'MolecularInteraction', 'TemplateReaction', 'Control', 'Catalysis', 'TemplateReactionRegulation', 'Modulation', 'Conversion', 'ComplexAssembly', 'BiochemicalReaction', 'Degradation', 'Transport', 'TransportWithBiochemicalReaction']

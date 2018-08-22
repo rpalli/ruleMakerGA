@@ -14,16 +14,9 @@ from ctypes import *
 #import networkConstructor as nc
 import simulation as sim
 import GA as ga
-from utils import genInitValueList, synthesizeInputs
+from utils import genInitValueList, synthesizeInputs, setupEmptyKOKI
 
-# make empty list representing no knockouts or knockins
-def setupEmptyKOKI(samples):
-	knockoutLists=[]
-	knockinLists=[]
-	for q in range(samples):
-		knockoutLists.append([])
-		knockinLists.append([])
-	return knockoutLists, knockinLists
+
 
 # make a list of dictionaries giving values at each node from list of values across samples and a dictionary structure with random numbers
 def genSampleList(output, sampleDict, samples, model):
@@ -65,7 +58,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	knockoutLists, knockinLists= setupEmptyKOKI(samples)
 		
 	# generate some simulated samples
-	output=ga.runProbabilityBooleanSims(individual[1], model, samples, params.cells, params, knockoutLists, knockinLists)
+	output=ga.runProbabilityBooleanSims(individual[1], model, samples, params.cells, params, knockoutLists, knockinLists, boolC)
 	
 	# add noise in omics data
 	if noise>0:
@@ -203,12 +196,12 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument("graph")
-	parser.add_argument("datafile")
+	parser.add_argument("noiseNum")
 	parser.add_argument("iterNum")
 
 	results = parser.parse_args()
 	graphName=results.graph
-	fileName=results.datafile
+	noiseNum=results.noiseNum
 	iterNum=int(results.iterNum)
 	
 	name=graphName[:-8]+fileName+'_'+results.iterNum ##
@@ -220,8 +213,8 @@ if __name__ == '__main__':
 	
 	# edit the below name to include the pertinent piece of the filename of discretized data
 	#outname=graphName[:-8]+'_'+results.iterNum
-	outname=graphName[:-8]+fileName+'_'+results.iterNum
+	outname=graphName[:-8]+noiseNum+'_'+results.iterNum
 	print(name) #
 	graph = nx.read_gpickle(graphName)
 	print(len(graph.nodes()))
-	transformTest(graph,outname,fileName)
+	omicsNoiseTester(graph,outname,0)

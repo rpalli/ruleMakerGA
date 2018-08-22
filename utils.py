@@ -3,6 +3,15 @@ import numpy as numpy
 from random import random
 import csv as csv
 
+# make empty list representing no knockouts or knockins
+def setupEmptyKOKI(samples):
+	knockoutLists=[]
+	knockinLists=[]
+	for q in range(samples):
+		knockoutLists.append([])
+		knockinLists.append([])
+	return knockoutLists, knockinLists
+
 # use dictionaries of values at each node for each sample to construct initial value list for the model
 def genInitValueList(newSampleList,model):
 	newInitValueList=[]
