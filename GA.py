@@ -1,4 +1,3 @@
-
 # import python packages
 import pickle
 import copy as copy
@@ -67,7 +66,6 @@ def cxTwoPointNode(ind1, ind2):
     :param ind1: The first individual participating in the crossover.
     :param ind2: The second individual participating in the crossover.
     :returns: A tuple of two individuals.
-
     This function uses the :func:`~random.randint` function from the Python 
     base :mod:`random` module.
     """
@@ -171,7 +169,7 @@ def varOrAdaptive(population, toolbox, model, lambda_, cxpb, mutpb, genfrac, mut
 	return offspring
 
 # select node to mutate
-def selectMutNode(errors)
+def selectMutNode(errors):
 	normerrors=[1.*error/numpy.sum(errors) for error in errors]# normalize errors to get a probability that the node  is modified
 	probs=numpy.cumsum(normerrors)
 	randy=random()# randomly select a node to mutate
@@ -287,7 +285,6 @@ def sortNondominatedAdapt(individuals, k, first_front_only=False):
 							 exit.
 	:returns: A list of Pareto fronts (lists), the first list includes 
 			  nondominated individuals.
-
 	.. [Deb2002] Deb, Pratab, Agarwal, and Meyarivan, "A fast elitist
 	   non-dominated sorting genetic algorithm for multi-objective
 	   optimization: NSGA-II", 2002.
@@ -344,7 +341,6 @@ def dominated(ind1, ind2):
 	"""Return true if each objective of *self* is not strictly worse than 
 		the corresponding objective of *other* and at least one objective is 
 		strictly better.
-
 		:param obj: Slice indicating on which objectives the domination is 
 					tested. The default value is `slice(None)`, representing
 					every objectives.
