@@ -2,6 +2,73 @@
 import numpy as numpy
 from random import random
 import csv as csv
+import networkx as nx
+
+# writes rules as a network
+def Get_expanded_network(rules,equal_sign='*='):
+	'''
+	The code is written by Gang Yang, Department of Physics, Penn State University if not specified.
+
+  Return the expanded network for a given Boolean network model.
+  The Boolean network model is a DiGraph object in the output format of form_network().
+  The Boolean network model can be generated through form_network function by reading a text file in the Booleannet format.
+  The Boolean rules will first be converted to a disjuctive normal form before generating the expanded network.
+
+  Parameters
+  ----------
+  Gread     : the given Boolean network model
+  prefix='n': prefix to encode the node name to avoid one node's name is a part of another node's name
+  suffix='n': suffix to encode the node name to avoid one node's name is a part of another node's name
+              e.g. node name '1' will become 'n1n' in the returned result
+  equal_sign: the equal sign of the rule in the returned result, whose default value follows the Booleannet format
+
+  Returns
+  -------
+  The expanded network for the given Boolean network model.
+	'''
+	composite_nodes=[]
+	G_expand=nx.DiGraph()
+	for line in rules:
+		child, update_rule=line.split('*=') #correctly annootate child, rule
+		update_rule=update_rule # remove white space from parents
+		if update_rule[0]=='(' and update_rule[-1]==')': # remove parens from parent
+			update_rule=update_rule[1:-1]
+		if child[0]=='~':# figure out parity of node
+			normal_child=child[1:].strip()
+		else:
+			normal_child=child[:].strip()
+		if 'or' in update_rule:
+			parents=update_rule.split(' or ')
+		else:
+			parents=[update_rule]
+		parents.sort()
+		for parent in parents:
+			parent=parent.replace('not ','~').replace('(','').replace(')','').strip()
+			if 'and' in parent:
+				composite_node=parent.replace(' and ','_').strip()
+				composite_nodes.append(composite_node)
+				G_expand.add_edge(composite_node,child)
+				for component in composite_node.split('_'):
+					G_expand.add_edge(component.strip(),composite_node)
+			elif not parent==child:
+				G_expand.add_edge(parent,child)
+	for node in G_expand.nodes():
+		if node[0]=='~' and not '_' in node:
+			G_expand.add_edge( node[1:], node)
+	nx.set_node_attributes(G_expand,'Display Name',{k:' ' if k in composite_nodes else k for k in G_expand.nodes() })
+	nx.set_node_attributes(G_expand,'andNode',{k: 1 if k in composite_nodes else 0 for k in G_expand.nodes()})
+
+	edgedict={}
+	for edge in G_expand.edges():
+		edgedict[edge]='a'
+	nx.set_edge_attributes(G_expand, 'signal', edgedict)
+
+	for node in G_expand.nodes():
+		if node[0]=='~' and not '_' in node:
+ 			for downstream in G_expand.successors(node):
+				G_expand.add_edge( node[1:], downstream, signal='i')
+			G_expand.remove_node(node)
+	return G_expand.copy()
 
 # make empty list representing no knockouts or knockins
 def setupEmptyKOKI(samples):
@@ -164,3 +231,4 @@ def LiuNetwork1Builder():
 	graph.add_edge('d','g', signal='a')
 
 	return graph
+

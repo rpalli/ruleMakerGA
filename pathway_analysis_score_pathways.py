@@ -13,7 +13,7 @@ import networkx as nx
 import operator
 # import other pieces of our software
 import networkConstructor as nc
-import utils as utils
+from utils import writeModel, Get_expanded_network
 
 # artificial holder for model data
 class modelHolder:
@@ -37,7 +37,7 @@ def outputGraphs(pathway, RAval, comparator, pathImportances):
 	nx.set_node_attributes(original,'RA',{k: RAval[k] for k in original.nodes()})
 	nx.set_node_attributes(original,'IS',{k: float(pathImportances[k]) for k in original.nodes()})
 	# write graph of rules with annotations
-	ruleGraph=utils.Get_expanded_network(pathway[2][0].split('\n'),equal_sign='*=')
+	ruleGraph=Get_expanded_network(pathway[2][0].split('\n'),equal_sign='*=')
 	nx.set_node_attributes(ruleGraph,'RA',{k: RAval[k] if k in original.nodes() else 0. for k in ruleGraph.nodes()})
 	nx.set_node_attributes(ruleGraph,'IS',{k: float(pathImportances[k]) if k in original.nodes() else 0. for k in ruleGraph.nodes()})
 	nx.write_graphml(original,comparator+'/'+pathway[0]+'.graphml')
@@ -82,29 +82,48 @@ def findPathwayList():
 	# looks for pathways that have gpickles generated originally
 	for file in os.listdir("gpickles"):
 		if file.endswith(".gpickle"):
-			if os.path.isfile('RD_out/'+file[:-8]+'_1_output.pickle'):
+			if os.path.isfile('pickles/'+file[:-8]+'_1_local1.pickle'):
 				codes.append(file[:-8])
 			else:
-				print(file+' has no output')
+				print(file[:-8]+' has no output')
 	print(codes)
 	# for each of these pathways, we find the output of the rule determination and scoring procedures and put them together. 
 	for code in codes:
 		pathVals=[]
 		rules=[]
 		for i in range(1,6):
-			[bruteOut1,dev,storeModel, storeModel3, equivalents]=pickle.Unpickler(open( 'RD_out/'+code+'_'+str(i)+'_local1.pickle', "rb" )).load()
+			[bruteOut1,dev,storeModel, storeModel3, equivalents, dev2]=pickle.Unpickler(open( 'pickles/'+code+'_'+str(i)+'_local1.pickle', "rb" )).load()
 			model=modelHolder(storeModel3)
-			pathVals.append(pickle.Unpickler(open( 'RD_out/'+code+'_'+str(i)+'_scores.pickle', "rb" )).load())
-			rules.append(utils.writeModel(bruteOut1, model))
+			pathVals.append(pickle.Unpickler(open( 'pickles/'+code+'_'+str(i)+'_scores1.pickle', "rb" )).load())
+			rules.append(writeModel(bruteOut1, model))
 		graph = nx.read_gpickle("gpickles/"+code+".gpickle")
 		ImportanceVals={}
 		for node in range(len(storeModel[1])): 
-			ImportanceVals[storeModel[1][node]]=math.log(np.mean([pathVals[i][node] for i in range(5)]),2)
+			# ImportanceVals[storeModel[1][node]]=math.log(np.mean([pathVals[i][node] for i in range(5)]),2)
+			ImportanceVals[storeModel[1][node]]=np.mean([math.log(pathVals[i][node] ,2) for i in range(5)])
 		# add nodes removed during network simplification back in
-		removedNodes=pickle.Unpickler(open( 'RD_out/'+code+'_'+str(i)+'_addLaterNodes.pickle', "rb" )).load()
+		removedNodes=pickle.Unpickler(open( 'pickles/'+code+'_addLaterNodes.pickle', "rb" )).load()
+		print(ImportanceVals.keys())
+		print(removedNodes)
+		doubleRemoveNodes=[]
 		for node in removedNodes:
-			ImportanceVals[node[0]]=ImportanceVals[node[1]]
+			if node[1] in ImportanceVals:
+				ImportanceVals[node[0]]=ImportanceVals[node[1]]
+			else:
+				doubleRemoveNodes.append(node)
+		count=0
+		while len(doubleRemoveNodes)>0 and count<1000:
+			count=count+1
+			tripleRemoveNodes=[]
+			for node in doubleRemoveNodes:
+				if node[1] in ImportanceVals:
+					ImportanceVals[node[0]]=ImportanceVals[node[1]]
+				else:
+					tripleRemoveNodes.append(node)
+			doubleRemoveNodes=tripleRemoveNodes
 		pathways.append([code,ImportanceVals, rules, graph])
+		if count>1000:
+			print('failed to add removed nodes back in:' + str(doubleRemoveNodes))
 	return pathways
 
 # read in Omics data

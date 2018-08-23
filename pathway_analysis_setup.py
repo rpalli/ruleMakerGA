@@ -121,7 +121,6 @@ def simplifyNetworkpathwayAnalysis(graph, ss):
 	#network simplification algorithm. 
 	# # 1. remove nodes with no input data
 	# # 2. remove edges to nodes from complexes they are a part of 
-	# # 3. save graph for future use with influence score calculation
 	# # 4. remove nodes with only 1 input
 	# # 5. remove nodes with only 1 output
 	# # 6. remove self edges
@@ -153,14 +152,12 @@ def simplifyNetworkpathwayAnalysis(graph, ss):
 
 
 	#print(graph.nodes())
-	flag=True
 
 	# 2. remove dependence of nodes on complexes that include that node
 	for node in graph.nodes():
 		predlist=graph.predecessors(node)
 		for pred in predlist:
 			if '-' in pred:
-				# # print(pred)
 				genes=pred.split('-')
 				flag=True
 				for gene in genes:
@@ -168,49 +165,47 @@ def simplifyNetworkpathwayAnalysis(graph, ss):
 						flag=False
 				if flag:
 					graph.remove_edge(pred,node)
-	flag=True
 		
-	# 3. save graph here for use in constructing the model to measure influence scores
 
-	# 4. rewire nodes that have only one upstream node
-	#print(len(graph.nodes()))
-	removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1) ]
-	for rm in removeNodeList:
-		before=graph.predecessors(rm)[0]
-		for after in graph.successors(rm):
-			edge1=graph.get_edge_data(before,rm)['signal']
-			edge2=graph.get_edge_data(rm,after)['signal']
-			inhCount=0
-			if edge1=='i':
-				inhCount=inhCount+1
-			if edge2=='i':
-				inhCount=inhCount+1
-			if inhCount==1:
-				graph.add_edge(before,after,signal='i')
-			else:
-				graph.add_edge(before,after,signal='a')
-		graph.remove_node(rm)
-		addBackNodes.append([rm,before])
+	# # 4. rewire nodes that have only one upstream node
+	# #print(len(graph.nodes()))
+	# removeNodeList= [x for x in graph.nodes() if (len(graph.predecessors(x))==1) ]
+	# for rm in removeNodeList:
+	# 	before=graph.predecessors(rm)[0]
+	# 	for after in graph.successors(rm):
+	# 		edge1=graph.get_edge_data(before,rm)['signal']
+	# 		edge2=graph.get_edge_data(rm,after)['signal']
+	# 		inhCount=0
+	# 		if edge1=='i':
+	# 			inhCount=inhCount+1
+	# 		if edge2=='i':
+	# 			inhCount=inhCount+1
+	# 		if inhCount==1:
+	# 			graph.add_edge(before,after,signal='i')
+	# 		else:
+	# 			graph.add_edge(before,after,signal='a')
+	# 	graph.remove_node(rm)
+	# 	addBackNodes.append([rm,before])
 
-	# 5. rewire nodes that have only one downstream node
-	removeNodeList= [x for x in graph.nodes() if (len(graph.successors(x))==1) ]
-	for rm in removeNodeList:
-		if len(graph.successors(x))==1:
-			finish=graph.successors(rm)[0]
-			for start in graph.predecessors(rm):
-				edge1=graph.get_edge_data(start,rm)['signal']
-				edge2=graph.get_edge_data(rm,finish)['signal']
-				inhCount=0
-				if edge1=='i':
-					inhCount=inhCount+1
-				if edge2=='i':
-					inhCount=inhCount+1
-				if inhCount==1:
-					graph.add_edge(start,finish,signal='i')
-				else:
-					graph.add_edge(start,finish,signal='a')
-			graph.remove_node(rm)
-			addBackNodes.append([rm,finish])
+	# # 5. rewire nodes that have only one downstream node
+	# removeNodeList= [x for x in graph.nodes() if (len(graph.successors(x))==1) ]
+	# for rm in removeNodeList:
+	# 	if len(graph.successors(x))==1:
+	# 		finish=graph.successors(rm)[0]
+	# 		for start in graph.predecessors(rm):
+	# 			edge1=graph.get_edge_data(start,rm)['signal']
+	# 			edge2=graph.get_edge_data(rm,finish)['signal']
+	# 			inhCount=0
+	# 			if edge1=='i':
+	# 				inhCount=inhCount+1
+	# 			if edge2=='i':
+	# 				inhCount=inhCount+1
+	# 			if inhCount==1:
+	# 				graph.add_edge(start,finish,signal='i')
+	# 			else:
+	# 				graph.add_edge(start,finish,signal='a')
+	# 		graph.remove_node(rm)
+	# 		addBackNodes.append([rm,finish])
 	# 6. remove self edges
 	for edge in graph.edges():
 		if edge[0]==edge[1]:
@@ -236,4 +231,3 @@ if __name__ == '__main__':
 	sss, geneDict, cvDict=readFpkmData(dataName, results.sep) # read in data
 	pickle.dump( sss, open( 'sss.pickle', "wb" ) ) # save data in correct format for runs
 	findPathways(cvDict, pathwaysName, geneDict) # generate gpickles needed for pathway analysis
-	print("--- %s seconds ---" % (time.time() - start_time))
