@@ -1,10 +1,9 @@
 #!/bin/sh
 #SBATCH --partition=standard
-#SBATCH -a 1-3
+#SBATCH -a 1-10
 #SBATCH -J GArun
 #SBATCH -o GA_out_%A_%a.txt
-#SBATCH -t 08:00:00
-#SBATCH -n 1
+#SBATCH -t 24:00:00
 #SBATCH -c 1
 
 module load intelpython/2.7.12
