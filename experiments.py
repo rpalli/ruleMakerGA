@@ -30,6 +30,21 @@ def findNoiseValue(noiseNum):
 		noise=2.
 	return noise
 
+def findSamples(sampleNum):
+	if sampleNum==1:
+		samples=2
+	elif sampleNum==2:
+		samples=3
+	elif sampleNum==3:
+		samples=4
+	elif sampleNum==4:
+		samples=5
+	elif sampleNum==5:
+		samples=10
+	elif sampleNum==6:
+		samples=15
+	return samples
+
 # make a list of dictionaries giving values at each node from list of values across samples and a dictionary structure with random numbers
 def genSampleList(output, sampleDict, samples, model):
 	newSampleList=[]
@@ -39,7 +54,6 @@ def genSampleList(output, sampleDict, samples, model):
 			newSample[model.nodeList[j]]=output[k][j]
 		newSampleList.append(newSample)
 	return newSampleList
-
 
 # run an experiment comparing 
 def runExperiment(graph, name, samples, noise, edgeNoise, params):
@@ -52,6 +66,7 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	#updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
 	updateBooler=cdll.LoadLibrary('./testRun.so')
 	boolC=updateBooler.syncBool 
+	params.sample=samples
 
 	sampleList=synthesizeInputs(graph,samples) # get empty list of inputs
 
@@ -122,7 +137,9 @@ def runExperiment(graph, name, samples, noise, edgeNoise, params):
 	outputList=[individual[1],bruteOut,initModel, storeModel3, equivalents, dev2]
 	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) )
 
-def sampleTester(graph, name, samples):
+
+def sampleTester(graph, name, sampleNum):
+	samples=findSamples(sampleNum)
 	params=sim.paramClass() # load in parameters
 	runExperiment(graph, name, samples, 0., 0, params)
 
