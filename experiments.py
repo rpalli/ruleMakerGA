@@ -44,7 +44,22 @@ def findSamples(sampleNum):
 	elif sampleNum==6:
 		samples=15
 	return samples
-
+def findRPKNnoise(noiseNum):
+	if noiseNum==1:
+		noiseEdges=0
+	elif noiseNum==2:
+		noiseEdges=2
+	elif noiseNum==3:
+		noiseEdges=5
+	elif noiseNum==4:
+		noiseEdges=10
+	elif noiseNum==5:
+		noiseEdges=15
+	elif noiseNum==6:
+		noiseEdges=20
+	elif noiseNum==7:
+		noiseEdges=40
+	return noiseEdges
 # make a list of dictionaries giving values at each node from list of values across samples and a dictionary structure with random numbers
 def genSampleList(output, sampleDict, samples, model):
 	newSampleList=[]
@@ -147,10 +162,11 @@ def omicsNoiseTester(graph, name, noise):
 	params=sim.paramClass() # load in parameters
 	runExperiment(graph, name, params.samples, noise,0, params)
 
-def RPKNnoiseTester(graph, name, noiseEdges):
+def RPKNnoiseTester(graph, name, noiseNum):
 	# runs experiment using graph and rule from Liu et al. 2016 along with additional false positive edges
 	# loop over number of times we want to generate fake data and perform sequence of events
 	params=sim.paramClass() # load in parameters
+	noiseEdges=findRPKNnoise(noiseNum)
 	runExperiment(graph, name, params.samples, 0. , noiseEdges, params)
 
 def transformTest(graph,name,fileName):

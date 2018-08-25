@@ -66,9 +66,13 @@ def makeRA(data,comparison,groups):
 		mean1=np.mean([data[element][temp] for temp in groups[group1]])
 		mean2=np.mean([data[element][temp] for temp in groups[group2]])
 		if mean1<=0 or mean2<=0:
-			print('zero mean for '+ element+'.  means: '+str(mean1)+' '+str(mean2)+'. Low replaced by .1')
 			print(data[element])
-			RAdict[element]=abs(math.log(max(mean1,mean2),2)-math.log(.1,2))
+			if mean1<=0 and mean2<=0:
+				print('zero mean for '+ element+'.  means: '+str(mean1)+' '+str(mean2)+'. Used difference = 0')
+				RAdict[element]=0.
+			else:
+				print('zero mean for '+ element+'.  means: '+str(mean1)+' '+str(mean2)+'. Low replaced by .1')
+				RAdict[element]=abs(math.log(max(mean1,mean2),2)-math.log(.1,2))
 		else:
 			differ=abs(math.log(mean1,2)-math.log(mean2,2))
 			RAdict[element]=differ
