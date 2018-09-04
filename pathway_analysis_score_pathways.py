@@ -35,11 +35,13 @@ def outputGraphs(pathway, RAval, comparator, pathImportances):
 	nx.set_node_attributes(original,'Display Name',{k: k for k in original.nodes()})
 	nx.set_node_attributes(original,'andNode',{k: 0 for k in original.nodes()})
 	nx.set_node_attributes(original,'RA',{k: RAval[k] for k in original.nodes()})
-	nx.set_node_attributes(original,'IS',{k: float(pathImportances[k]) for k in original.nodes()})
+	# print(maximportance)
+	maximportance=max([(pathImportances[v]) for v in pathImportances])
+	nx.set_node_attributes(original,'IS',{k: (float(pathImportances[k])/maximportance) for k in original.nodes()})
 	# write graph of rules with annotations
 	ruleGraph=Get_expanded_network(pathway[2][0].split('\n'),equal_sign='*=')
 	nx.set_node_attributes(ruleGraph,'RA',{k: RAval[k] if k in original.nodes() else 0. for k in ruleGraph.nodes()})
-	nx.set_node_attributes(ruleGraph,'IS',{k: float(pathImportances[k]) if k in original.nodes() else 0. for k in ruleGraph.nodes()})
+	nx.set_node_attributes(ruleGraph,'IS', {k: (float(pathImportances[k])/maximportance) if k in original.nodes() else 0. for k in ruleGraph.nodes()})
 	nx.write_graphml(original,comparator+'/'+pathway[0]+'.graphml')
 	nx.write_graphml(ruleGraph,comparator+'/'+pathway[0]+'_rules.graphml')
 
@@ -66,12 +68,13 @@ def makeRA(data,comparison,groups):
 		mean1=np.mean([data[element][temp] for temp in groups[group1]])
 		mean2=np.mean([data[element][temp] for temp in groups[group2]])
 		if mean1<=0 or mean2<=0:
-			print(data[element])
-			if mean1<=0 and mean2<=0:
-				print('zero mean for '+ element+'.  means: '+str(mean1)+' '+str(mean2)+'. Used difference = 0')
+			if mean1==0 and mean2==0:
 				RAdict[element]=0.
+				print('zero mean for '+ element+'.  means: '+str(mean1)+' '+str(mean2)+'. RA set to zero')
+
 			else:
 				print('zero mean for '+ element+'.  means: '+str(mean1)+' '+str(mean2)+'. Low replaced by .1')
+				print(data[element])
 				RAdict[element]=abs(math.log(max(mean1,mean2),2)-math.log(.1,2))
 		else:
 			differ=abs(math.log(mean1,2)-math.log(mean2,2))
@@ -103,7 +106,7 @@ def findPathwayList():
 		ImportanceVals={}
 		for node in range(len(storeModel[1])): 
 			# ImportanceVals[storeModel[1][node]]=math.log(np.mean([pathVals[i][node] for i in range(5)]),2)
-			ImportanceVals[storeModel[1][node]]=np.mean([math.log(pathVals[i][node] ,2) for i in range(5)])
+			ImportanceVals[storeModel[1][node]]=float(np.mean([math.log(1.+pathVals[i][node] ,2) for i in range(5)]))
 		# add nodes removed during network simplification back in
 		removedNodes=pickle.Unpickler(open( 'pickles/'+code+'_addLaterNodes.pickle', "rb" )).load()
 		doubleRemoveNodes=[]
@@ -200,7 +203,7 @@ def analyze_pathways(diffName, matrixName, dataName, delmited):
 		# iterate over comparisons for each pathway and calculate z score
 		for RAval in RAvals:
 			z_scores.append(scorePathway(RAval,pathway[1]))
-		pvals=scipy.stats.norm.sf(map(abs,z_scores)) # calculate p value
+		pvals=scipy.stats.norm.sf(z_scores) # calculate p value
 		# store p values
 		tempdict={'pathway':pathDict[pathway[0][3:]],'code':pathway[0][3:] }
 		for i in range(len(comparisonStrings)):
