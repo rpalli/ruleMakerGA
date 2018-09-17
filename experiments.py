@@ -198,7 +198,7 @@ def transformTest(graph,name,fileName):
 	model=sim.modelClass(graph,sampleList, False)
 	model.updateCpointers()
 	# cpy data into correct order for simulation 
-	newInitValueList=genInitValueList(sampleList,model)
+	newInitValueList=genInitValueList2(sampleList,model)
 	model.initValueList=newInitValueList
 	print('setup successful')
 

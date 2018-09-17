@@ -80,6 +80,20 @@ def setupEmptyKOKI(samples):
 	return knockoutLists, knockinLists
 
 # use dictionaries of values at each node for each sample to construct initial value list for the model
+def genInitValueList2(newSampleList,model):
+	newInitValueList=[]
+	# make empty set of cells with all zeros
+	for j in range(0,len(newSampleList)):
+		newInitValueList.append(np.zeros(500,dtype=np.intc, order='C'))
+	# change on states from actual data to 1s
+	for j in range(0,len(model.nodeList)): # for each node
+		for k in range(0,len(newSampleList)): # for each cell
+			ss=newSampleList[k] # update sample
+			if ss[model.nodeList[j]]==1 # if the gene is on 
+				newInitValueList[k][j]=1 # update to on
+	return newInitValueList
+
+# use dictionaries of values at each node for each sample to construct initial value list for the model
 def genInitValueList(newSampleList,model):
 	newInitValueList=[]
 	for j in range(0,len(newSampleList)):
@@ -92,7 +106,6 @@ def genInitValueList(newSampleList,model):
 			else:
 				newInitValueList[k].append(0.5)
 	return newInitValueList
-
 def findEnd(node,model):
 	if node==len(model.nodeList)-1:
 		end= model.size

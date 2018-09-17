@@ -397,7 +397,7 @@ def NP(individual, model, cells, sampleProbs, params, KOs, KIs, boolC):
 		return NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
 
 # main EBN simulation code. Runs an EBN
-def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
+def NPsync(individual, model, cells, cellState, params, KOs, KIs, syncBoolC):
 	cellArray=[]
 	# simSteps=3*len(model.nodeList)
 	simSteps= 100
@@ -435,10 +435,10 @@ def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
 		# shuffle nodes to be initially called.... 
 		#simulations that are truly random starting states should have all nodes added to this list
 		#get initial values for all nodes
-		initValues=genEBNInitValues(individual, model,sampleProbs)
+		# initValues=genEBNInitValues(individual, model,sampleProbs)
 		vals=np.zeros(len(model.nodeList), dtype=np.intc, order='C')
-		initValues=np.array(initValues,dtype=np.intc, order='C')
-		initValues1=ctypes.c_void_p(initValues.ctypes.data)
+		# initValues=np.array(initValues,dtype=np.intc, order='C')
+		initValues1=ctypes.c_void_p(cellState.ctypes.data)
 		valsubmit=ctypes.c_void_p(vals.ctypes.data)
 		syncBoolC(valsubmit,nodeIndividual1, indLen1, nodeNum1, andLenList1, individualParse1, andNodes1, andNodeInvertList1, simSteps1, initValues1, knockouts1, knockins1)
 		cellArray.append(.1*vals)
