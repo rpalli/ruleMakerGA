@@ -7,7 +7,6 @@ import networkx as nx
 import itertools as itertool
 import scipy.stats as regress
 import numpy as np
-import sklearn.feature_selection as selecter
 import ctypes 
 import math as math
 
@@ -162,6 +161,7 @@ class modelClass:
 			activities.append(activity)
 		self.andNodeList[node]=possibilities
 		self.andNodeInvertList[node]=activities
+	# setup C pointers with correct lengths to pass to simulation software in C
 	def updateCpointers(self):
 		tempandnoder=[]
 		tempandinverter=[]
@@ -181,8 +181,6 @@ class modelClass:
 
 class paramClass:
 	def __init__(self,):    
-		self.bioReplicates=1
-		self.modelNodes=2
 		self.mutModel=.25
 		self.cells=1000
 		self.samples=5
@@ -197,49 +195,11 @@ class paramClass:
 		self.mutationProb=.4 # prob of mutating a particular parent
 		self.rewire=False
 		self.async=False # run in asynchronous mode
-		self.adaptive=True
 		self.verbose=True
 		self.bitFlipProb=.1 # prob of flipping bits inside mutation
 		self.sigmaNetwork=0
 		self.sigmaNode=0
-		self.hofSize=10
 		self.trials=1
-		self.IC=0 #tells the information criterion... 0- no criterion; 1- AIC; 2- BIC
-
-def updateBool2(currentNode,oldValue,nodeIndividual,model):
-	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
-	updateBool3=updateBooler.updateBool  
-	#img = MyImage()
-	#print(img.nrows,img.ncols)
-	#print(img.data)
-	#img.get()
-	oldValue=np.array(oldValue,dtype=np.intc)
-	nodeIndividual=np.array(nodeIndividual, dtype=np.intc)
-	
-	indLen=len(nodeIndividual)
-	tempAndNodes=[xi+[-1]*(3-len(xi)) for xi in model.andNodeList[currentNode]]
-	while(len(tempAndNodes)<7):
-		tempAndNodes.append([0,0,0])
-	andNodes=np.array(tempAndNodes)
-	
-	tempandNodeInvertList=[xi+[-1]*(3-len(xi)) for xi in model.andNodeInvertList[currentNode]]
-	while(len(tempandNodeInvertList)<7):
-		tempandNodeInvertList.append([0,0,0])
-	andNodeInvertList=np.array(tempandNodeInvertList)
-	
-	andLenList=np.array([len(lister) for lister in model.andNodeList[currentNode]], dtype=np.intc)
-
-	currentNode=ctypes.c_void_p(currentNode)
-	nodeIndividual=ctypes.c_void_p(nodeIndividual.ctypes.data)
-	indLen=ctypes.c_void_p(indLen)
-	andNodes=ctypes.c_void_p(andNodes.ctypes.data)
-	andLenList=ctypes.c_void_p(andLenList.ctypes.data)
-	oldValue=ctypes.c_void_p(oldValue.ctypes.data)
-	andNodeInvertList=ctypes.c_void_p(andNodeInvertList.ctypes.data)
-
-	value=updateBool3(currentNode,oldValue,nodeIndividual, indLen,andNodes, andLenList,andNodeInvertList)
-	return value
-
 		
 def updateBool(currentNode,oldValue,nodeIndividual, model):
 	# we update node by updating shadow and nodes then combining them to update or nodes. 
@@ -293,13 +253,14 @@ def updateFuzzy(currentNode,oldValue,nodeIndividual, model):
 		newval= max(newval , val)
 	return newval
 
-#run a simulation given a starting state
+#run a simulation given a starting state in purely python... legacy and unused now
 def runBool(individual, model,  simSteps, initValues, params, knockouts, knockins, async):
 	if async:
 		return asyncBool(individual, model, simSteps, initValues, params.iters, knockouts, knockins)
 	else:
 		return syncBool(individual, model, simSteps, initValues, knockouts, knockins)
 
+# synchronous Boolean simulation function
 def syncBool(individual, model, simSteps, initValues, knockouts, knockins):
 	# do simulation. individual specifies the particular logic rules on the model. params is a generic holder for simulation parameters. 
 	# set up data storage for simulation, add step 0
@@ -396,20 +357,19 @@ def NP(individual, model, cells, sampleProbs, params, KOs, KIs, boolC):
 	else:
 		return NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, boolC)
 
-# main EBN simulation code. Runs an EBN
+# NP simulation code for synchronous simulation... fast bc in C
 def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
 	cellArray=[]
-	# simSteps=3*len(model.nodeList)
 	simSteps= 100
-
-	async=params.async
 	
+	# set up knockin and knockout lists
 	knockins=np.zeros(len(model.nodeList),dtype=np.intc, order='C')
 	knockouts=np.zeros(len(model.nodeList),dtype=np.intc, order='C')
-	# for knocker in KOs:
-	# 	knockouts[knocker]=1
-	# for knocker in KIs:
-	# 	knockins[knocker]=1
+	for knocker in KOs:
+		knockouts[knocker]=1
+	for knocker in KIs:
+		knockins[knocker]=1
+
 	# put objects in correct format for passing to C
 	nodeIndividual=np.array(individual, dtype=np.intc, order='C')
 	indLen=len(nodeIndividual)
@@ -430,16 +390,61 @@ def NPsync(individual, model, cells, sampleProbs, params, KOs, KIs, syncBoolC):
 	knockouts1=ctypes.c_void_p(knockouts.ctypes.data)
 	knockins1=ctypes.c_void_p(knockins.ctypes.data)
 	
-	# syncBoolC.argtypes = [ctypes.c_int, ndpointer(ctypes.c_int), ndpointer(ctypes.c_int)]
 	for j in range(0,cells):
-		# shuffle nodes to be initially called.... 
-		#simulations that are truly random starting states should have all nodes added to this list
-		#get initial values for all nodes
-		initValues=genEBNInitValues(individual, model,sampleProbs)
-		vals=np.zeros(len(model.nodeList), dtype=np.intc, order='C')
-		initValues=np.array(initValues,dtype=np.intc, order='C')
-		initValues1=ctypes.c_void_p(initValues.ctypes.data)
-		valsubmit=ctypes.c_void_p(vals.ctypes.data)
+		# run simulation across cells
+		initValues=genEBNInitValues(individual, model,sampleProbs) # get initial values for all nodes
+		vals=np.zeros(len(model.nodeList), dtype=np.intc, order='C') # initiate output array
+		initValues=np.array(initValues,dtype=np.intc, order='C') # setup input array
+		initValues1=ctypes.c_void_p(initValues.ctypes.data) # put input array as C pointer
+		valsubmit=ctypes.c_void_p(vals.ctypes.data) # put output array into C pointer
+		# run simulation and average over last ten steps
 		syncBoolC(valsubmit,nodeIndividual1, indLen1, nodeNum1, andLenList1, individualParse1, andNodes1, andNodeInvertList1, simSteps1, initValues1, knockouts1, knockins1)
 		cellArray.append(.1*vals)
 	return [(1.*np.sum(col)) / cells for col in zip(*cellArray)]
+
+# NP simulation code for asynchronous simulation... slow because no C code yet
+def NPasync(individual, model, cells, sampleProbs, params, KOs, KIs):
+	cellArray=[]
+	simSteps= 100
+	# run simulation across many cells
+	for j in range(0,cells):
+		initValues=genEBNInitValues(individual, model,sampleProbs) # get initial values for all nodes
+		asyncResult = asyncBool(individual, model, simSteps, initValues, params.iters, KOs, KIs) # run asynchronous simulation
+		cellArray.append(asyncResult) # append results for this cell
+	return [(1.*np.sum(col)) / cells for col in zip(*cellArray)]
+
+
+# wrapper to run update for a single node in C... mainly used for testing, no longer used at all in code
+def updateBool2(currentNode,oldValue,nodeIndividual,model):
+	# load in library
+	updateBooler=ctypes.cdll.LoadLibrary('./testRun.so')
+	updateBool3=updateBooler.updateBool  
+	# save old value and output arrays
+	oldValue=np.array(oldValue,dtype=np.intc)
+	nodeIndividual=np.array(nodeIndividual, dtype=np.intc)
+	
+	# set up and node arrays, convert to C pointers....
+	# all of this is obsolete now and is in the model, but this is legacy code so left here for future reference
+	indLen=len(nodeIndividual)
+	tempAndNodes=[xi+[-1]*(3-len(xi)) for xi in model.andNodeList[currentNode]]
+	while(len(tempAndNodes)<7):
+		tempAndNodes.append([0,0,0])
+	andNodes=np.array(tempAndNodes)
+	
+	tempandNodeInvertList=[xi+[-1]*(3-len(xi)) for xi in model.andNodeInvertList[currentNode]]
+	while(len(tempandNodeInvertList)<7):
+		tempandNodeInvertList.append([0,0,0])
+	andNodeInvertList=np.array(tempandNodeInvertList)
+	
+	andLenList=np.array([len(lister) for lister in model.andNodeList[currentNode]], dtype=np.intc)
+
+	currentNode=ctypes.c_void_p(currentNode)
+	nodeIndividual=ctypes.c_void_p(nodeIndividual.ctypes.data)
+	indLen=ctypes.c_void_p(indLen)
+	andNodes=ctypes.c_void_p(andNodes.ctypes.data)
+	andLenList=ctypes.c_void_p(andLenList.ctypes.data)
+	oldValue=ctypes.c_void_p(oldValue.ctypes.data)
+	andNodeInvertList=ctypes.c_void_p(andNodeInvertList.ctypes.data)
+
+	value=updateBool3(currentNode,oldValue,nodeIndividual, indLen,andNodes, andLenList,andNodeInvertList)
+	return value

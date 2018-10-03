@@ -3,7 +3,6 @@ import networkx as nx
 import operator
 from sets import Set
 import scipy.stats as stat
-import matplotlib.pyplot as plt
 import requests
 import argparse as argparse
 from scipy.stats import variation

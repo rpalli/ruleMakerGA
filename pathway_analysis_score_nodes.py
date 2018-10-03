@@ -1,3 +1,4 @@
+# import necessary modules
 import argparse as argparse
 import operator
 import networkx as nx
@@ -8,6 +9,7 @@ from simulation import paramClass, modelClass, NPsync
 from utils import genInitValueList, setupEmptyKOKI, writeModel
 from GA import GAsearchModel, localSearch
 
+# calculate importance scores
 def calcImportance(individual,params,model, sss,knockoutLists, knockinLists, boolC):
 	importanceScores=[]
 	for node in range(len(model.nodeList)):
@@ -40,6 +42,7 @@ if __name__ == '__main__':
 	name=graphName[:-8]+'_'+results.iterNum
 	graph = nx.read_gpickle(graphName)
 	
+	# read in C function to run simulations
 	updateBooler=cdll.LoadLibrary('./testRun.so')
 	boolC=updateBooler.syncBool 
 
@@ -58,9 +61,11 @@ if __name__ == '__main__':
 	newInitValueList=genInitValueList(sampleList,model)
 	model.initValueList=newInitValueList
 
-	# find rules
+	# find rules by doing GA then local search
 	model1, dev, bruteOut =GAsearchModel(model, sampleList, params, knockoutLists, knockinLists, name, boolC) # run GA
 	bruteOut1, equivalents, dev2 = localSearch(model1, bruteOut, sampleList, params, knockoutLists, knockinLists, boolC) # run local search
+	
+	# output results
 	storeModel3=[(model.size), list(model.nodeList), list(model.individualParse), list(model.andNodeList) , list(model.andNodeInvertList), list(model.andLenList),	list(model.nodeList), dict(model.nodeDict), list(model.initValueList)]
 	outputList=[bruteOut1,dev,storeModel, storeModel3, equivalents, dev2]
 	pickle.dump( outputList, open( name+"_local1.pickle", "wb" ) ) # output rules

@@ -8,7 +8,6 @@ import numpy as numpy
 import operator
 import math as math
 from sets import Set
-from joblib import Parallel, delayed
 import gc as gc
 from collections import defaultdict, deque
 from itertools import chain
@@ -388,7 +387,6 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 	popList=[]
 	# Evaluate the individuals with an invalid fitness
 	invalid_ind = [ind for ind in population if not ind.fitness.valid]
-	# fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
 	fitnesses=[evaluateByNode(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind]
 
 	for ind, fit in zip(invalid_ind, fitnesses):
@@ -416,7 +414,6 @@ def eaMuPlusLambdaAdaptive( toolbox, model, mu, lambda_, cxpb, mutpb, ngen, name
 		offspring = varOrAdaptive(population, toolbox, model, lambda_, .5+.5*(1.-1.*gen/ngen), (.5*gen/ngen), (1.*gen/ngen),mutModel)
 		# Evaluate the individuals with an invalid fitness
 		invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-		# fitnesses=Parallel(n_jobs=min(24,len(invalid_ind)))(delayed(evaluateByNode)(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind)
 		fitnesses=[evaluateByNode(indy[1], params.cells, indy[0],  newSSS, params, KOlist, KIlist, boolC) for indy in invalid_ind]
 		for ind, fit in zip(invalid_ind, fitnesses):
 			ind.fitness.values = fit
@@ -463,7 +460,6 @@ def GAsearchModel(model, sampleList,params, KOlist, KIlist, namer, boolC):
 # wrapper to do local search in parrallell manner
 def localSearch(model, indy, newSSS, params, KOlist, KIlist, boolC):
 	outputs=[checkNodePossibilities(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList))]
-	# outputs=Parallel(n_jobs=min(24,len(model.nodeList)))(delayed(checkNodePossibilities)(node, indy, newSSS, params.cells, model,params, KOlist, KIlist , boolC) for node in range(len(model.nodeList)))
 	equivs=[]
 	individual=[]
 	devs=[]
